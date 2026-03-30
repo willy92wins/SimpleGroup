@@ -48,10 +48,10 @@ class LFPG_GroupManager
 
     // Fast lookups
     protected ref map<string, string> m_PlayerToGroup;
-    protected ref array<string> m_GroupNames;
+    protected ref map<string, bool> m_GroupNames;
 
     // Flag position cache — for territory overlap checks
-    ref array<ref LFPG_FlagPositionCache> m_FlagPositions;
+    protected ref array<ref LFPG_FlagPositionCache> m_FlagPositions;
 
     // Flag entity references (groupID → flag) — runtime only
     protected ref map<string, LFPG_FlagBase> m_GroupFlags;
@@ -69,7 +69,7 @@ class LFPG_GroupManager
     {
         m_Groups = new map<string, ref LFPG_GroupData>;
         m_PlayerToGroup = new map<string, string>;
-        m_GroupNames = new array<string>;
+        m_GroupNames = new map<string, bool>;
         m_FlagPositions = new array<ref LFPG_FlagPositionCache>;
         m_GroupFlags = new map<string, LFPG_FlagBase>;
         m_RPCThrottle = new map<string, int>;
@@ -277,6 +277,33 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
+    // FIND GROUP BY POSITION — Helper para ModdedBBB y ModdedGardenPlot
+    // Busca el groupID cuyo build zone contiene esta posicion
+    // O(f) — pero solo se usa en EEDelete (infrecuente)
+    // ========================================================================
+    string FindGroupIDAtPosition(vector pos)
+    {
+        if (!m_Config)
+            return "";
+
+        int j;
+        int cnt = m_FlagPositions.Count();
+        for (j = 0; j < cnt; j = j + 1)
+        {
+            LFPG_FlagPositionCache cacheEntry = m_FlagPositions[j];
+            if (!cacheEntry)
+                continue;
+
+            float dSq = vector.DistanceSq(pos, cacheEntry.m_Position);
+            if (dSq < m_Config.m_BuildRadiusSq)
+            {
+                return cacheEntry.m_GroupID;
+            }
+        }
+        return "";
+    }
+
+    // ========================================================================
     // DEPLOY / GARDEN COUNTERS — O(1) runtime
     // ========================================================================
     bool CanDeploy(string groupID)
@@ -361,7 +388,7 @@ class LFPG_GroupManager
         if (m_PlayerToGroup.Contains(playerUID))
             return "";
 
-        if (m_GroupNames.Find(groupName) >= 0)
+        if (m_GroupNames.Contains(groupName))
             return "";
 
         if (!flag)
@@ -394,7 +421,7 @@ class LFPG_GroupManager
         // Registrar en estructuras
         m_Groups.Set(groupID, group);
         m_PlayerToGroup.Set(playerUID, groupID);
-        m_GroupNames.Insert(groupName);
+        m_GroupNames.Set(groupName, true);
 
         // Configurar la bandera
         flag.SetGroupID(groupID);
@@ -444,10 +471,9 @@ class LFPG_GroupManager
         }
 
         // Limpiar nombre
-        int nameIdx = m_GroupNames.Find(group.m_GroupName);
-        if (nameIdx >= 0)
+        if (m_GroupNames.Contains(group.m_GroupName))
         {
-            m_GroupNames.Remove(nameIdx);
+            m_GroupNames.Remove(group.m_GroupName);
         }
 
         // Destruir objetos desplegados si la config lo indica
@@ -728,8 +754,8 @@ class LFPG_GroupManager
                 return LFPG_NAME_INVALID_CHARS;
         }
 
-        // Check nombre duplicado
-        if (m_GroupNames.Find(name) >= 0)
+        // Check nombre duplicado — O(1) via map
+        if (m_GroupNames.Contains(name))
             return LFPG_NAME_TAKEN;
 
         return LFPG_NAME_OK;
@@ -866,15 +892,14 @@ class LFPG_GroupManager
         }
 
         // Quitar nombre viejo del set
-        int oldIdx = m_GroupNames.Find(group.m_GroupName);
-        if (oldIdx >= 0)
+        if (m_GroupNames.Contains(group.m_GroupName))
         {
-            m_GroupNames.Remove(oldIdx);
+            m_GroupNames.Remove(group.m_GroupName);
         }
 
         // Asignar nuevo nombre
         group.m_GroupName = newName;
-        m_GroupNames.Insert(newName);
+        m_GroupNames.Set(newName, true);
 
         SaveGroups();
 
@@ -1342,7 +1367,7 @@ class LFPG_GroupManager
             // Reconstruir nombre set
             if (group.m_GroupName != "")
             {
-                m_GroupNames.Insert(group.m_GroupName);
+                m_GroupNames.Set(group.m_GroupName, true);
             }
 
             // Reconstruir player→group map

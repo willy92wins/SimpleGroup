@@ -102,28 +102,24 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (groupID == "" || groupID != flag.GetGroupID())
             return;
 
-        // Consumir materiales de los slots
+        // Doble check de materiales server-side
         string slotLog = "Material_FPole_WoodenLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
-        if (logAtt)
-        {
-            GetGame().ObjectDelete(logAtt);
-        }
+        if (!logAtt)
+            return;
 
         string slotRope = "Material_FPole_Rope";
         EntityAI ropeAtt = flag.FindAttachmentBySlotName(slotRope);
-        if (ropeAtt)
-        {
-            GetGame().ObjectDelete(ropeAtt);
-        }
+        if (!ropeAtt)
+            return;
 
-        // Upgrade via GroupManager (con null-check post-spawn)
+        // Upgrade PRIMERO — si falla, no se pierde nada
+        // Los attachments se destruyen automaticamente con la bandera vieja
+        // cuando UpgradeFlag() hace ObjectDelete(oldFlag)
         string newClass = "LFPG_Flag_T2";
         bool success = mgr.UpgradeFlag(groupID, newClass, flag);
         if (!success)
         {
-            // Spawn falló — los materiales ya se consumieron, devolver?
-            // Por seguridad, logear el error. Los materiales se pierden.
             string errMsg = "[LFPG_Territory] Upgrade T1->T2 failed for group: ";
             errMsg = errMsg + groupID;
             Print(errMsg);

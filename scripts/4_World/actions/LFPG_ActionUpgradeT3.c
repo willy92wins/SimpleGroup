@@ -118,29 +118,32 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (groupID == "" || groupID != flag.GetGroupID())
             return;
 
-        // Consumir materiales
+        // Doble check de materiales y cantidades server-side
         string slotFW = "Firewood";
         EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
-        if (fwAtt)
-        {
-            GetGame().ObjectDelete(fwAtt);
-        }
+        if (!fwAtt)
+            return;
+        ItemBase fwItem = ItemBase.Cast(fwAtt);
+        if (!fwItem || fwItem.GetQuantity() < 6)
+            return;
 
         string slotNails = "Material_FPole_Nails";
         EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
-        if (nailsAtt)
-        {
-            GetGame().ObjectDelete(nailsAtt);
-        }
+        if (!nailsAtt)
+            return;
+        ItemBase nailsItem = ItemBase.Cast(nailsAtt);
+        if (!nailsItem || nailsItem.GetQuantity() < 60)
+            return;
 
         string slotStones = "Stones";
         EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
-        if (stonesAtt)
-        {
-            GetGame().ObjectDelete(stonesAtt);
-        }
+        if (!stonesAtt)
+            return;
+        ItemBase stonesItem = ItemBase.Cast(stonesAtt);
+        if (!stonesItem || stonesItem.GetQuantity() < 16)
+            return;
 
-        // Upgrade con null-check post-spawn
+        // Upgrade PRIMERO — attachments se destruyen con la bandera vieja
         string newClass = "LFPG_Flag_T3";
         bool success = mgr.UpgradeFlag(groupID, newClass, flag);
         if (!success)

@@ -41,25 +41,11 @@ modded class BaseBuildingBase
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
-            LFPG_TerritoryConfig config = mgr.GetConfig();
-            if (config)
+            vector pos = GetPosition();
+            string groupID = mgr.FindGroupIDAtPosition(pos);
+            if (groupID != "")
             {
-                vector pos = GetPosition();
-                int i;
-                int count = mgr.m_FlagPositions.Count();
-                for (i = 0; i < count; i = i + 1)
-                {
-                    LFPG_FlagPositionCache cache = mgr.m_FlagPositions[i];
-                    if (!cache)
-                        continue;
-
-                    float distSq = vector.DistanceSq(pos, cache.m_Position);
-                    if (distSq < config.m_BuildRadiusSq)
-                    {
-                        mgr.DecrementDeployCount(cache.m_GroupID);
-                        break;
-                    }
-                }
+                mgr.DecrementDeployCount(groupID);
             }
         }
         #endif

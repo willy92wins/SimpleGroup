@@ -106,27 +106,6 @@ modded class GardenPlot
     {
         if (!mgr)
             return "";
-
-        LFPG_TerritoryConfig config = mgr.GetConfig();
-        if (!config)
-            return "";
-
-        // Iterar grupos y buscar la bandera cuyo build radius contiene esta posición
-        // Esto es O(f) pero solo se ejecuta al destruir un garden (raro)
-        int i;
-        int count = mgr.m_FlagPositions.Count();
-        for (i = 0; i < count; i = i + 1)
-        {
-            LFPG_FlagPositionCache cache = mgr.m_FlagPositions[i];
-            if (!cache)
-                continue;
-
-            float distSq = vector.DistanceSq(pos, cache.m_Position);
-            if (distSq < config.m_BuildRadiusSq)
-            {
-                return cache.m_GroupID;
-            }
-        }
-        return "";
+        return mgr.FindGroupIDAtPosition(pos);
     }
 };
