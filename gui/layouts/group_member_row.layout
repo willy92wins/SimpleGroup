@@ -1,0 +1,134 @@
+FrameWidgetClass LFPG_MemberRow {
+ size 250 30
+ hexactpos 1
+ vexactpos 1
+ hexactsize 1
+ vexactsize 1
+ {
+  ImageWidgetClass RowBg {
+   position 0 0
+   size 250 28
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.15 0.15 0.18 0.5
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  TextWidgetClass LeaderIcon {
+   scriptclass "ViewBinding"
+   position 6 2
+   size 20 24
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/Metron"
+   color 1.0 0.85 0.2 1.0
+   "text valign" center
+   {
+    ScriptParamsClass {
+     Binding_Name "LeaderStar"
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass MemberNameText {
+   scriptclass "ViewBinding"
+   position 24 2
+   size 130 24
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.85 0.85 0.85 1.0
+   "text valign" center
+   {
+    ScriptParamsClass {
+     Binding_Name "MemberName"
+     {
+     }
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnTransfer {
+   scriptclass "ViewBinding"
+   position 158 3
+   size 40 22
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   visible 0
+   color 0.25 0.45 0.7 0.8
+   {
+    ScriptParamsClass {
+     Relay_Command "OnTransferExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnTransferLabel {
+     position 0 0
+     size 40 22
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "#STR_LFPG_UI_TRANSFER"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnKick {
+   scriptclass "ViewBinding"
+   position 202 3
+   size 40 22
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   visible 0
+   color 0.6 0.2 0.2 0.8
+   {
+    ScriptParamsClass {
+     Relay_Command "OnKickExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnKickLabel {
+     position 0 0
+     size 40 22
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "#STR_LFPG_UI_KICK"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+ }
+}

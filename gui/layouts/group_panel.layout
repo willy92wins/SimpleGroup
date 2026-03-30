@@ -1,0 +1,176 @@
+FrameWidgetClass LFPG_GroupPanel {
+ size 260 320
+ hexactpos 1
+ vexactpos 1
+ hexactsize 1
+ vexactsize 1
+ halign right_ref
+ valign top_ref
+ position -270 10
+ {
+  ImageWidgetClass PanelBg {
+   position 0 0
+   size 260 320
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.12 0.12 0.14 0.92
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  ImageWidgetClass HeaderBg {
+   position 0 0
+   size 260 44
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.16 0.18 0.22 1.0
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  TextWidgetClass GroupNameText {
+   scriptclass "ViewBinding"
+   position 10 6
+   size 200 22
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/Metron"
+   color 0.9 0.9 0.9 1.0
+   {
+    ScriptParamsClass {
+     Binding_Name "GroupName"
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass TierText {
+   scriptclass "ViewBinding"
+   position 212 6
+   size 40 22
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/Metron"
+   "text halign" right
+   color 0.6 0.75 1.0 1.0
+   {
+    ScriptParamsClass {
+     Binding_Name "TierLabel"
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass DeployText {
+   scriptclass "ViewBinding"
+   position 10 26
+   size 240 16
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.6 0.6 0.6 1.0
+   {
+    ScriptParamsClass {
+     Binding_Name "DeployInfo"
+     {
+     }
+    }
+   }
+  }
+
+  ImageWidgetClass DividerLine {
+   position 10 44
+   size 240 1
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.3 0.3 0.35 0.6
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  ScrollWidgetClass MemberScroll {
+   position 0 48
+   size 260 234
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   clipchildren 1
+   "Scrollbar V" 1
+   {
+    WrapSpacerWidgetClass MemberList {
+     scriptclass "ViewBinding"
+     position 0 0
+     size 260 234
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     "Size To Content V" 1
+     {
+      ScriptParamsClass {
+       Binding_Name "MemberRows"
+       {
+       }
+      }
+     }
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnLeave {
+   scriptclass "ViewBinding"
+   position 10 288
+   size 240 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.6 0.2 0.2 0.9
+   {
+    ScriptParamsClass {
+     Relay_Command "OnLeaveExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnLeaveText {
+     position 0 0
+     size 240 26
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "#STR_LFPG_UI_LEAVE_GROUP"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+ }
+}

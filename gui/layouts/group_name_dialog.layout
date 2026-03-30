@@ -1,0 +1,165 @@
+FrameWidgetClass LFPG_GroupNameDialog {
+ size 320 180
+ hexactpos 1
+ vexactpos 1
+ hexactsize 1
+ vexactsize 1
+ halign center_ref
+ valign center_ref
+ position -160 -90
+ {
+  ImageWidgetClass DialogBg {
+   position 0 0
+   size 320 180
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.1 0.1 0.12 0.96
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  ImageWidgetClass DialogHeaderBg {
+   position 0 0
+   size 320 36
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.16 0.18 0.22 1.0
+   stretch 1
+   ignorepointer 1
+   {
+   }
+  }
+
+  TextWidgetClass DialogTitle {
+   position 10 6
+   size 300 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/Metron"
+   text "#STR_LFPG_UI_GROUP_NAME"
+   "text halign" center
+   "text valign" center
+   color 0.9 0.9 0.9 1.0
+   {
+   }
+  }
+
+  EditBoxWidgetClass NameEditBox {
+   scriptclass "ViewBinding"
+   position 20 50
+   size 280 30
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.9 0.9 0.9 1.0
+   Two_Way_Binding 1
+   {
+    ScriptParamsClass {
+     Binding_Name "EditGroupName"
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass ErrorText {
+   scriptclass "ViewBinding"
+   position 20 84
+   size 280 18
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 1.0 0.3 0.3 1.0
+   "text halign" center
+   {
+    ScriptParamsClass {
+     Binding_Name "ErrorMessage"
+     {
+     }
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnConfirm {
+   scriptclass "ViewBinding"
+   position 20 110
+   size 135 32
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.2 0.5 0.3 0.9
+   {
+    ScriptParamsClass {
+     Relay_Command "OnConfirmExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnConfirmLabel {
+     position 0 0
+     size 135 32
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "#STR_LFPG_UI_CONFIRM"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnCancel {
+   scriptclass "ViewBinding"
+   position 165 110
+   size 135 32
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.5 0.2 0.2 0.9
+   {
+    ScriptParamsClass {
+     Relay_Command "OnCancelExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnCancelLabel {
+     position 0 0
+     size 135 32
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "#STR_LFPG_UI_CANCEL"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+ }
+}

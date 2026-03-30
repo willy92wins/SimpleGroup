@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project name="LFPG_Territory">
+    <Package name="LFPG_Territory">
+
+        <!-- Items -->
+        <Container>
+            <Key Id="STR_LFPG_FLAGKIT_T1">
+                <English>Territory Flag Kit</English>
+                <Spanish>Kit de Bandera de Territorio</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAGKIT_T1_DESC">
+                <English>A basic kit to establish a territory flag. Deploy to claim land.</English>
+                <Spanish>Un kit básico para establecer una bandera de territorio. Despliégalo para reclamar terreno.</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T1">
+                <English>Territory Flag (Tier 1)</English>
+                <Spanish>Bandera de Territorio (Nivel 1)</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T1_DESC">
+                <English>A basic territory marker. Upgrade with a log and rope.</English>
+                <Spanish>Un marcador básico de territorio. Mejóralo con un tronco y una cuerda.</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T2">
+                <English>Territory Flag (Tier 2)</English>
+                <Spanish>Bandera de Territorio (Nivel 2)</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T2_DESC">
+                <English>A reinforced territory flag. Upgrade with firewood, nails and stones.</English>
+                <Spanish>Una bandera de territorio reforzada. Mejórala con leña, clavos y piedras.</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T3">
+                <English>Territory Flag (Tier 3)</English>
+                <Spanish>Bandera de Territorio (Nivel 3)</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_FLAG_T3_DESC">
+                <English>A fortified territory flag. Maximum tier — lasts the longest.</English>
+                <Spanish>Una bandera de territorio fortificada. Nivel máximo — dura más tiempo.</Spanish>
+            </Key>
+        </Container>
+
+        <!-- Actions -->
+        <Container>
+            <Key Id="STR_LFPG_ACTION_RAISE_FLAG">
+                <English>Raise Flag</English>
+                <Spanish>Subir Bandera</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_LOWER_FLAG">
+                <English>Lower Flag</English>
+                <Spanish>Bajar Bandera</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_INVITE">
+                <English>Activate Invite Mode</English>
+                <Spanish>Activar Modo Invitación</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_JOIN_GROUP">
+                <English>Join Group</English>
+                <Spanish>Unirse al Grupo</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_DESTROY_FLAG">
+                <English>Destroy Flag (Dissolve Group)</English>
+                <Spanish>Destruir Bandera (Disolver Grupo)</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_UPGRADE_T2">
+                <English>Upgrade to Tier 2</English>
+                <Spanish>Mejorar a Nivel 2</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ACTION_UPGRADE_T3">
+                <English>Upgrade to Tier 3</English>
+                <Spanish>Mejorar a Nivel 3</Spanish>
+            </Key>
+        </Container>
+
+        <!-- Crafting -->
+        <Container>
+            <Key Id="STR_LFPG_CRAFT_FLAGKIT_T1">
+                <English>Craft Territory Flag Kit</English>
+                <Spanish>Fabricar Kit de Bandera de Territorio</Spanish>
+            </Key>
+        </Container>
+
+        <!-- UI -->
+        <Container>
+            <Key Id="STR_LFPG_INPUT_GROUP_PANEL">
+                <English>Open Group Panel</English>
+                <Spanish>Abrir Panel de Grupo</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_GROUP_NAME">
+                <English>Group Name</English>
+                <Spanish>Nombre del Grupo</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_CONFIRM">
+                <English>Confirm</English>
+                <Spanish>Confirmar</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_CANCEL">
+                <English>Cancel</English>
+                <Spanish>Cancelar</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_LEAVE_GROUP">
+                <English>Leave Group</English>
+                <Spanish>Abandonar Grupo</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_KICK">
+                <English>Kick</English>
+                <Spanish>Expulsar</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_TRANSFER">
+                <English>Make Leader</English>
+                <Spanish>Hacer Líder</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_UI_DEPLOYED">
+                <English>Deployed</English>
+                <Spanish>Desplegados</Spanish>
+            </Key>
+        </Container>
+
+        <!-- Error messages -->
+        <Container>
+            <Key Id="STR_LFPG_ERR_NAME_SHORT">
+                <English>Name is too short</English>
+                <Spanish>El nombre es muy corto</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ERR_NAME_LONG">
+                <English>Name is too long</English>
+                <Spanish>El nombre es muy largo</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ERR_NAME_TAKEN">
+                <English>Name is already taken</English>
+                <Spanish>El nombre ya está en uso</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ERR_NAME_INVALID">
+                <English>Name contains invalid characters</English>
+                <Spanish>El nombre contiene caracteres no válidos</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ERR_TERRITORY_BLOCKED">
+                <English>Too close to another territory</English>
+                <Spanish>Demasiado cerca de otro territorio</Spanish>
+            </Key>
+            <Key Id="STR_LFPG_ERR_DEPLOY_LIMIT">
+                <English>Deploy limit reached for this tier</English>
+                <Spanish>Límite de despliegue alcanzado para este nivel</Spanish>
+            </Key>
+        </Container>
+
+    </Package>
+</Project>
