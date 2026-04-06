@@ -140,7 +140,7 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
 
     override string GetLayoutFile()
     {
-        return "LFPG_Territory/gui/layouts/group_name_dialog.layout";
+        return "SimpleGroup/gui/layouts/group_name_dialog.layout";
     }
 
     override typename GetControllerType()
@@ -162,6 +162,11 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
     override bool UseKeyboard()
     {
         return true;
+    }
+
+    override array<string> GetInputExcludes()
+    {
+        return {"menu"};
     }
 
     override bool CanCloseWithEscape()
@@ -187,6 +192,16 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
             return;
 
         LFPG_GroupNameDialog dialog = new LFPG_GroupNameDialog();
+
+        // Guard: si el layout no se creó (ruta inválida, etc), limpiar
+        if (!dialog.GetLayoutRoot())
+        {
+            Print("[SimpleGroup] ERROR: GroupNameDialog layout failed to load. Cleaning up.");
+            s_Instance = null;
+            dialog = null;
+            return;
+        }
+
         LFPG_GroupNameDialogController ctrl = LFPG_GroupNameDialogController.Cast(dialog.GetController());
         if (ctrl)
         {

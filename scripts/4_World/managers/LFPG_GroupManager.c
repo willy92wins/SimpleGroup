@@ -1,14 +1,14 @@
 // ============================================================================
-// LFPG_GroupManager.c — 4_World/managers
-// Singleton SERVER-SIDE — el corazón del sistema de grupos
+// LFPG_GroupManager.c - 4_World/managers
+// Singleton SERVER-SIDE - el corazon del sistema de grupos
 //
 // OPTIMIZACIONES:
 //  - m_PlayerToGroup: O(1) lookup para IsInBuildZone (hot path)
-//  - m_GroupNames: O(1) validación de nombres únicos
+//  - m_GroupNames: O(1) validacion de nombres unicos
 //  - m_FlagPositions: array para territory overlap (no GetObjectsAtPosition)
 //  - Sin m_FlagToGroup (redundante: flag.m_GroupID es suficiente)
-//  - Timer class para tick periódico (inmune al bug CallLater 4.5h)
-//  - JSON save atómico (tmp → bak → final)
+//  - Timer class para tick periodico (inmune al bug CallLater 4.5h)
+//  - JSON save atomico (tmp -> bak -> final)
 //  - RPC rate limiting por jugador
 //  - Deploy/Garden counters O(1) (no proximity scan en runtime)
 // ============================================================================
@@ -43,24 +43,34 @@ class LFPG_GroupManager
     // ========================================================================
     protected ref LFPG_TerritoryConfig m_Config;
 
-    // Primary storage: groupID → GroupData
+    // Primary storage: groupID -> GroupData
     protected ref map<string, ref LFPG_GroupData> m_Groups;
 
     // Fast lookups
     protected ref map<string, string> m_PlayerToGroup;
     protected ref map<string, bool> m_GroupNames;
 
-    // Flag position cache — for territory overlap checks
+    // Flag position cache - for territory overlap checks
     protected ref array<ref LFPG_FlagPositionCache> m_FlagPositions;
 
-    // Flag entity references (groupID → flag) — runtime only
+    // Flag entity references (groupID -> flag) - runtime only
     protected ref map<string, LFPG_FlagBase> m_GroupFlags;
 
-    // RPC rate limiting: playerUID → last RPC time (ms)
+    // RPC rate limiting: playerUID -> last RPC time (ms)
     protected ref map<string, int> m_RPCThrottle;
 
     // Periodic validation timer (Timer class, NOT CallLater)
     protected ref Timer m_ValidationTimer;
+
+    // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
+    protected ref array<string> m_OrphanBuffer;
+    protected ref array<Man> m_PlayerSearchBuffer;
+
+    // FIX H1 edge case: Suprimir decrement cuando ObjectDelete es por anti-cheat
+    protected bool m_SuppressDeployDecrement;
+
+    // FIX M2: Dirty flag para saves diferidos (counters)
+    protected bool m_IsDirty;
 
     // ========================================================================
     // CONSTRUCTOR
@@ -73,6 +83,10 @@ class LFPG_GroupManager
         m_FlagPositions = new array<ref LFPG_FlagPositionCache>;
         m_GroupFlags = new map<string, LFPG_FlagBase>;
         m_RPCThrottle = new map<string, int>;
+        m_OrphanBuffer = new array<string>;
+        m_PlayerSearchBuffer = new array<Man>;
+        m_SuppressDeployDecrement = false;
+        m_IsDirty = false;
     }
 
     void ~LFPG_GroupManager()
@@ -85,7 +99,7 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // INIT — Llamado desde modded MissionServer.OnInit()
+    // INIT - Llamado desde modded MissionServer.OnInit()
     // ========================================================================
     void Init()
     {
@@ -95,12 +109,12 @@ class LFPG_GroupManager
         // Cargar grupos desde JSON
         LoadGroups();
 
-        // Timer periódico de validación (cada 5 min)
-        // Usa Timer class (NO CallLater) — inmune al bug de 4.5h
+        // Timer periodico de validacion (cada 60s)
+        // Usa Timer class (NO CallLater) - inmune al bug de 4.5h
         m_ValidationTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
-        m_ValidationTimer.Run(300.0, this, "OnValidationTick", null, true);
+        m_ValidationTimer.Run(60.0, this, "OnValidationTick", null, true);
 
-        string msg = "[LFPG_Territory] GroupManager initialized. Groups: ";
+        string msg = "[SimpleGroup] GroupManager initialized. Groups: ";
         msg = msg + m_Groups.Count().ToString();
         Print(msg);
     }
@@ -111,49 +125,93 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // PERIODIC VALIDATION (cada 5 min)
+    // PERIODIC VALIDATION (cada 60s)
     // NO recalcula raiseProgress (eso es lazy).
-    // Solo valida integridad: grupos sin bandera → disolver.
+    // Solo valida integridad: grupos sin bandera -> disolver.
     // ========================================================================
     void OnValidationTick()
     {
-        // Verificar que cada grupo tiene su bandera registrada
-        array<string> orphanGroups = new array<string>;
+        // FIX H4: Reutilizar buffer en vez de new array
+        m_OrphanBuffer.Clear();
         int i;
         int groupCount = m_Groups.Count();
 
-        // Iterar grupos buscando huérfanos
+        // Iterar grupos buscando huerfanos (grupo sin bandera valida)
         for (i = 0; i < groupCount; i = i + 1)
         {
             string groupID = m_Groups.GetKey(i);
+            bool isOrphan = false;
+
             if (!m_GroupFlags.Contains(groupID))
             {
-                orphanGroups.Insert(groupID);
+                isOrphan = true;
             }
             else
             {
                 LFPG_FlagBase flag = m_GroupFlags.Get(groupID);
                 if (!flag)
                 {
-                    orphanGroups.Insert(groupID);
+                    isOrphan = true;
+                    // Limpiar la entrada nula del map
+                    m_GroupFlags.Remove(groupID);
                 }
+            }
+
+            if (isOrphan)
+            {
+                m_OrphanBuffer.Insert(groupID);
             }
         }
 
-        // Disolver huérfanos
-        int orphanCount = orphanGroups.Count();
+        // Disolver huerfanos
+        int orphanCount = m_OrphanBuffer.Count();
         for (i = 0; i < orphanCount; i = i + 1)
         {
-            string orphanID = orphanGroups[i];
-            string warnMsg = "[LFPG_Territory] Orphan group detected, dissolving: ";
+            string orphanID = m_OrphanBuffer[i];
+            string warnMsg = "[SimpleGroup] Orphan group detected in tick, dissolving: ";
             warnMsg = warnMsg + orphanID;
             Print(warnMsg);
             DissolveGroup(orphanID);
         }
+
+        // Limpiar entradas huerfanas en m_FlagPositions
+        // (posiciones de territorios cuyo grupo ya no existe)
+        int posCount = m_FlagPositions.Count();
+        int j = 0;
+        while (j < posCount)
+        {
+            LFPG_FlagPositionCache posCache = m_FlagPositions[j];
+            if (!posCache || !m_Groups.Contains(posCache.m_GroupID))
+            {
+                string posWarn = "[SimpleGroup] Stale position cache entry removed for group: ";
+                if (posCache)
+                {
+                    posWarn = posWarn + posCache.m_GroupID;
+                }
+                else
+                {
+                    posWarn = posWarn + "(null)";
+                }
+                Print(posWarn);
+                m_FlagPositions.Remove(j);
+                posCount = posCount - 1;
+            }
+            else
+            {
+                j = j + 1;
+            }
+        }
+
+        // FIX M2: Flush saves diferidos de counters
+        if (m_IsDirty)
+        {
+            SaveGroups();
+            m_IsDirty = false;
+        }
     }
 
     // ========================================================================
-    // FLAG REGISTRATION — Llamado desde flag.AfterStoreLoad() y al crear grupo
+    // FLAG REGISTRATION - Llamado desde flag.AfterStoreLoad() y al crear grupo
     // ========================================================================
     void RegisterFlag(LFPG_FlagBase flag, string groupID)
     {
@@ -162,6 +220,16 @@ class LFPG_GroupManager
 
         m_GroupFlags.Set(groupID, flag);
         UpdateFlagPositionCache(groupID, flag.GetPosition(), flag.ComputeCurrentRaiseProgress(), flag.GetTier());
+
+        // FIX C4: Restaurar MemberCount desde datos del grupo (tras restart)
+        if (m_Groups.Contains(groupID))
+        {
+            LFPG_GroupData group = m_Groups.Get(groupID);
+            if (group)
+            {
+                flag.SetMemberCount(group.GetMemberCount());
+            }
+        }
     }
 
     void UnregisterFlag(string groupID)
@@ -174,9 +242,9 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // FLAG POSITION CACHE — Para territory overlap checks
+    // FLAG POSITION CACHE - Para territory overlap checks
     // Array lineal: con 50 flags, 50 comparaciones es despreciable
-    // Mucho más barato que GetObjectsAtPosition(500m)
+    // Mucho mas barato que GetObjectsAtPosition(500m)
     // ========================================================================
     protected void UpdateFlagPositionCache(string groupID, vector pos, float progress, int tier)
     {
@@ -192,7 +260,7 @@ class LFPG_GroupManager
             }
         }
 
-        // No existe — añadir nuevo
+        // No existe - anadir nuevo
         LFPG_FlagPositionCache newCache = new LFPG_FlagPositionCache();
         newCache.Set(pos, groupID, progress, tier);
         m_FlagPositions.Insert(newCache);
@@ -214,11 +282,11 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // HOT PATH: IsInBuildZone — O(1) — Llamado cada frame por hologram
+    // HOT PATH: IsInBuildZone - O(1) - Llamado cada frame por hologram
     // ========================================================================
     bool IsInBuildZone(string playerUID, vector buildPos)
     {
-        // 1. Lookup grupo del jugador — O(1)
+        // 1. Lookup grupo del jugador - O(1)
         if (!m_PlayerToGroup.Contains(playerUID))
             return false;
 
@@ -226,12 +294,12 @@ class LFPG_GroupManager
         if (groupID == "")
             return false;
 
-        // 2. Obtener datos del grupo — O(1)
+        // 2. Obtener datos del grupo - O(1)
         if (!m_Groups.Contains(groupID))
             return false;
 
-        // 3. Obtener posición de la bandera desde cache — O(f) peor caso
-        //    pero típicamente el jugador tiene UNA bandera, así que es O(1) amortizado
+        // 3. Obtener posicion de la bandera desde cache - O(f) peor caso
+        //    pero tipicamente el jugador tiene UNA bandera, asi que es O(1) amortizado
         LFPG_FlagBase flag = null;
         if (m_GroupFlags.Contains(groupID))
         {
@@ -241,7 +309,7 @@ class LFPG_GroupManager
         if (!flag)
             return false;
 
-        // 4. Check distancia sin sqrt — O(1)
+        // 4. Check distancia sin sqrt - O(1)
         vector flagPos = flag.GetPosition();
         float distSq = vector.DistanceSq(buildPos, flagPos);
         if (distSq > m_Config.m_BuildRadiusSq)
@@ -256,7 +324,7 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // TERRITORY CHECK — ¿Hay otra bandera a <500m de esta posición?
+    // TERRITORY CHECK - ?Hay otra bandera a <500m de esta posicion?
     // Usa cache, NO GetObjectsAtPosition
     // ========================================================================
     bool IsPositionInTerritory(vector pos)
@@ -277,9 +345,9 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // FIND GROUP BY POSITION — Helper para ModdedBBB y ModdedGardenPlot
+    // FIND GROUP BY POSITION - Helper para ModdedBBB y ModdedGardenPlot
     // Busca el groupID cuyo build zone contiene esta posicion
-    // O(f) — pero solo se usa en EEDelete (infrecuente)
+    // O(f) - pero solo se usa en EEDelete (infrecuente)
     // ========================================================================
     string FindGroupIDAtPosition(vector pos)
     {
@@ -304,7 +372,8 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // DEPLOY / GARDEN COUNTERS — O(1) runtime
+    // DEPLOY / GARDEN COUNTERS - O(1) runtime
+    // FIX M2: Counters usan MarkDirty (save diferido) en vez de SaveGroups
     // ========================================================================
     bool CanDeploy(string groupID)
     {
@@ -327,20 +396,39 @@ class LFPG_GroupManager
         if (group)
         {
             group.m_DeployedCount = group.m_DeployedCount + 1;
-            SaveGroups();
+            MarkDirty();
         }
     }
 
     void DecrementDeployCount(string groupID)
     {
+        // FIX H1 edge: Si el decrement fue causado por anti-cheat ObjectDelete, saltar
+        if (m_SuppressDeployDecrement)
+        {
+            m_SuppressDeployDecrement = false;
+            return;
+        }
+
         if (!m_Groups.Contains(groupID))
             return;
         LFPG_GroupData group = m_Groups.Get(groupID);
         if (group && group.m_DeployedCount > 0)
         {
             group.m_DeployedCount = group.m_DeployedCount - 1;
-            SaveGroups();
+            MarkDirty();
         }
+    }
+
+    // FIX H1 edge: Activar supresion antes de ObjectDelete anti-cheat
+    void SuppressNextDeployDecrement()
+    {
+        m_SuppressDeployDecrement = true;
+    }
+
+    // FIX H1 edge: Limpiar supresion (llamado desde EEDelete si no hubo decrement)
+    void ClearDeployDecrementSuppress()
+    {
+        m_SuppressDeployDecrement = false;
     }
 
     bool CanPlaceGarden(string groupID)
@@ -361,7 +449,7 @@ class LFPG_GroupManager
         if (group)
         {
             group.m_GardenPlotCount = group.m_GardenPlotCount + 1;
-            SaveGroups();
+            MarkDirty();
         }
     }
 
@@ -373,8 +461,14 @@ class LFPG_GroupManager
         if (group && group.m_GardenPlotCount > 0)
         {
             group.m_GardenPlotCount = group.m_GardenPlotCount - 1;
-            SaveGroups();
+            MarkDirty();
         }
+    }
+
+    // FIX M2: Marcar como dirty (save diferido en siguiente ValidationTick)
+    void MarkDirty()
+    {
+        m_IsDirty = true;
     }
 
     // ========================================================================
@@ -406,7 +500,7 @@ class LFPG_GroupManager
         group.m_DeployedCount = 0;
         group.m_GardenPlotCount = 0;
 
-        // Añadir líder como primer miembro
+        // Anadir lider como primer miembro
         LFPG_MemberData member = new LFPG_MemberData();
         member.Set(playerUID, playerName, GetGame().GetTime());
         group.m_Members.Insert(member);
@@ -431,7 +525,7 @@ class LFPG_GroupManager
         // Persistir
         SaveGroups();
 
-        string logMsg = "[LFPG_Territory] Group created: ";
+        string logMsg = "[SimpleGroup] Group created: ";
         logMsg = logMsg + groupName;
         logMsg = logMsg + " (";
         logMsg = logMsg + groupID;
@@ -442,7 +536,7 @@ class LFPG_GroupManager
         return groupID;
     }
 
-    // Disolver grupo: se llama al destruir bandera o grupo huérfano
+    // Disolver grupo: se llama al destruir bandera o grupo huerfano
     void DissolveGroup(string groupID)
     {
         if (!m_Groups.Contains(groupID))
@@ -477,13 +571,13 @@ class LFPG_GroupManager
         }
 
         // Destruir objetos desplegados si la config lo indica
-        // ANTES de UnregisterFlag — DestroyDeployedObjects usa GetGroupFlag()
+        // ANTES de UnregisterFlag - DestroyDeployedObjects usa GetGroupFlag()
         if (m_Config && m_Config.m_DestroyDeployedOnDissolve)
         {
             DestroyDeployedObjects(group);
         }
 
-        // Limpiar flag references (DESPUÉS de destruir deployed objects)
+        // Limpiar flag references (DESPUES de destruir deployed objects)
         UnregisterFlag(groupID);
 
         // Eliminar grupo
@@ -491,12 +585,12 @@ class LFPG_GroupManager
 
         SaveGroups();
 
-        string logMsg = "[LFPG_Territory] Group dissolved: ";
+        string logMsg = "[SimpleGroup] Group dissolved: ";
         logMsg = logMsg + groupID;
         Print(logMsg);
     }
 
-    // Añadir miembro
+    // Anadir miembro
     bool AddMember(string groupID, string playerUID, string playerName)
     {
         if (!m_Groups.Contains(groupID))
@@ -536,7 +630,7 @@ class LFPG_GroupManager
         return true;
     }
 
-    // Quitar miembro — con traspaso de liderazgo si es líder que abandona
+    // Quitar miembro - con traspaso de liderazgo si es lider que abandona
     bool RemoveMember(string groupID, string playerUID)
     {
         if (!m_Groups.Contains(groupID))
@@ -555,13 +649,13 @@ class LFPG_GroupManager
         // Quitar del array de miembros
         group.m_Members.Remove(memberIdx);
 
-        // Quitar del lookup rápido
+        // Quitar del lookup rapido
         if (m_PlayerToGroup.Contains(playerUID))
         {
             m_PlayerToGroup.Remove(playerUID);
         }
 
-        // Si era el líder Y quedan miembros → traspasar liderazgo
+        // Si era el lider Y quedan miembros -> traspasar liderazgo
         if (wasLeader && group.GetMemberCount() > 0)
         {
             string newLeaderUID = group.GetOldestMemberUID();
@@ -580,7 +674,7 @@ class LFPG_GroupManager
             }
         }
 
-        // Si no quedan miembros → disolver grupo
+        // Si no quedan miembros -> disolver grupo
         if (group.GetMemberCount() <= 0)
         {
             DissolveGroup(groupID);
@@ -605,7 +699,7 @@ class LFPG_GroupManager
         return true;
     }
 
-    // Transferir liderazgo (solo por petición voluntaria del líder)
+    // Transferir liderazgo (solo por peticion voluntaria del lider)
     bool TransferLeadership(string groupID, string currentLeaderUID, string newLeaderUID)
     {
         if (!m_Groups.Contains(groupID))
@@ -649,7 +743,7 @@ class LFPG_GroupManager
         return m_GroupFlags.Get(groupID);
     }
 
-    // ¿Tiene este jugador un grupo?
+    // ?Tiene este jugador un grupo?
     bool HasGroup(string playerUID)
     {
         return m_PlayerToGroup.Contains(playerUID);
@@ -664,7 +758,35 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // UPGRADE — Swap de entidad de bandera
+    // STALE GROUP CLEANUP - Detecta y disuelve grupos cuya bandera ya no existe
+    // Llamado defensivamente antes de operaciones criticas (colocar bandera)
+    // Si EEDelete fallo por cualquier razon, esto lo atrapa
+    // ========================================================================
+    bool CleanupStaleGroupForPlayer(string playerUID)
+    {
+        if (!HasGroup(playerUID))
+            return false;
+
+        string groupID = GetPlayerGroupID(playerUID);
+        if (groupID == "")
+            return false;
+
+        LFPG_FlagBase flag = GetGroupFlag(groupID);
+        if (flag)
+            return false;
+
+        // Flag entity is gone but group persists — stale group
+        string logMsg = "[SimpleGroup] Stale group detected (flag destroyed), dissolving: ";
+        logMsg = logMsg + groupID;
+        logMsg = logMsg + " for player: ";
+        logMsg = logMsg + playerUID;
+        Print(logMsg);
+        DissolveGroup(groupID);
+        return true;
+    }
+
+    // ========================================================================
+    // UPGRADE - Swap de entidad de bandera
     // ========================================================================
     bool UpgradeFlag(string groupID, string newClassName, LFPG_FlagBase oldFlag)
     {
@@ -683,13 +805,13 @@ class LFPG_GroupManager
         vector ori = oldFlag.GetOrientation();
         int memberCount = oldFlag.GetMemberCount();
 
-        // Spawn nueva bandera — verificar que se creó correctamente
+        // Spawn nueva bandera - verificar que se creo correctamente
         Object obj = GetGame().CreateObjectEx(newClassName, pos, ECE_PLACE_ON_SURFACE);
         LFPG_FlagBase newFlag = LFPG_FlagBase.Cast(obj);
         if (!newFlag)
         {
-            // ABORT — no borrar vieja, no modificar nada
-            string errMsg = "[LFPG_Territory] ERROR: Failed to spawn upgrade entity: ";
+            // ABORT - no borrar vieja, no modificar nada
+            string errMsg = "[SimpleGroup] ERROR: Failed to spawn upgrade entity: ";
             errMsg = errMsg + newClassName;
             Print(errMsg);
             return false;
@@ -714,7 +836,9 @@ class LFPG_GroupManager
         UnregisterFlag(groupID);
         RegisterFlag(newFlag, groupID);
 
-        // Borrar entidad vieja (DESPUÉS de registrar la nueva)
+        // Borrar entidad vieja (DESPUES de registrar la nueva)
+        // FIX: Desactivar dissolve en EEDelete — la vieja bandera ya no es duena del grupo
+        oldFlag.SetSkipDissolveOnDelete();
         GetGame().ObjectDelete(oldFlag);
 
         // Persistir
@@ -723,7 +847,7 @@ class LFPG_GroupManager
         // Notificar miembros
         SendGroupSyncUpdateToMembers(group, LFPG_SYNC_TIER_CHANGED);
 
-        string logMsg = "[LFPG_Territory] Flag upgraded: group=";
+        string logMsg = "[SimpleGroup] Flag upgraded: group=";
         logMsg = logMsg + groupID;
         logMsg = logMsg + " newTier=";
         logMsg = logMsg + newFlag.GetTier().ToString();
@@ -754,7 +878,7 @@ class LFPG_GroupManager
                 return LFPG_NAME_INVALID_CHARS;
         }
 
-        // Check nombre duplicado — O(1) via map
+        // Check nombre duplicado - O(1) via map
         if (m_GroupNames.Contains(name))
             return LFPG_NAME_TAKEN;
 
@@ -762,7 +886,7 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // RPC RATE LIMITING — Anti-spam
+    // RPC RATE LIMITING - Anti-spam
     // ========================================================================
     protected bool IsRPCThrottled(string playerUID)
     {
@@ -779,7 +903,7 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // RPC HANDLER — Server-side dispatcher
+    // RPC HANDLER - Server-side dispatcher
     // ========================================================================
     void HandleRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
@@ -795,6 +919,7 @@ class LFPG_GroupManager
 
         if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
         {
+            // RESERVED — no triggered from client (group created via Action/OnPlacementComplete)
             HandleCreateGroup(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_SET_GROUP_NAME)
@@ -803,6 +928,7 @@ class LFPG_GroupManager
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_JOIN)
         {
+            // RESERVED — no triggered from client (join via ActionJoinGroup.OnStartServer)
             HandleRequestJoin(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_LEAVE)
@@ -819,10 +945,12 @@ class LFPG_GroupManager
         }
         else if (rpc_type == LFPG_RPC_C2S_START_INVITE)
         {
+            // RESERVED — no triggered from client (invite via ActionInvite.OnStartServer)
             HandleStartInvite(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_DESTROY_FLAG)
         {
+            // RESERVED — no triggered from client (destroy via ActionDestroyFlag.OnStartServer)
             HandleDestroyFlag(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_GROUP_DATA)
@@ -832,7 +960,7 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // RPC HANDLERS — Individual operations
+    // RPC HANDLERS - Individual operations
     // ========================================================================
 
     protected void HandleCreateGroup(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
@@ -849,14 +977,24 @@ class LFPG_GroupManager
             return;
 
         // Crear grupo con nombre temporal (se renombra via SET_GROUP_NAME)
-        string tempName = "Group_";
-        tempName = tempName + senderUID.Substring(senderUID.Length() - 4, 4);
+        string tempName = "#TEMP#";
+        int suidLen = senderUID.Length();
+        if (suidLen > 4)
+        {
+            int sIdx = suidLen - 4;
+            string sSuffix = senderUID.Substring(sIdx, 4);
+            tempName = tempName + sSuffix;
+        }
+        else
+        {
+            tempName = tempName + senderUID;
+        }
 
         string groupID = CreateGroup(senderUID, senderName, tempName, flag);
         if (groupID == "")
             return;
 
-        // Pedir al cliente que abra el diálogo de nombre
+        // Pedir al cliente que abra el dialogo de nombre
         SendOpenNameDialog(sender, flag, groupID);
 
         // Enviar sync completo al creador
@@ -879,7 +1017,7 @@ class LFPG_GroupManager
         if (!group)
             return;
 
-        // Solo el líder puede renombrar
+        // Solo el lider puede renombrar
         if (!group.IsLeader(senderUID))
             return;
 
@@ -904,7 +1042,8 @@ class LFPG_GroupManager
         SaveGroups();
 
         SendNameResult(sender, flag, LFPG_NAME_OK);
-        SendGroupSyncUpdateToMembers(group, LFPG_SYNC_LEADER_CHANGED);
+        // Notificar a todos con sync completo (nombre cambio)
+        SendGroupSyncUpdateToMembers(group, LFPG_SYNC_COUNT_CHANGED);
     }
 
     protected void HandleRequestJoin(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
@@ -1019,8 +1158,8 @@ class LFPG_GroupManager
         if (!itemInHands)
             return;
 
-        string itemType = itemInHands.GetType();
-        if (itemType != "Hatchet")
+        string kindHatchet = "Hatchet";
+        if (!itemInHands.IsKindOf(kindHatchet))
             return;
 
         // Disolver grupo y destruir bandera
@@ -1041,15 +1180,13 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // PLAYER JOIN/LEAVE SERVER — Llamado desde modded PlayerBase
+    // PLAYER JOIN/LEAVE SERVER - Llamado desde modded PlayerBase
     // ========================================================================
     void OnPlayerJoined(string playerUID, PlayerBase player)
     {
         if (!HasGroup(playerUID))
             return;
 
-        // Enviar lightweight sync para que el cliente tenga datos de cache
-        // antes de intentar construir
         string groupID = GetPlayerGroupID(playerUID);
         LFPG_FlagBase flag = GetGroupFlag(groupID);
 
@@ -1058,10 +1195,36 @@ class LFPG_GroupManager
             return;
 
         SendLightweightSync(identity, groupID, flag);
+
+        // Si el grupo tiene nombre temporal y este jugador es lider,
+        // re-enviar dialogo de nombre (forzado)
+        // Prefijo temporal "#TEMP#" - contiene '#' que no esta en
+        // LFPG_NAME_ALLOWED_CHARS, imposible que un jugador lo escriba
+        if (m_Groups.Contains(groupID))
+        {
+            LFPG_GroupData group = m_Groups.Get(groupID);
+            if (group && group.IsLeader(playerUID))
+            {
+                string prefix = "#TEMP#";
+                int prefixLen = prefix.Length();
+                int nameLen = group.m_GroupName.Length();
+                if (nameLen >= prefixLen)
+                {
+                    string nameStart = group.m_GroupName.Substring(0, prefixLen);
+                    if (nameStart == prefix)
+                    {
+                        if (flag)
+                        {
+                            SendOpenNameDialog(identity, flag, groupID);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // ========================================================================
-    // SEND RPC HELPERS — Server → Client
+    // SEND RPC HELPERS - Server -> Client
     // ========================================================================
 
     void SendGroupSyncFull(PlayerIdentity target, string groupID, LFPG_FlagBase flag)
@@ -1102,9 +1265,25 @@ class LFPG_GroupManager
         int deployLimit = group.GetDeployLimit(m_Config);
         rpc.Write(deployLimit);
 
-        // Posición de la bandera (para cache del cliente)
+        // Posicion de la bandera (para cache del cliente)
         vector flagPos = flag.GetPosition();
         rpc.Write(flagPos);
+
+        // FIX 4: Build radius sincronizado
+        float buildRadiusSq = 900.0;
+        if (m_Config)
+        {
+            buildRadiusSq = m_Config.m_BuildRadiusSq;
+        }
+        rpc.Write(buildRadiusSq);
+
+        // FIX M4: Garden max sincronizado
+        int gardenMax = 3;
+        if (m_Config)
+        {
+            gardenMax = m_Config.m_MaxGardenPlotsPerFlag;
+        }
+        rpc.Write(gardenMax);
 
         rpc.Send(flag, LFPG_RPC_S2C_GROUP_SYNC_FULL, true, target);
     }
@@ -1142,7 +1321,24 @@ class LFPG_GroupManager
             rpc.Write(0.0);
         }
 
-        // Se envía a null target (flag puede no existir aún en cliente)
+        // FIX 4: Build radius sincronizado
+        float buildRadiusSq = 900.0;
+        if (m_Config)
+        {
+            buildRadiusSq = m_Config.m_BuildRadiusSq;
+        }
+        rpc.Write(buildRadiusSq);
+
+        // FIX AUDIT: Garden count/max en lightweight sync (antes faltaban)
+        rpc.Write(group.m_GardenPlotCount);
+        int gardenMaxLW = 3;
+        if (m_Config)
+        {
+            gardenMaxLW = m_Config.m_MaxGardenPlotsPerFlag;
+        }
+        rpc.Write(gardenMaxLW);
+
+        // Se envia a null target (flag puede no existir aun en cliente)
         // El cliente lo procesa via PlayerBase.OnRPC o MissionGameplay
         if (flag)
         {
@@ -1187,7 +1383,7 @@ class LFPG_GroupManager
             return;
 
         // Buscar cualquier bandera cercana como target del RPC
-        // Si no hay, no podemos enviar (el jugador lo detectará al abrir panel)
+        // Si no hay, no podemos enviar (el jugador lo detectara al abrir panel)
         LFPG_FlagBase flag = GetGroupFlag(groupID);
         if (!flag)
             return;
@@ -1197,7 +1393,7 @@ class LFPG_GroupManager
         rpc.Send(flag, LFPG_RPC_S2C_GROUP_DISSOLVED, true, identity);
     }
 
-    protected void SendOpenNameDialog(PlayerIdentity target, LFPG_FlagBase flag, string groupID)
+    void SendOpenNameDialog(PlayerIdentity target, LFPG_FlagBase flag, string groupID)
     {
         if (!target || !flag)
             return;
@@ -1223,14 +1419,14 @@ class LFPG_GroupManager
 
     protected PlayerBase GetPlayerByUID(string uid)
     {
-        // Buscar jugador online por UID
-        array<Man> players = new array<Man>;
-        GetGame().GetPlayers(players);
+        // FIX H5: Reutilizar buffer en vez de new array
+        m_PlayerSearchBuffer.Clear();
+        GetGame().GetPlayers(m_PlayerSearchBuffer);
         int i;
-        int count = players.Count();
+        int count = m_PlayerSearchBuffer.Count();
         for (i = 0; i < count; i = i + 1)
         {
-            Man man = players[i];
+            Man man = m_PlayerSearchBuffer[i];
             if (!man)
                 continue;
             PlayerIdentity identity = man.GetIdentity();
@@ -1258,6 +1454,7 @@ class LFPG_GroupManager
         array<CargoBase> proxyCargos = new array<CargoBase>;
         GetGame().GetObjectsAtPosition(pos, radius, objects, proxyCargos);
 
+        string ownerGroupID = group.m_GroupID;
         int i;
         int count = objects.Count();
         for (i = 0; i < count; i = i + 1)
@@ -1270,13 +1467,19 @@ class LFPG_GroupManager
             BaseBuildingBase building = BaseBuildingBase.Cast(obj);
             if (building)
             {
+                // FIX AUDIT: Verificar que el objeto pertenece a ESTE grupo
+                // (evita dano colateral si otra bandera esta muy cerca)
+                string buildingOwner = FindGroupIDAtPosition(building.GetPosition());
+                if (buildingOwner != ownerGroupID)
+                    continue;
+
                 GetGame().ObjectDelete(building);
             }
         }
     }
 
     // ========================================================================
-    // PERSISTENCE — JSON atómico
+    // PERSISTENCE - JSON atomico
     // ========================================================================
     void SaveGroups()
     {
@@ -1295,7 +1498,7 @@ class LFPG_GroupManager
             }
         }
 
-        // Escritura atómica: tmp → bak → final
+        // Escritura atomica: tmp -> bak -> final
         string tmpPath = LFPG_TerritoryConfig.GetGroupsTmpPath();
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
@@ -1330,6 +1533,7 @@ class LFPG_GroupManager
     void LoadGroups()
     {
         string filePath = LFPG_TerritoryConfig.GetGroupsPath();
+        string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string dirPath = LFPG_TerritoryConfig.GetConfigDir();
 
         // Crear directorio si no existe
@@ -1340,17 +1544,33 @@ class LFPG_GroupManager
 
         if (!FileExist(filePath))
         {
-            Print("[LFPG_Territory] No groups.json found. Starting fresh.");
+            Print("[SimpleGroup] No groups.json found. Starting fresh.");
             return;
         }
 
         LFPG_GroupsFileData fileData = new LFPG_GroupsFileData();
         JsonFileLoader<LFPG_GroupsFileData>.JsonLoadFile(filePath, fileData);
 
-        if (!fileData || !fileData.m_Groups)
+        // FIX M1: Si la carga primaria falla, intentar backup
+        if (!fileData || !fileData.m_Groups || fileData.m_Groups.Count() == 0)
         {
-            Print("[LFPG_Territory] ERROR: Failed to parse groups.json");
-            return;
+            Print("[SimpleGroup] WARNING: Primary groups.json failed or empty. Trying backup...");
+            if (FileExist(bakPath))
+            {
+                fileData = new LFPG_GroupsFileData();
+                JsonFileLoader<LFPG_GroupsFileData>.JsonLoadFile(bakPath, fileData);
+                if (!fileData || !fileData.m_Groups)
+                {
+                    Print("[SimpleGroup] ERROR: Backup also failed. Starting fresh.");
+                    return;
+                }
+                Print("[SimpleGroup] Backup loaded successfully.");
+            }
+            else
+            {
+                Print("[SimpleGroup] ERROR: No backup found. Starting fresh.");
+                return;
+            }
         }
 
         // Reconstruir estructuras en memoria
@@ -1370,7 +1590,7 @@ class LFPG_GroupManager
                 m_GroupNames.Set(group.m_GroupName, true);
             }
 
-            // Reconstruir player→group map
+            // Reconstruir player->group map
             int j;
             int memberCount = group.m_Members.Count();
             for (j = 0; j < memberCount; j = j + 1)
@@ -1383,7 +1603,7 @@ class LFPG_GroupManager
             }
         }
 
-        string logMsg = "[LFPG_Territory] Loaded ";
+        string logMsg = "[SimpleGroup] Loaded ";
         logMsg = logMsg + m_Groups.Count().ToString();
         logMsg = logMsg + " groups from JSON.";
         Print(logMsg);

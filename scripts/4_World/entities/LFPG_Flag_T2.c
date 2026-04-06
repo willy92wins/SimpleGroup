@@ -1,5 +1,5 @@
 // ============================================================================
-// LFPG_Flag_T2.c — 4_World/entities
+// LFPG_Flag_T2.c - 4_World/entities
 // Tier 2: Tronco + bandera, estructura media
 // Attachment slots: Firewood + Nails + Stones (para upgrade a T3)
 // ============================================================================

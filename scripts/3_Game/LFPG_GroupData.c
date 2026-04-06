@@ -1,5 +1,5 @@
 // ============================================================================
-// LFPG_GroupData.c — 3_Game
+// LFPG_GroupData.c - 3_Game
 // Modelo de datos serializable a JSON para grupos y miembros
 //
 // OPTIMIZACIONES aplicadas:
@@ -10,7 +10,7 @@
 // ============================================================================
 
 // ----------------------------------------------------------------------------
-// LFPG_MemberData — Datos de un miembro del grupo (JSON-serializable)
+// LFPG_MemberData - Datos de un miembro del grupo (JSON-serializable)
 // ----------------------------------------------------------------------------
 class LFPG_MemberData
 {
@@ -34,7 +34,7 @@ class LFPG_MemberData
 };
 
 // ----------------------------------------------------------------------------
-// LFPG_GroupData — Datos completos de un grupo (JSON-serializable)
+// LFPG_GroupData - Datos completos de un grupo (JSON-serializable)
 // ----------------------------------------------------------------------------
 class LFPG_GroupData
 {
@@ -66,7 +66,7 @@ class LFPG_GroupData
         m_FlagNetHigh = 0;
     }
 
-    // Genera un ID único: timestamp del server + random + sufijo del UID
+    // Genera un ID unico: timestamp del server + random + sufijo del UID
     static string GenerateGroupID(string leaderUID)
     {
         int gameTime = GetGame().GetTime();
@@ -76,7 +76,7 @@ class LFPG_GroupData
         id = id + "_";
         id = id + rnd.ToString();
         id = id + "_";
-        // Tomar últimos 6 chars del UID para unicidad adicional
+        // Tomar ultimos 6 chars del UID para unicidad adicional
         int uidLen = leaderUID.Length();
         if (uidLen > 6)
         {
@@ -106,19 +106,19 @@ class LFPG_GroupData
         return -1;
     }
 
-    // ¿Es este jugador miembro del grupo?
+    // ?Es este jugador miembro del grupo?
     bool IsMember(string playerUID)
     {
         return (FindMemberIndex(playerUID) >= 0);
     }
 
-    // ¿Es este jugador el líder?
+    // ?Es este jugador el lider?
     bool IsLeader(string playerUID)
     {
         return (m_LeaderUID == playerUID);
     }
 
-    // Obtiene el miembro más antiguo que NO sea el líder actual
+    // Obtiene el miembro mas antiguo que NO sea el lider actual
     // Para traspaso de liderazgo al abandonar
     string GetOldestMemberUID()
     {
@@ -135,7 +135,7 @@ class LFPG_GroupData
         return "";
     }
 
-    // Número de miembros
+    // Numero de miembros
     int GetMemberCount()
     {
         return m_Members.Count();
@@ -158,7 +158,7 @@ class LFPG_GroupData
 };
 
 // ----------------------------------------------------------------------------
-// LFPG_FlagPositionCache — Struct ligera para cache de posiciones de banderas
+// LFPG_FlagPositionCache - Struct ligera para cache de posiciones de banderas
 // Solo existe en memoria del GroupManager, NO se serializa
 // ----------------------------------------------------------------------------
 class LFPG_FlagPositionCache
@@ -186,7 +186,7 @@ class LFPG_FlagPositionCache
 };
 
 // ----------------------------------------------------------------------------
-// LFPG_GroupsFileData — Wrapper para serialización/deserialización del JSON
+// LFPG_GroupsFileData - Wrapper para serializacion/deserializacion del JSON
 // El JSON contiene un array de grupos
 // ----------------------------------------------------------------------------
 class LFPG_GroupsFileData

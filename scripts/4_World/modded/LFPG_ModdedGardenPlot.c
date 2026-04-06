@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ModdedGardenPlot.c — 4_World/modded
-// Restricción de GardenPlot: territorio + máximo configurable por bandera
-// Modda GardenPlot (base), así GardenPlotPolytunnel y GardenPlotGreenhouse heredan
+// LFPG_ModdedGardenPlot.c - 4_World/modded
+// Restriccion de GardenPlot: territorio + maximo configurable por bandera
+// Modda GardenPlot (base), asi GardenPlotPolytunnel y GardenPlotGreenhouse heredan
 //
 // Usa counter O(1) del GroupManager (no proximity scan)
 // ============================================================================
@@ -10,11 +10,11 @@ modded class GardenPlot
 {
     override bool CanBePlaced(Man player, vector position)
     {
-        // Checks vanilla (superficie fértil, etc.)
+        // Checks vanilla (superficie fertil, etc.)
         if (!super.CanBePlaced(player, position))
             return false;
 
-        // Check de territorio: igual que cualquier construcción
+        // Check de territorio: igual que cualquier construccion
         PlayerBase pb = PlayerBase.Cast(player);
         if (!pb)
             return false;
@@ -53,7 +53,7 @@ modded class GardenPlot
         return true;
     }
 
-    // Server: incrementar counter al colocar con éxito
+    // Server: incrementar counter al colocar con exito
     override void OnPlacementComplete(Man player, vector position = "0 0 0", vector orientation = "0 0 0")
     {
         super.OnPlacementComplete(player, position, orientation);
@@ -84,12 +84,12 @@ modded class GardenPlot
     override void EEDelete(EntityAI parent)
     {
         #ifdef SERVER
-        // Buscar a qué grupo pertenece este garden plot por proximidad a banderas
+        // Buscar a que grupo pertenece este garden plot por proximidad a banderas
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
             vector pos = GetPosition();
-            // Buscar la bandera más cercana en build range
+            // Buscar la bandera mas cercana en build range
             string groupID = FindOwnerGroupID(mgr, pos);
             if (groupID != "")
             {
@@ -101,7 +101,7 @@ modded class GardenPlot
         super.EEDelete(parent);
     }
 
-    // Busca el grupo dueño por proximidad a su bandera
+    // Busca el grupo dueno por proximidad a su bandera
     protected string FindOwnerGroupID(LFPG_GroupManager mgr, vector pos)
     {
         if (!mgr)

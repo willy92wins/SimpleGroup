@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ActionDestroyFlag.c — 4_World/actions
-// Acción: líder destruye la bandera con hatchet → disuelve grupo
-// Condición: líder del grupo + Hatchet en manos
+// LFPG_ActionDestroyFlag.c - 4_World/actions
+// Accion: lider destruye la bandera con hatchet -> disuelve grupo
+// FIX 3: Client usa Cache
 // ============================================================================
 
 class LFPG_ActionDestroyFlag extends ActionInteractBase
@@ -14,13 +14,8 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
 
     override void CreateConditionComponents()
     {
-        m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
-    }
-
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
+        m_ConditionItem = new CCINonRuined;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
     override bool HasTarget()
@@ -37,26 +32,49 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         if (!flag)
             return false;
 
-        if (!flag.HasGroup())
-            return false;
-
-        // Necesita Hatchet en manos
+        // Necesita Hatchet en manos (ambos lados)
         EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
         if (!itemInHands)
             return false;
 
-        string handType = itemInHands.GetType();
-        if (handType != "Hatchet")
+        string kindHatchet = "Hatchet";
+        if (!itemInHands.IsKindOf(kindHatchet))
             return false;
 
-        // Solo líder
-        if (!IsDedicatedServer())
+        // FIX 3: Client-side usa SOLO el cache
+        if (!GetGame().IsDedicatedServer())
         {
+            if (!LFPG_ClientGroupCache.HasGroup())
+                return false;
+
             if (!LFPG_ClientGroupCache.IsLeader())
                 return false;
-            if (LFPG_ClientGroupCache.s_GroupID != flag.GetGroupID())
+
+            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
                 return false;
+
+            return true;
         }
+
+        // Server-side
+        if (!flag.HasGroup())
+            return false;
+
+        PlayerIdentity identity = player.GetIdentity();
+        if (!identity)
+            return false;
+
+        string playerUID = identity.GetPlainId();
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (!mgr)
+            return false;
+
+        LFPG_GroupData group = mgr.GetGroupByPlayer(playerUID);
+        if (!group || !group.IsLeader(playerUID))
+            return false;
+
+        if (group.m_GroupID != flag.GetGroupID())
+            return false;
 
         return true;
     }
@@ -87,10 +105,7 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         if (!group || !group.IsLeader(playerUID))
             return;
 
-        // Disolver grupo (notifica a todos los miembros)
         mgr.DissolveGroup(groupID);
-
-        // Destruir la entidad bandera
         GetGame().ObjectDelete(flag);
     }
 };

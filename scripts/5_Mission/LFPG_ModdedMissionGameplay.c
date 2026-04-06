@@ -1,5 +1,5 @@
 // ============================================================================
-// LFPG_ModdedMissionGameplay.c — 5_Mission
+// LFPG_ModdedMissionGameplay.c - 5_Mission
 // Client-side: inicializar cache, crear panel, keybind P para toggle
 // ============================================================================
 
@@ -12,30 +12,34 @@ modded class MissionGameplay
         // Inicializar cache del cliente
         LFPG_ClientGroupCache.Init();
 
-        // Pre-crear el panel (oculto). GetWorkspace() es válido aquí.
-        LFPG_GroupPanel.CreateInstance();
-
-        Print("[LFPG_Territory] MissionGameplay initialized (client).");
+        // FIX C2: Panel ya no se pre-crea. Se instancia al pulsar P.
+        Print("[SimpleGroup] MissionGameplay initialized (client).");
     }
 
     override void OnUpdate(float timeslice)
     {
         super.OnUpdate(timeslice);
 
-        // Check keybind P (configurable via inputs.xml)
-        string inputName = "UALFPGGroupPanel";
-        UAInput input = GetUApi().GetInputByName(inputName);
-        if (input && input.LocalPress())
+        // Check keybind U (patron VPP: GetGame().GetInput().LocalPress)
+        Input input = GetGame().GetInput();
+        if (input)
         {
-            ToggleGroupPanel();
+            string inputName = "UALFPGGroupPanel";
+            if (input.LocalPress(inputName, false))
+            {
+                UIScriptedMenu currentMenu = GetGame().GetUIManager().GetMenu();
+                bool panelOpen = (LFPG_GroupPanel.GetInstance() != null);
+                if (!currentMenu || panelOpen)
+                {
+                    ToggleGroupPanel();
+                }
+            }
         }
     }
 
     protected void ToggleGroupPanel()
     {
-        if (!LFPG_ClientGroupCache.HasGroup())
-            return;
-
+        // FIX C2: Toggle crea/destruye el panel (patron ScriptViewMenu)
         LFPG_GroupPanel.Toggle();
     }
 

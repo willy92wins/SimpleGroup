@@ -1,10 +1,10 @@
 // ============================================================================
-// LFPG_ModdedPlayerBase.c — 4_World/modded
-// Sync de datos de grupo al reconectar — usa EEInit() de la entidad jugador
+// LFPG_ModdedPlayerBase.c - 4_World/modded
+// Sync de datos de grupo al reconectar - usa EEInit() de la entidad jugador
 //
-// OPTIMIZACIÓN vs MissionGameplay.OnInit():
-//  En OnInit() el PlayerBase puede no existir aún en el server.
-//  EEInit() se dispara cuando la entidad del jugador está lista.
+// OPTIMIZACION vs MissionGameplay.OnInit():
+//  En OnInit() el PlayerBase puede no existir aun en el server.
+//  EEInit() se dispara cuando la entidad del jugador esta lista.
 //  Garantiza que GetIdentity() funciona y podemos enviar RPCs.
 // ============================================================================
 
@@ -16,15 +16,13 @@ modded class PlayerBase
 
         #ifdef SERVER
         // Solo en servidor: enviar sync si el jugador tiene grupo
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(
-            LFPG_DelayedPlayerSync, 2000, false, this
-        );
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_DelayedPlayerSync, 2000, false, this);
         #endif
     }
 };
 
-// Función global para el CallLater (no se puede pasar método de modded class)
-// El delay de 2s asegura que la identidad esté disponible
+// Funcion global para el CallLater (no se puede pasar metodo de modded class)
+// El delay de 2s asegura que la identidad este disponible
 void LFPG_DelayedPlayerSync(PlayerBase player)
 {
     if (!player)

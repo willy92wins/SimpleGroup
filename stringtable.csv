@@ -29,3 +29,4 @@
 "STR_LFPG_ERR_NAME_INVALID","Name contains invalid characters","Name contains invalid characters","","","","","","","El nombre contiene caracteres no validos","","","","","",
 "STR_LFPG_ERR_TERRITORY_BLOCKED","Too close to another territory","Too close to another territory","","","","","","","Demasiado cerca de otro territorio","","","","","",
 "STR_LFPG_ERR_DEPLOY_LIMIT","Deploy limit reached","Deploy limit reached","","","","","","","Limite de despliegue alcanzado","","","","","",
+"STR_LFPG_ACTION_REGISTER","Register Territory","Register Territory","","","","","","","Registrar Territorio","","","","","",

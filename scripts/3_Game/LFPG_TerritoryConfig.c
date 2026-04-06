@@ -1,8 +1,8 @@
 // ============================================================================
-// LFPG_TerritoryConfig.c — 3_Game
-// Configuración del servidor — serializable a/desde JSON
+// LFPG_TerritoryConfig.c - 3_Game
+// Configuracion del servidor - serializable a/desde JSON
 //
-// Archivo: $profile/LFPG_Territory/config.json
+// Archivo: $profile/SimpleGroup/config.json
 // Se carga una vez al inicio del servidor.
 // Si no existe, se crea con valores por defecto.
 // ============================================================================
@@ -16,7 +16,7 @@ class LFPG_TerritoryConfig
     int m_BuildRadiusMeters;
     int m_TerritoryRadiusMeters;
 
-    // --- Invitación ---
+    // --- Invitacion ---
     int m_InviteDurationSeconds;
 
     // --- Nombre de grupo ---
@@ -56,7 +56,7 @@ class LFPG_TerritoryConfig
         m_TierDeployLimits.Insert(12);
         m_TierDeployLimits.Insert(16);
 
-        // Duración en segundos: T1=2d, T2=5d, T3=7d
+        // Duracion en segundos: T1=2d, T2=5d, T3=7d
         m_TierDurations = new array<int>;
         m_TierDurations.Insert(172800);
         m_TierDurations.Insert(432000);
@@ -110,7 +110,7 @@ class LFPG_TerritoryConfig
         m_TerritoryRadiusSq = m_TerritoryRadiusMeters * m_TerritoryRadiusMeters;
     }
 
-    // Obtiene la duración del tier en segundos
+    // Obtiene la duracion del tier en segundos
     int GetTierDuration(int tier)
     {
         int idx = tier - 1;
@@ -122,32 +122,32 @@ class LFPG_TerritoryConfig
     }
 
     // ========================================================================
-    // Carga/Guarda — Rutas de archivo
+    // Carga/Guarda - Rutas de archivo
     // ========================================================================
 
     static string GetConfigDir()
     {
-        return "$profile:LFPG_Territory";
+        return "$profile:SimpleGroup";
     }
 
     static string GetConfigPath()
     {
-        return "$profile:LFPG_Territory/config.json";
+        return "$profile:SimpleGroup/config.json";
     }
 
     static string GetGroupsPath()
     {
-        return "$profile:LFPG_Territory/groups.json";
+        return "$profile:SimpleGroup/groups.json";
     }
 
     static string GetGroupsBackupPath()
     {
-        return "$profile:LFPG_Territory/groups.json.bak";
+        return "$profile:SimpleGroup/groups.json.bak";
     }
 
     static string GetGroupsTmpPath()
     {
-        return "$profile:LFPG_Territory/groups.json.tmp";
+        return "$profile:SimpleGroup/groups.json.tmp";
     }
 
     // Carga config desde JSON. Si no existe, crea con defaults y guarda.
@@ -165,10 +165,9 @@ class LFPG_TerritoryConfig
 
         if (FileExist(filePath))
         {
-            string errorMsg;
             config = new LFPG_TerritoryConfig();
             JsonFileLoader<LFPG_TerritoryConfig>.JsonLoadFile(filePath, config);
-            string loadMsg = "[LFPG_Territory] Config loaded from: ";
+            string loadMsg = "[SimpleGroup] Config loaded from: ";
             loadMsg = loadMsg + filePath;
             Print(loadMsg);
         }
@@ -176,7 +175,7 @@ class LFPG_TerritoryConfig
         {
             config = new LFPG_TerritoryConfig();
             JsonFileLoader<LFPG_TerritoryConfig>.JsonSaveFile(filePath, config);
-            string createMsg = "[LFPG_Territory] Default config created at: ";
+            string createMsg = "[SimpleGroup] Default config created at: ";
             createMsg = createMsg + filePath;
             Print(createMsg);
         }

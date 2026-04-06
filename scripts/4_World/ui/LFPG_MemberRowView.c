@@ -1,13 +1,13 @@
 // ============================================================================
-// LFPG_MemberRowView.c — 4_World/ui
+// LFPG_MemberRowView.c - 4_World/ui
 // ScriptView para cada fila de miembro en el panel de grupo
 // Usa Dabs MVC: ScriptView + ViewController con ViewBindings
 //
 // Bindings del layout:
-//  - LeaderStar: TextWidget (★ si es líder, vacío si no)
+//  - LeaderStar: TextWidget (* si es lider, vacio si no)
 //  - MemberName: TextWidget (nombre del jugador)
-//  - BtnTransfer: visible solo para líder, no en su propia fila
-//  - BtnKick: visible solo para líder, no en su propia fila
+//  - BtnTransfer: visible solo para lider, no en su propia fila
+//  - BtnKick: visible solo para lider, no en su propia fila
 // ============================================================================
 
 class LFPG_MemberRowController extends ViewController
@@ -40,7 +40,7 @@ class LFPG_MemberRowController extends ViewController
         m_IsLeader = isLeader;
         m_IsSelf = isLocalPlayer;
 
-        // Estrella de líder
+        // Estrella de lider
         if (isLeader)
         {
             LeaderStar = "*";
@@ -58,7 +58,7 @@ class LFPG_MemberRowController extends ViewController
         string propName = "MemberName";
         NotifyPropertyChanged(propName);
 
-        // Botones: solo visibles si el local es líder Y esta fila no es el local
+        // Botones: solo visibles si el local es lider Y esta fila no es el local
         bool showButtons = false;
         if (localIsLeader && !isLocalPlayer)
         {
@@ -95,16 +95,10 @@ class LFPG_MemberRowController extends ViewController
         return true;
     }
 
-    // Enviar RPC con el UID del target
+    // FIX C1: Usa helper centralizado del cache
     protected void SendMemberRPC(int rpcType, string targetUID)
     {
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
-        if (!player)
-            return;
-
-        // Necesitamos encontrar la bandera del grupo para enviar el RPC
-        // Buscar la bandera más cercana que sea LFPG_FlagBase
-        LFPG_FlagBase flag = FindNearestGroupFlag(player);
+        LFPG_FlagBase flag = LFPG_ClientGroupCache.FindLocalGroupFlag();
         if (!flag)
             return;
 
@@ -112,37 +106,16 @@ class LFPG_MemberRowController extends ViewController
         rpc.Write(targetUID);
         rpc.Send(flag, rpcType, true, null);
     }
-
-    protected LFPG_FlagBase FindNearestGroupFlag(PlayerBase player)
-    {
-        vector playerPos = player.GetPosition();
-        float searchRadius = 100.0;
-        array<Object> objects = new array<Object>;
-        array<CargoBase> proxyCargos = new array<CargoBase>;
-        GetGame().GetObjectsAtPosition(playerPos, searchRadius, objects, proxyCargos);
-
-        int i;
-        int count = objects.Count();
-        for (i = 0; i < count; i = i + 1)
-        {
-            LFPG_FlagBase flag = LFPG_FlagBase.Cast(objects[i]);
-            if (flag && flag.GetGroupID() == LFPG_ClientGroupCache.s_GroupID)
-            {
-                return flag;
-            }
-        }
-        return null;
-    }
 };
 
 // ============================================================================
-// LFPG_MemberRowView — ScriptView wrapper
+// LFPG_MemberRowView - ScriptView wrapper
 // ============================================================================
 class LFPG_MemberRowView extends ScriptView
 {
     override string GetLayoutFile()
     {
-        return "LFPG_Territory/gui/layouts/group_member_row.layout";
+        return "SimpleGroup/gui/layouts/group_member_row.layout";
     }
 
     override typename GetControllerType()

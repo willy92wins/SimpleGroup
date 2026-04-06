@@ -1,5 +1,5 @@
 // ============================================================================
-// LFPG_ModdedMissionServer.c — 5_Mission
+// LFPG_ModdedMissionServer.c - 5_Mission
 // Init del GroupManager en el server
 // ============================================================================
 
@@ -17,7 +17,7 @@ modded class MissionServer
             mgr.Init();
         }
 
-        Print("[LFPG_Territory] MissionServer initialized.");
+        Print("[SimpleGroup] MissionServer initialized.");
     }
 
     override void OnMissionFinish()

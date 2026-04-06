@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_CraftFlagKitT1.c — 4_World (RecipeBase auto-discovered by engine)
-// Crafteo: LongWoodenStick + Rag → LFPG_FlagKit_T1
-// Patrón exacto de CraftTerritoryFlagKit vanilla
+// LFPG_CraftFlagKitT1.c - 4_World (RecipeBase auto-discovered by engine)
+// Crafteo: LongWoodenStick + Rag -> LFPG_FlagKit_T1
+// Patron exacto de CraftTerritoryFlagKit vanilla
 // ============================================================================
 
 class LFPG_CraftFlagKitT1 extends RecipeBase
@@ -57,7 +57,7 @@ class LFPG_CraftFlagKitT1 extends RecipeBase
 
     override bool CanDo(ItemBase ingredients[], PlayerBase player)
     {
-        // No permitir si están attached a otro objeto
+        // No permitir si estan attached a otro objeto
         if (ingredients[0].GetInventory().IsAttachment())
             return false;
         if (ingredients[1].GetInventory().IsAttachment())

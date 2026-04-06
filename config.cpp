@@ -1,21 +1,66 @@
 // ============================================================================
-// LFPG_Territory — config.cpp
+// SimpleGroup — config.cpp
 // Sistema de Grupos / Territorio / Restriccion de Construccion
 // Herencia: ItemBase (NO Flag_Base) — TechRef FINAL v2
 //
 // PLACEHOLDER MODELS:
-//   Kit T1  → LongWoodenStick (palo largo)
-//   Banderas → WoodenCrate (cajon de madera)
+//   Kit T1  → WoodenCrate
+//   Banderas → WoodenCrate
 //   VERIFICAR RUTAS .p3d antes de empaquetar!
 // ============================================================================
 
+// ============================================================================
+// CfgSlots — Slots custom para upgrades (patron LFPowerGrid)
+// ============================================================================
+class CfgSlots
+{
+    // T1 -> T2 upgrade slots
+    class Slot_LFPG_FlagLog
+    {
+        name = "LFPG_FlagLog";
+        displayName = "Wooden Log";
+        ghostIcon = "planks";
+        stackMax = 1;
+    };
+    class Slot_LFPG_FlagRope
+    {
+        name = "LFPG_FlagRope";
+        displayName = "Rope";
+        ghostIcon = "metalwire";
+        stackMax = 1;
+    };
+    // T2 -> T3 upgrade slots
+    class Slot_LFPG_FlagFirewood
+    {
+        name = "LFPG_FlagFirewood";
+        displayName = "Firewood";
+        ghostIcon = "firewood";
+        stackMax = 6;
+    };
+    class Slot_LFPG_FlagNails
+    {
+        name = "LFPG_FlagNails";
+        displayName = "Nails";
+        ghostIcon = "nails";
+        stackMax = 60;
+    };
+    class Slot_LFPG_FlagStones
+    {
+        name = "LFPG_FlagStones";
+        displayName = "Stones";
+        ghostIcon = "stones";
+        stackMax = 16;
+    };
+};
+
 class CfgPatches
 {
-    class LFPG_Territory
+    class SimpleGroup
     {
         units[] =
         {
             "LFPG_FlagKit_T1",
+            "LFPG_Flag_T1_Placing",
             "LFPG_Flag_T1",
             "LFPG_Flag_T2",
             "LFPG_Flag_T3"
@@ -27,6 +72,8 @@ class CfgPatches
             "DZ_Data",
             "DZ_Scripts",
             "DZ_Gear_Camping",
+            "DZ_Gear_Consumables",
+            "DZ_Gear_Crafting",
             "JM_CF_Scripts"
         };
     };
@@ -42,22 +89,32 @@ class CfgVehicles
 
     // ========================================================================
     // LFPG_FlagKit_T1 — Kit crafteable y deployable
-    // Placeholder: modelo LongWoodenStick
     // ========================================================================
     class LFPG_FlagKit_T1: Inventory_Base
     {
         scope = 2;
         displayName = "$STR_LFPG_FLAGKIT_T1";
         descriptionShort = "$STR_LFPG_FLAGKIT_T1_DESC";
-        // TODO: verificar ruta exacta en tu P: drive
-        model = "\dz\gear\crafting\wooden_stick_blunt.p3d";
+        model = "\dz\gear\camping\wooden_case.p3d";
+        projectionTypename = "LFPG_Flag_T1_Placing";
         rotationFlags = 16;
         weight = 800;
         itemSize[] = { 1, 5 };
+        itemBehaviour = 2;
         canBeSplit = 0;
         varQuantityInit = 0;
         varQuantityMin = 0;
         varQuantityMax = 0;
+    };
+
+    // ========================================================================
+    // LFPG_Flag_T1_Placing — Entidad SOLO para hologram preview
+    // ========================================================================
+    class LFPG_Flag_T1_Placing: Inventory_Base
+    {
+        scope = 1;
+        model = "\dz\gear\camping\wooden_case.p3d";
+        storageCategory = 1;
     };
 
     // ========================================================================
@@ -87,29 +144,37 @@ class CfgVehicles
 
     // ========================================================================
     // LFPG_Flag_T1 — Tier 1
-    // Placeholder: modelo WoodenCrate
-    // Slots para upgrade a T2: WoodenLog + Rope
+    // Slots custom para upgrade a T2: WoodenLog + Rope
     // ========================================================================
     class LFPG_Flag_T1: LFPG_FlagBase
     {
         scope = 2;
         displayName = "$STR_LFPG_FLAG_T1";
         descriptionShort = "$STR_LFPG_FLAG_T1_DESC";
-        // TODO: verificar ruta exacta en tu P: drive
         model = "\dz\gear\camping\wooden_case.p3d";
         weight = 3000;
         itemSize[] = { 10, 10 };
 
         attachments[] =
         {
-            "Material_FPole_WoodenLog",
-            "Material_FPole_Rope"
+            "LFPG_FlagLog",
+            "LFPG_FlagRope"
+        };
+        class GUIInventoryAttachmentsProps
+        {
+            class UpgradeMaterials
+            {
+                name = "Upgrade to T2";
+                description = "";
+                attachmentSlots[] = {"LFPG_FlagLog", "LFPG_FlagRope"};
+                icon = "set:dayz_inventory image:cat_common_cargo";
+            };
         };
     };
 
     // ========================================================================
     // LFPG_Flag_T2 — Tier 2
-    // Slots para upgrade a T3: Firewood + Nails + Stones
+    // Slots custom para upgrade a T3: Firewood + Nails + Stones
     // ========================================================================
     class LFPG_Flag_T2: LFPG_FlagBase
     {
@@ -122,9 +187,19 @@ class CfgVehicles
 
         attachments[] =
         {
-            "Firewood",
-            "Material_FPole_Nails",
-            "Stones"
+            "LFPG_FlagFirewood",
+            "LFPG_FlagNails",
+            "LFPG_FlagStones"
+        };
+        class GUIInventoryAttachmentsProps
+        {
+            class UpgradeMaterials
+            {
+                name = "Upgrade to T3";
+                description = "";
+                attachmentSlots[] = {"LFPG_FlagFirewood", "LFPG_FlagNails", "LFPG_FlagStones"};
+                icon = "set:dayz_inventory image:cat_common_cargo";
+            };
         };
     };
 
@@ -140,6 +215,39 @@ class CfgVehicles
         weight = 15000;
         itemSize[] = { 10, 10 };
     };
+
+    // ========================================================================
+    // Vanilla item overrides — anadir inventorySlot custom (patron PowerGrid)
+    // IMPORTANTE: parent class explicito para no crear clase nueva scope=0
+    //
+    // WoodenLog y Nail usan inventorySlot[] (array) en vanilla -> += funciona
+    // Rope usa inventorySlot = "Material_FPole_Rope" en vanilla (string) ->
+    //   redeclarar como array incluyendo el slot vanilla original
+    // Stone y Firewood usan inventorySlot = "string" en vanilla ->
+    //   += falla silenciosamente (Bohemia T148506), hay que redeclarar
+    //   el array completo incluyendo el slot vanilla original
+    // ========================================================================
+    class WoodenLog: Inventory_Base
+    {
+        inventorySlot[] += {"LFPG_FlagLog"};
+    };
+    class Rope: Inventory_Base
+    {
+        inventorySlot[] = {"Material_FPole_Rope", "LFPG_FlagRope"};
+    };
+    class Firewood: Inventory_Base
+    {
+        inventorySlot[] = {"Firewood", "LFPG_FlagFirewood"};
+    };
+    class Nail: Inventory_Base
+    {
+        inventorySlot[] += {"LFPG_FlagNails"};
+    };
+    class Stone: Inventory_Base
+    {
+        inventorySlot[] = {"Stones", "LFPG_FlagStones"};
+        varQuantityMax = 16.0;
+    };
 };
 
 // ============================================================================
@@ -148,9 +256,10 @@ class CfgVehicles
 
 class CfgMods
 {
-    class LFPG_Territory
+    class SimpleGroup
     {
         type = "mod";
+        inputs = "SimpleGroup\inputs.xml";
         dependencies[] = { "Game", "World", "Mission" };
 
         class defs
@@ -158,17 +267,17 @@ class CfgMods
             class gameScriptModule
             {
                 value = "";
-                files[] = { "LFPG_Territory/scripts/3_Game" };
+                files[] = { "SimpleGroup/scripts/3_Game" };
             };
             class worldScriptModule
             {
                 value = "";
-                files[] = { "LFPG_Territory/scripts/4_World" };
+                files[] = { "SimpleGroup/scripts/4_World" };
             };
             class missionScriptModule
             {
                 value = "";
-                files[] = { "LFPG_Territory/scripts/5_Mission" };
+                files[] = { "SimpleGroup/scripts/5_Mission" };
             };
         };
     };

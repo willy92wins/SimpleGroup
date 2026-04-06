@@ -1,14 +1,14 @@
 // ============================================================================
-// LFPG_ActionInvite.c - 4_World/actions
-// Accion single: activar modo invitacion en la bandera
-// FIX 3: Client usa Cache
+// LFPG_ActionRegisterTerritory.c - 4_World/actions
+// Accion: registrar grupo en bandera sin dueno (fallback para admin spawn)
+// Condicion: bandera sin grupo + jugador sin grupo
 // ============================================================================
 
-class LFPG_ActionInvite extends ActionInteractBase
+class LFPG_ActionRegisterTerritory extends ActionInteractBase
 {
-    void LFPG_ActionInvite()
+    void LFPG_ActionRegisterTerritory()
     {
-        string text = "#STR_LFPG_ACTION_INVITE";
+        string text = "#STR_LFPG_ACTION_REGISTER";
         m_Text = text;
     }
 
@@ -33,45 +33,30 @@ class LFPG_ActionInvite extends ActionInteractBase
         if (!flag)
             return false;
 
-        // Invite mode ya activo (SyncVar, funciona en ambos lados)
-        if (flag.IsInviteModeActive())
-            return false;
-
-        // FIX 3: Client-side usa SOLO el cache
         if (!GetGame().IsDedicatedServer())
         {
-            if (!LFPG_ClientGroupCache.HasGroup())
+            if (LFPG_ClientGroupCache.HasGroup())
                 return false;
-
-            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
+            if (flag.IsInviteModeActive())
                 return false;
-
-            // Bandera debe estar subida
-            if (flag.m_RaiseProgressNet <= 0.0)
+            if (flag.GetMemberCount() > 0)
                 return false;
-
             return true;
         }
-
-        // Server-side
-        if (!flag.HasGroup())
-            return false;
-
-        if (flag.IsFullyLowered())
-            return false;
 
         PlayerIdentity identity = player.GetIdentity();
         if (!identity)
             return false;
 
         string playerUID = identity.GetPlainId();
+
+        if (flag.HasGroup())
+            return false;
+
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
-            string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "")
-                return false;
-            if (groupID != flag.GetGroupID())
+            if (mgr.HasGroup(playerUID))
                 return false;
         }
 
@@ -94,15 +79,44 @@ class LFPG_ActionInvite extends ActionInteractBase
         if (!identity)
             return;
 
+        string playerUID = identity.GetPlainId();
+        string playerName = identity.GetName();
+
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (!mgr)
             return;
 
-        LFPG_TerritoryConfig config = mgr.GetConfig();
-        if (!config)
+        if (flag.HasGroup())
             return;
 
-        int durationMs = config.m_InviteDurationSeconds * 1000;
-        flag.ActivateInviteMode(durationMs);
+        // FIX: Limpiar grupo zombi antes de verificar HasGroup
+        mgr.CleanupStaleGroupForPlayer(playerUID);
+
+        if (mgr.HasGroup(playerUID))
+            return;
+
+        string tempName = "#TEMP#";
+        int uidLen = playerUID.Length();
+        if (uidLen > 4)
+        {
+            int startIdx = uidLen - 4;
+            string suffix = playerUID.Substring(startIdx, 4);
+            tempName = tempName + suffix;
+        }
+        else
+        {
+            tempName = tempName + playerUID;
+        }
+
+        string groupID = mgr.CreateGroup(playerUID, playerName, tempName, flag);
+        if (groupID == "")
+            return;
+
+        mgr.SendOpenNameDialog(identity, flag, groupID);
+        mgr.SendGroupSyncFull(identity, groupID, flag);
+
+        string logMsg = "[SimpleGroup] Player registered territory: ";
+        logMsg = logMsg + playerUID;
+        Print(logMsg);
     }
 };

@@ -62,10 +62,10 @@ FrameWidgetClass LFPG_GroupNameDialog {
    vexactsize 1
    font "gui/fonts/MetronBook"
    color 0.9 0.9 0.9 1.0
-   Two_Way_Binding 1
    {
     ScriptParamsClass {
      Binding_Name "EditGroupName"
+     Two_Way_Binding 1
      {
      }
     }

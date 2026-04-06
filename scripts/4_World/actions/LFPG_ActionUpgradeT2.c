@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ActionUpgradeT2.c — 4_World/actions
-// Upgrade T1 → T2: SledgeHammer + WoodenLog + Rope en slots de la bandera
-// Null-check post-spawn: si falla el spawn, no se borra la vieja
+// LFPG_ActionUpgradeT2.c - 4_World/actions
+// Upgrade T1 -> T2: SledgeHammer + WoodenLog + Rope en slots
+// FIX 3: Client usa Cache
 // ============================================================================
 
 class LFPG_ActionUpgradeT2 extends ActionInteractBase
@@ -14,13 +14,8 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
 
     override void CreateConditionComponents()
     {
-        m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
-    }
-
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
+        m_ConditionItem = new CCINonRuined;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
     override bool HasTarget()
@@ -37,11 +32,7 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (!flag)
             return false;
 
-        // Solo T1 puede upgradearse a T2
         if (flag.GetTier() != 1)
-            return false;
-
-        if (!flag.HasGroup())
             return false;
 
         // Necesita SledgeHammer en manos
@@ -49,27 +40,49 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (!itemInHands)
             return false;
 
-        string handType = itemInHands.GetType();
-        if (handType != "SledgeHammer")
+        string kindSledge = "SledgeHammer";
+        if (!itemInHands.IsKindOf(kindSledge))
             return false;
 
-        // Verificar materiales en slots de la bandera
-        string slotLog = "Material_FPole_WoodenLog";
+        // Verificar materiales en slots custom
+        string slotLog = "LFPG_FlagLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
         if (!logAtt)
             return false;
 
-        string slotRope = "Material_FPole_Rope";
+        string slotRope = "LFPG_FlagRope";
         EntityAI ropeAtt = flag.FindAttachmentBySlotName(slotRope);
         if (!ropeAtt)
             return false;
 
-        // Solo miembros del grupo
-        if (!IsDedicatedServer())
+        // FIX 3: Client-side usa SOLO el cache
+        if (!GetGame().IsDedicatedServer())
         {
             if (!LFPG_ClientGroupCache.HasGroup())
                 return false;
-            if (LFPG_ClientGroupCache.s_GroupID != flag.GetGroupID())
+
+            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
+                return false;
+
+            return true;
+        }
+
+        // Server-side
+        if (!flag.HasGroup())
+            return false;
+
+        PlayerIdentity identity = player.GetIdentity();
+        if (!identity)
+            return false;
+
+        string playerUID = identity.GetPlainId();
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+        {
+            string groupID = mgr.GetPlayerGroupID(playerUID);
+            if (groupID == "")
+                return false;
+            if (groupID != flag.GetGroupID())
                 return false;
         }
 
@@ -97,30 +110,28 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (!mgr)
             return;
 
-        // Verificar membership server-side
         string groupID = mgr.GetPlayerGroupID(playerUID);
-        if (groupID == "" || groupID != flag.GetGroupID())
+        if (groupID == "")
+            return;
+        if (groupID != flag.GetGroupID())
             return;
 
-        // Doble check de materiales server-side
-        string slotLog = "Material_FPole_WoodenLog";
+        // Doble check materiales server-side
+        string slotLog = "LFPG_FlagLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
         if (!logAtt)
             return;
 
-        string slotRope = "Material_FPole_Rope";
+        string slotRope = "LFPG_FlagRope";
         EntityAI ropeAtt = flag.FindAttachmentBySlotName(slotRope);
         if (!ropeAtt)
             return;
 
-        // Upgrade PRIMERO — si falla, no se pierde nada
-        // Los attachments se destruyen automaticamente con la bandera vieja
-        // cuando UpgradeFlag() hace ObjectDelete(oldFlag)
         string newClass = "LFPG_Flag_T2";
         bool success = mgr.UpgradeFlag(groupID, newClass, flag);
         if (!success)
         {
-            string errMsg = "[LFPG_Territory] Upgrade T1->T2 failed for group: ";
+            string errMsg = "[SimpleGroup] Upgrade T1->T2 failed for group: ";
             errMsg = errMsg + groupID;
             Print(errMsg);
         }

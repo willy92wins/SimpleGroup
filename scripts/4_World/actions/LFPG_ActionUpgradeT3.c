@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ActionUpgradeT3.c — 4_World/actions
-// Upgrade T2 → T3: Pickaxe + 6 Firewood + 60 Nails + 16 Stone en slots
-// Los stackMax vanilla son exactos: Firewood=6, Nails=60, Stones=16
+// LFPG_ActionUpgradeT3.c - 4_World/actions
+// Upgrade T2 -> T3: Pickaxe + 6 Firewood + 60 Nails + 16 Stones
+// FIX 3: Client usa Cache
 // ============================================================================
 
 class LFPG_ActionUpgradeT3 extends ActionInteractBase
@@ -14,13 +14,8 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
 
     override void CreateConditionComponents()
     {
-        m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
-    }
-
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
+        m_ConditionItem = new CCINonRuined;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
     override bool HasTarget()
@@ -37,11 +32,7 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!flag)
             return false;
 
-        // Solo T2 puede upgradearse a T3
         if (flag.GetTier() != 2)
-            return false;
-
-        if (!flag.HasGroup())
             return false;
 
         // Necesita Pickaxe en manos
@@ -49,13 +40,12 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!itemInHands)
             return false;
 
-        string handType = itemInHands.GetType();
-        if (handType != "Pickaxe")
+        string kindPickaxe = "Pickaxe";
+        if (!itemInHands.IsKindOf(kindPickaxe))
             return false;
 
-        // Verificar materiales en slots: stackMax exactos
-        // Firewood: 6 unidades en slot "Firewood"
-        string slotFW = "Firewood";
+        // Verificar materiales en slots custom
+        string slotFW = "LFPG_FlagFirewood";
         EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
         if (!fwAtt)
             return false;
@@ -63,8 +53,7 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!fwItem || fwItem.GetQuantity() < 6)
             return false;
 
-        // Nails: 60 unidades en slot "Material_FPole_Nails"
-        string slotNails = "Material_FPole_Nails";
+        string slotNails = "LFPG_FlagNails";
         EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
         if (!nailsAtt)
             return false;
@@ -72,8 +61,7 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!nailsItem || nailsItem.GetQuantity() < 60)
             return false;
 
-        // Stones: 16 unidades en slot "Stones"
-        string slotStones = "Stones";
+        string slotStones = "LFPG_FlagStones";
         EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
         if (!stonesAtt)
             return false;
@@ -81,12 +69,34 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!stonesItem || stonesItem.GetQuantity() < 16)
             return false;
 
-        // Solo miembros del grupo
-        if (!IsDedicatedServer())
+        // FIX 3: Client-side usa SOLO el cache
+        if (!GetGame().IsDedicatedServer())
         {
             if (!LFPG_ClientGroupCache.HasGroup())
                 return false;
-            if (LFPG_ClientGroupCache.s_GroupID != flag.GetGroupID())
+
+            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
+                return false;
+
+            return true;
+        }
+
+        // Server-side
+        if (!flag.HasGroup())
+            return false;
+
+        PlayerIdentity identity = player.GetIdentity();
+        if (!identity)
+            return false;
+
+        string playerUID = identity.GetPlainId();
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+        {
+            string groupID = mgr.GetPlayerGroupID(playerUID);
+            if (groupID == "")
+                return false;
+            if (groupID != flag.GetGroupID())
                 return false;
         }
 
@@ -115,11 +125,13 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
             return;
 
         string groupID = mgr.GetPlayerGroupID(playerUID);
-        if (groupID == "" || groupID != flag.GetGroupID())
+        if (groupID == "")
+            return;
+        if (groupID != flag.GetGroupID())
             return;
 
-        // Doble check de materiales y cantidades server-side
-        string slotFW = "Firewood";
+        // Doble check materiales server-side
+        string slotFW = "LFPG_FlagFirewood";
         EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
         if (!fwAtt)
             return;
@@ -127,7 +139,7 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!fwItem || fwItem.GetQuantity() < 6)
             return;
 
-        string slotNails = "Material_FPole_Nails";
+        string slotNails = "LFPG_FlagNails";
         EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
         if (!nailsAtt)
             return;
@@ -135,7 +147,7 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!nailsItem || nailsItem.GetQuantity() < 60)
             return;
 
-        string slotStones = "Stones";
+        string slotStones = "LFPG_FlagStones";
         EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
         if (!stonesAtt)
             return;
@@ -143,12 +155,11 @@ class LFPG_ActionUpgradeT3 extends ActionInteractBase
         if (!stonesItem || stonesItem.GetQuantity() < 16)
             return;
 
-        // Upgrade PRIMERO — attachments se destruyen con la bandera vieja
         string newClass = "LFPG_Flag_T3";
         bool success = mgr.UpgradeFlag(groupID, newClass, flag);
         if (!success)
         {
-            string errMsg = "[LFPG_Territory] Upgrade T2->T3 failed for group: ";
+            string errMsg = "[SimpleGroup] Upgrade T2->T3 failed for group: ";
             errMsg = errMsg + groupID;
             Print(errMsg);
         }

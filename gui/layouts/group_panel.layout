@@ -4,9 +4,7 @@ FrameWidgetClass LFPG_GroupPanel {
  vexactpos 1
  hexactsize 1
  vexactsize 1
- halign right_ref
- valign top_ref
- position -270 10
+ position 0 0
  {
   ImageWidgetClass PanelBg {
    position 0 0

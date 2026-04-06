@@ -1,8 +1,7 @@
 // ============================================================================
-// LFPG_ActionRaiseFlag.c — 4_World/actions
-// Acción continua: mantener F para subir la bandera
-// Patrón vanilla: CAContinuousRepeat(1) — ejecuta cada ~1 segundo
-// Condición: miembro del grupo + bandera no completamente subida
+// LFPG_ActionRaiseFlag.c - 4_World/actions
+// Accion continua: mantener F para subir la bandera
+// FIX 3: Client usa Cache (no flag.HasGroup/GetGroupID que no sincronizan)
 // ============================================================================
 
 class LFPG_ActionRaiseFlagCB extends ActionContinuousBaseCB
@@ -29,13 +28,9 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
-    }
 
     override bool HasTarget()
     {
@@ -51,38 +46,42 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
         if (!flag)
             return false;
 
-        // Solo si la bandera tiene grupo asignado
+        // FIX 3: Client-side usa SOLO el cache
+        if (!GetGame().IsDedicatedServer())
+        {
+            if (!LFPG_ClientGroupCache.HasGroup())
+                return false;
+
+            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
+                return false;
+
+            // Bandera no completamente subida (SyncVar, funciona en client)
+            if (flag.m_RaiseProgressNet >= 1.0)
+                return false;
+
+            return true;
+        }
+
+        // Server-side: checks completos
         if (!flag.HasGroup())
             return false;
 
-        // Solo si la bandera no está completamente subida
         float progress = flag.ComputeCurrentRaiseProgress();
         if (progress >= 1.0)
             return false;
 
-        // Solo miembros del grupo
         PlayerIdentity identity = player.GetIdentity();
         if (!identity)
             return false;
 
         string playerUID = identity.GetPlainId();
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-
-        // Client-side: usar cache
-        if (!IsDedicatedServer())
-        {
-            if (!LFPG_ClientGroupCache.HasGroup())
-                return false;
-            if (LFPG_ClientGroupCache.s_GroupID != flag.GetGroupID())
-                return false;
-            return true;
-        }
-
-        // Server-side: verificar membership
         if (mgr)
         {
             string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "" || groupID != flag.GetGroupID())
+            if (groupID == "")
+                return false;
+            if (groupID != flag.GetGroupID())
                 return false;
         }
 
@@ -106,7 +105,6 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
         float delta = config.m_FlagRaiseRatePerSecond;
         flag.IncrementRaiseProgress(delta);
 
-        // Si llegó a 1.0, la bandera está completamente subida
         float progress = flag.ComputeCurrentRaiseProgress();
         if (progress >= 1.0)
         {

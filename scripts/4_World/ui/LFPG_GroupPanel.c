@@ -1,18 +1,18 @@
 // ============================================================================
-// LFPG_GroupPanel.c — 4_World/ui
-// Panel de grupo (tecla P) — ScriptView sin bloqueo de input
+// LFPG_GroupPanel.c - 4_World/ui
+// Panel de grupo (tecla P) - ScriptViewMenu con cursor y input
+//
+// FIX C2: Cambiado de ScriptView a ScriptViewMenu
+//   - Dabs ScriptViewMenu gestiona cursor, input lock y UIManager
+//   - Lifecycle: crear al abrir, destruir al cerrar (patron estandar Dabs)
+//
+// FIX C1: Usa LFPG_ClientGroupCache.FindLocalGroupFlag() centralizado
+//   - Usa IsFlagAtPosition en vez de GetGroupID (no sincronizado en client)
 //
 // Dabs MVC:
-//  - ScriptView crea widgets del layout automáticamente
 //  - ViewController bindea propiedades a widgets
 //  - ObservableCollection bindea member rows al WrapSpacer
 //  - UseUpdateLoop = false (se actualiza solo por RPC)
-//
-// Ciclo de vida:
-//  1. Pre-creado en MissionGameplay.OnInit (GetWorkspace válido)
-//  2. Toggle con tecla P (show/hide, no crear/destruir)
-//  3. Al show: solicitar GROUP_SYNC_FULL al server
-//  4. Al recibir sync: refrescar datos en el controller
 // ============================================================================
 
 class LFPG_GroupPanelController extends ViewController
@@ -74,13 +74,11 @@ class LFPG_GroupPanelController extends ViewController
 
     protected void RefreshMemberRows()
     {
-        // Limpiar rows existentes
         MemberRows.Clear();
 
         if (!LFPG_ClientGroupCache.s_Members)
             return;
 
-        // Determinar si el jugador local es líder
         bool localIsLeader = LFPG_ClientGroupCache.IsLeader();
         string localUID = GetLocalPlayerUID();
 
@@ -97,13 +95,7 @@ class LFPG_GroupPanelController extends ViewController
             bool isLeader = (member.m_PlayerUID == LFPG_ClientGroupCache.s_LeaderUID);
             bool isSelf = (member.m_PlayerUID == localUID);
 
-            rowView.SetMemberData(
-                member.m_PlayerUID,
-                member.m_PlayerName,
-                isLeader,
-                isSelf,
-                localIsLeader
-            );
+            rowView.SetMemberData(member.m_PlayerUID, member.m_PlayerName, isLeader, isSelf, localIsLeader);
 
             MemberRows.Insert(rowView);
         }
@@ -121,81 +113,61 @@ class LFPG_GroupPanelController extends ViewController
     }
 
     // Relay_Command: abandonar grupo
+    // FIX C1: Usa helper centralizado del cache
     bool OnLeaveExecute(ButtonCommandArgs args)
     {
-        // Buscar bandera para enviar RPC
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
-        if (!player)
-            return false;
-
-        LFPG_FlagBase flag = FindNearestGroupFlag(player);
+        LFPG_FlagBase flag = LFPG_ClientGroupCache.FindLocalGroupFlag();
         if (!flag)
             return false;
 
         ScriptRPC rpc = new ScriptRPC();
         rpc.Send(flag, LFPG_RPC_C2S_REQUEST_LEAVE, true, null);
 
-        // Cerrar panel
         LFPG_GroupPanel panel = LFPG_GroupPanel.GetInstance();
         if (panel)
         {
-            panel.Hide();
+            panel.Close();
         }
 
         return true;
     }
-
-    protected LFPG_FlagBase FindNearestGroupFlag(PlayerBase player)
-    {
-        vector playerPos = player.GetPosition();
-        float searchRadius = 100.0;
-        array<Object> objects = new array<Object>;
-        array<CargoBase> proxyCargos = new array<CargoBase>;
-        GetGame().GetObjectsAtPosition(playerPos, searchRadius, objects, proxyCargos);
-
-        int i;
-        int count = objects.Count();
-        for (i = 0; i < count; i = i + 1)
-        {
-            LFPG_FlagBase flag = LFPG_FlagBase.Cast(objects[i]);
-            if (flag && flag.GetGroupID() == LFPG_ClientGroupCache.s_GroupID)
-            {
-                return flag;
-            }
-        }
-        return null;
-    }
 };
 
 // ============================================================================
-// LFPG_GroupPanel — ScriptView principal
+// LFPG_GroupPanel - ScriptViewMenu (FIX C2)
+// Lifecycle: crear al abrir (new), destruir al cerrar (Close/ESC)
+// Dabs gestiona cursor, input lock y menu stack automaticamente
 // ============================================================================
-class LFPG_GroupPanel extends ScriptView
+class LFPG_GroupPanel extends ScriptViewMenu
 {
-    // Singleton — pre-creado en MissionGameplay.OnInit
     protected static ref LFPG_GroupPanel s_Instance;
-
-    protected bool m_IsVisible;
 
     void LFPG_GroupPanel()
     {
-        m_IsVisible = false;
-        // Empezar oculto
-        Widget root = GetLayoutRoot();
-        if (root)
+        s_Instance = this;
+
+        // Refrescar datos del cache inmediatamente
+        LFPG_GroupPanelController ctrl = LFPG_GroupPanelController.Cast(GetController());
+        if (ctrl)
         {
-            root.Show(false);
+            ctrl.RefreshFromCache();
         }
+
+        // Solicitar sync fresco al server
+        RequestGroupData();
     }
 
     void ~LFPG_GroupPanel()
     {
-        s_Instance = null;
+        if (s_Instance == this)
+        {
+            s_Instance = null;
+        }
     }
 
     override string GetLayoutFile()
     {
-        return "LFPG_Territory/gui/layouts/group_panel.layout";
+        return "SimpleGroup/gui/layouts/group_panel.layout";
     }
 
     override typename GetControllerType()
@@ -208,101 +180,167 @@ class LFPG_GroupPanel extends ScriptView
         return false;
     }
 
-    // ========================================================================
-    // SINGLETON
-    // ========================================================================
-    static void CreateInstance()
+    override bool UseMouse()
     {
-        if (s_Instance)
-            return;
-
-        // Solo crear si GetWorkspace es válido (Rule 6 y 9)
-        if (!GetGame())
-            return;
-        if (!GetGame().GetWorkspace())
-            return;
-
-        s_Instance = new LFPG_GroupPanel();
+        return true;
     }
 
-    static void DestroyInstance()
+    override bool UseKeyboard()
     {
-        s_Instance = null;
+        return false;
     }
 
+    override bool CanCloseWithEscape()
+    {
+        return true;
+    }
+
+    override array<string> GetInputExcludes()
+    {
+        return {"menu"};
+    }
+
+    // ========================================================================
+    // SINGLETON + TOGGLE
+    // ========================================================================
     static LFPG_GroupPanel GetInstance()
     {
         return s_Instance;
     }
 
-    // ========================================================================
-    // TOGGLE
-    // ========================================================================
     static void Toggle()
     {
-        if (!s_Instance)
-            return;
-
-        if (s_Instance.m_IsVisible)
+        if (s_Instance)
         {
-            s_Instance.Hide();
-        }
-        else
-        {
-            s_Instance.Show();
-        }
-    }
-
-    void Show()
-    {
-        if (m_IsVisible)
+            s_Instance.Close();
             return;
+        }
 
         if (!LFPG_ClientGroupCache.HasGroup())
+        {
+            Print("[SimpleGroup] GroupPanel.Toggle: no group in cache, skipping.");
+            return;
+        }
+
+        if (!GetGame())
+            return;
+        if (!GetGame().GetWorkspace())
             return;
 
-        m_IsVisible = true;
-        Widget root = GetLayoutRoot();
-        if (root)
+        LFPG_GroupPanel panel = new LFPG_GroupPanel();
+
+        // Guard: si el layout no se creo, limpiar para evitar menu fantasma
+        if (!panel.GetLayoutRoot())
         {
-            root.Show(true);
+            Print("[SimpleGroup] ERROR: GroupPanel layout failed to load. Cleaning up ghost menu.");
+            s_Instance = null;
+            panel = null;
+            return;
         }
 
-        // Refrescar datos del cache
-        LFPG_GroupPanelController ctrl = LFPG_GroupPanelController.Cast(GetController());
-        if (ctrl)
-        {
-            ctrl.RefreshFromCache();
-        }
+        // FIX AUDIT: Posicionar en script (no halign/valign en layout — modo mixto es fragil)
+        // Posicion: esquina superior derecha, 10px de margen
+        panel.PositionOnScreen();
 
-        // Solicitar sync fresco al server
-        RequestGroupData();
+        // FIX AUDIT: Forzar visibilidad explicita del layout root
+        // UIManager.ShowScriptedMenu puede alterar visibilidad durante el registro
+        panel.GetLayoutRoot().Show(true);
+
+        // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
+        panel.InitBackgrounds();
+
+        string dbgMsg = "[SimpleGroup] GroupPanel opened. LayoutRoot=";
+        dbgMsg = dbgMsg + panel.GetLayoutRoot().GetName();
+        Widget rootW = panel.GetLayoutRoot();
+        float rx = 0;
+        float ry = 0;
+        rootW.GetScreenPos(rx, ry);
+        dbgMsg = dbgMsg + " pos=";
+        dbgMsg = dbgMsg + rx.ToString();
+        dbgMsg = dbgMsg + ",";
+        dbgMsg = dbgMsg + ry.ToString();
+        Print(dbgMsg);
     }
 
-    void Hide()
+    static void DestroyInstance()
     {
-        if (!m_IsVisible)
+        if (s_Instance)
+        {
+            s_Instance.Close();
+        }
+    }
+
+    // FIX AUDIT: Posicionar panel desde script
+    // Evita halign/valign modo mixto (fragil segun skill UI)
+    // Usa GetScreenSize para calcular esquina superior derecha
+    void PositionOnScreen()
+    {
+        Widget root = GetLayoutRoot();
+        if (!root)
             return;
 
-        m_IsVisible = false;
-        Widget root = GetLayoutRoot();
-        if (root)
-        {
-            root.Show(false);
-        }
+        int screenW = 0;
+        int screenH = 0;
+        GetScreenSize(screenW, screenH);
+
+        // Panel 260x320, margen 10px desde esquina superior derecha
+        float posX = screenW - 270;
+        float posY = 10;
+        root.SetPos(posX, posY);
+
+        string posMsg = "[SimpleGroup] Panel positioned at ";
+        posMsg = posMsg + posX.ToString();
+        posMsg = posMsg + ", ";
+        posMsg = posMsg + posY.ToString();
+        posMsg = posMsg + " (screen: ";
+        posMsg = posMsg + screenW.ToString();
+        posMsg = posMsg + "x";
+        posMsg = posMsg + screenH.ToString();
+        posMsg = posMsg + ")";
+        Print(posMsg);
     }
 
-    bool IsVisible()
+    // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
+    // ImageWidget puede no renderizar solo con 'color' en layout sin image source
+    void InitBackgrounds()
     {
-        return m_IsVisible;
+        Widget root = GetLayoutRoot();
+        if (!root)
+            return;
+
+        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
+
+        // PanelBg: layout color 0.12 0.12 0.14 0.92 → ARGB(235, 31, 31, 36)
+        string nameBg = "PanelBg";
+        ImageWidget panelBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
+        if (panelBg)
+        {
+            panelBg.LoadImageFile(0, colorTex);
+            panelBg.SetColor(ARGB(235, 31, 31, 36));
+        }
+
+        // HeaderBg: layout color 0.16 0.18 0.22 1.0 → ARGB(255, 41, 46, 56)
+        string nameHeader = "HeaderBg";
+        ImageWidget headerBg = ImageWidget.Cast(root.FindAnyWidget(nameHeader));
+        if (headerBg)
+        {
+            headerBg.LoadImageFile(0, colorTex);
+            headerBg.SetColor(ARGB(255, 41, 46, 56));
+        }
+
+        // DividerLine: layout color 0.3 0.3 0.35 0.6 → ARGB(153, 77, 77, 89)
+        string nameDivider = "DividerLine";
+        ImageWidget dividerLine = ImageWidget.Cast(root.FindAnyWidget(nameDivider));
+        if (dividerLine)
+        {
+            dividerLine.LoadImageFile(0, colorTex);
+            dividerLine.SetColor(ARGB(153, 77, 77, 89));
+        }
     }
 
     // Llamado cuando llega nuevo sync del server
     void OnDataReceived()
     {
-        if (!m_IsVisible)
-            return;
-
         LFPG_GroupPanelController ctrl = LFPG_GroupPanelController.Cast(GetController());
         if (ctrl)
         {
@@ -310,31 +348,14 @@ class LFPG_GroupPanel extends ScriptView
         }
     }
 
-    // Solicitar datos actualizados al server
+    // FIX C1: Usa helper centralizado
     protected void RequestGroupData()
     {
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
-        if (!player)
+        LFPG_FlagBase flag = LFPG_ClientGroupCache.FindLocalGroupFlag();
+        if (!flag)
             return;
 
-        // Buscar la bandera del grupo para enviar el RPC
-        vector playerPos = player.GetPosition();
-        float searchRadius = 100.0;
-        array<Object> objects = new array<Object>;
-        array<CargoBase> proxyCargos = new array<CargoBase>;
-        GetGame().GetObjectsAtPosition(playerPos, searchRadius, objects, proxyCargos);
-
-        int i;
-        int count = objects.Count();
-        for (i = 0; i < count; i = i + 1)
-        {
-            LFPG_FlagBase flag = LFPG_FlagBase.Cast(objects[i]);
-            if (flag && flag.GetGroupID() == LFPG_ClientGroupCache.s_GroupID)
-            {
-                ScriptRPC rpc = new ScriptRPC();
-                rpc.Send(flag, LFPG_RPC_C2S_REQUEST_GROUP_DATA, true, null);
-                return;
-            }
-        }
+        ScriptRPC rpc = new ScriptRPC();
+        rpc.Send(flag, LFPG_RPC_C2S_REQUEST_GROUP_DATA, true, null);
     }
 };

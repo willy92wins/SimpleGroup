@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ActionLowerFlag.c — 4_World/actions
-// Acción continua: mantener F para bajar la bandera
-// Condición: miembro del grupo + bandera no completamente bajada
+// LFPG_ActionLowerFlag.c - 4_World/actions
+// Accion continua: mantener F para bajar la bandera
+// FIX 3: Client usa Cache
 // ============================================================================
 
 class LFPG_ActionLowerFlagCB extends ActionContinuousBaseCB
@@ -28,13 +28,9 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
-    }
 
     override bool HasTarget()
     {
@@ -50,35 +46,41 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
         if (!flag)
             return false;
 
+        // FIX 3: Client-side usa SOLO el cache
+        if (!GetGame().IsDedicatedServer())
+        {
+            if (!LFPG_ClientGroupCache.HasGroup())
+                return false;
+
+            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
+                return false;
+
+            if (flag.m_RaiseProgressNet <= 0.0)
+                return false;
+
+            return true;
+        }
+
+        // Server-side
         if (!flag.HasGroup())
             return false;
 
-        // Solo si la bandera no está completamente bajada
         float progress = flag.ComputeCurrentRaiseProgress();
         if (progress <= 0.0)
             return false;
 
-        // Solo miembros del grupo
         PlayerIdentity identity = player.GetIdentity();
         if (!identity)
             return false;
 
         string playerUID = identity.GetPlainId();
-
-        if (!IsDedicatedServer())
-        {
-            if (!LFPG_ClientGroupCache.HasGroup())
-                return false;
-            if (LFPG_ClientGroupCache.s_GroupID != flag.GetGroupID())
-                return false;
-            return true;
-        }
-
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
             string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "" || groupID != flag.GetGroupID())
+            if (groupID == "")
+                return false;
+            if (groupID != flag.GetGroupID())
                 return false;
         }
 

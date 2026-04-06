@@ -1,7 +1,7 @@
 // ============================================================================
-// LFPG_ActionJoinGroup.c — 4_World/actions
-// Acción: unirse al grupo via bandera en invite mode
-// Condición: sin grupo + bandera en invite mode + grupo no lleno
+// LFPG_ActionJoinGroup.c - 4_World/actions
+// Accion: unirse al grupo via bandera en invite mode
+// Condicion: sin grupo + bandera en invite mode + grupo no lleno
 // ============================================================================
 
 class LFPG_ActionJoinGroup extends ActionInteractBase
@@ -15,13 +15,9 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTCursor;
+        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
     }
 
-    override typename GetInputType()
-    {
-        return ContinuousInteractActionInput;
-    }
 
     override bool HasTarget()
     {
@@ -42,7 +38,7 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
             return false;
 
         // Jugador NO debe tener grupo
-        if (!IsDedicatedServer())
+        if (!GetGame().IsDedicatedServer())
         {
             if (LFPG_ClientGroupCache.HasGroup())
                 return false;
@@ -81,7 +77,7 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
         bool added = mgr.AddMember(groupID, playerUID, playerName);
         if (!added)
         {
-            // Join failed — group full, already member, etc.
+            // Join failed - group full, already member, etc.
             return;
         }
         // AddMember already sends GROUP_SYNC_FULL to all members including the new one

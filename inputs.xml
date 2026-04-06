@@ -1,7 +1,13 @@
-<?xml version="1.0" encoding="utf-8"?>
-<modinfo>
-    <action name="UALFPGGroupPanel">
-        <input name="kP" />
-        <desc>$STR_LFPG_INPUT_GROUP_PANEL</desc>
-    </action>
-</modinfo>
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<modded_inputs>
+    <inputs>
+        <actions>
+            <input name="UALFPGGroupPanel" loc="$STR_LFPG_INPUT_GROUP_PANEL"/>
+        </actions>
+    </inputs>
+    <preset>
+        <input name="UALFPGGroupPanel">
+            <btn name="kU"/>
+        </input>
+    </preset>
+</modded_inputs>

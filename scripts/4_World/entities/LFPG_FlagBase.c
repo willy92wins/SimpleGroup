@@ -1,33 +1,33 @@
 // ============================================================================
-// LFPG_FlagBase.c — 4_World/entities
+// LFPG_FlagBase.c - 4_World/entities
 // Entidad base de banderas de territorio LFPG
 //
-// Hereda ItemBase (NO Flag_Base) — TechRef FINAL v2 §0.1
+// Hereda ItemBase (NO Flag_Base) - TechRef FINAL v2 S0.1
 //
 // OPTIMIZACIONES:
 //  - raiseProgress calculado lazy (on-demand desde timestamp, sin timer global)
-//  - SyncVars mínimos: float + bool + int
+//  - SyncVars minimos: float + bool + int
 //  - GroupName via RPC (RegisterNetSyncVariableString no existe)
 //  - Rate limiting de RPCs integrado
-//  - Fase conversion: raiseProgress(0=down,1=up) ↔ vanillaPhase(0=up,1=down)
+//  - Fase conversion: raiseProgress(0=down,1=up) <-> vanillaPhase(0=up,1=down)
 //
 // PERSISTENCIA:
-//  - m_GroupID (string) — enlace al grupo en JSON
-//  - m_RemainingSeconds (float) — tiempo restante de raise
-//    Se persiste el remaining, NO epoch. Así no dependemos de reloj real.
+//  - m_GroupID (string) - enlace al grupo en JSON
+//  - m_RemainingSeconds (float) - tiempo restante de raise
+//    Se persiste el remaining, NO epoch. Asi no dependemos de reloj real.
 //    La bandera solo baja durante uptime del servidor (igual que vanilla).
 // ============================================================================
 
 class LFPG_FlagBase extends ItemBase
 {
     // ========================================================================
-    // PERSISTED FIELDS — guardados en OnStoreSave, restaurados en OnStoreLoad
+    // PERSISTED FIELDS - guardados en OnStoreSave, restaurados en OnStoreLoad
     // ========================================================================
     protected string m_GroupID;
     protected float m_RemainingSeconds;
 
     // ========================================================================
-    // SYNCVARS — server → clients (automático vía engine)
+    // SYNCVARS - server -> clients (automatico via engine)
     // Registrados en constructor. Escritura SOLO en #ifdef SERVER.
     // ========================================================================
     float m_RaiseProgressNet;
@@ -35,14 +35,14 @@ class LFPG_FlagBase extends ItemBase
     int m_MemberCountNet;
 
     // ========================================================================
-    // RUNTIME FIELDS — NO persistidos, NO sincronizados
+    // RUNTIME FIELDS - NO persistidos, NO sincronizados
     // ========================================================================
     protected int m_RaisedAtTime;
     protected float m_RemainingAtRaise;
     protected bool m_IsRegisteredWithManager;
 
     // ========================================================================
-    // CONSTRUCTOR — Registro de SyncVars (DEBE ser aquí, NO en EEInit)
+    // CONSTRUCTOR - Registro de SyncVars (DEBE ser aqui, NO en EEInit)
     // ========================================================================
     void LFPG_FlagBase()
     {
@@ -54,10 +54,11 @@ class LFPG_FlagBase extends ItemBase
         m_RaisedAtTime = 0;
         m_RemainingAtRaise = 0.0;
         m_IsRegisteredWithManager = false;
+        m_SkipDissolveOnDelete = false;
 
-        // SyncVar registration — string var names assigned to locals first
+        // SyncVar registration - string var names assigned to locals first
         string varProgress = "m_RaiseProgressNet";
-        RegisterNetSyncVariableFloat(varProgress, 0.0, 1.0, 5);
+        RegisterNetSyncVariableFloat(varProgress, 0.0, 1.0, 8);
 
         string varInvite = "m_InviteModeNet";
         RegisterNetSyncVariableBool(varInvite);
@@ -69,7 +70,7 @@ class LFPG_FlagBase extends ItemBase
     void ~LFPG_FlagBase()
     {
         // Cancelar CallLater pendiente de DeactivateInviteMode
-        // Si no se cancela y la entidad se destruye con invite activo → segfault
+        // Si no se cancela y la entidad se destruye con invite activo -> segfault
         if (GetGame())
         {
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(DeactivateInviteMode);
@@ -77,7 +78,52 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // TIER — Override en subclases
+    // EEDelete - Disolver grupo INMEDIATAMENTE al destruirse la bandera
+    // m_SkipDissolveOnDelete: se activa durante UpgradeFlag para evitar
+    // que ObjectDelete de la bandera vieja disuelva el grupo recien upgradeado
+    // ========================================================================
+    protected bool m_SkipDissolveOnDelete;
+
+    void SetSkipDissolveOnDelete()
+    {
+        m_SkipDissolveOnDelete = true;
+    }
+
+    override void EEDelete(EntityAI parent)
+    {
+        #ifdef SERVER
+        if (m_SkipDissolveOnDelete)
+        {
+            string skipMsg = "[SimpleGroup] EEDelete: skip dissolve (upgrade) for group=";
+            skipMsg = skipMsg + m_GroupID;
+            Print(skipMsg);
+        }
+        else if (m_GroupID != "")
+        {
+            LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+            if (mgr)
+            {
+                string dissolveMsg = "[SimpleGroup] EEDelete: dissolving group=";
+                dissolveMsg = dissolveMsg + m_GroupID;
+                Print(dissolveMsg);
+                mgr.DissolveGroup(m_GroupID);
+            }
+            else
+            {
+                Print("[SimpleGroup] EEDelete: WARNING GroupManager null, cannot dissolve!");
+            }
+        }
+        else
+        {
+            Print("[SimpleGroup] EEDelete: flag has no group (m_GroupID empty)");
+        }
+        #endif
+
+        super.EEDelete(parent);
+    }
+
+    // ========================================================================
+    // TIER - Override en subclases
     // ========================================================================
     int GetTier()
     {
@@ -85,7 +131,27 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // GROUP ID — Acceso desde GroupManager
+    // INVENTORY RESTRICTIONS - Las banderas NO se pueden coger
+    // El modelo placeholder (wooden_case) hereda acciones de pickup;
+    // estas overrides lo impiden.
+    // ========================================================================
+    override bool CanPutInCargo(EntityAI parent)
+    {
+        return false;
+    }
+
+    override bool CanPutIntoHands(EntityAI parent)
+    {
+        return false;
+    }
+
+    override bool IsTakeable()
+    {
+        return false;
+    }
+
+    // ========================================================================
+    // GROUP ID - Acceso desde GroupManager
     // ========================================================================
     string GetGroupID()
     {
@@ -105,19 +171,19 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // RAISE PROGRESS — Sistema lazy (sin timer global)
+    // RAISE PROGRESS - Sistema lazy (sin timer global)
     //
-    // Convención LFPG: 0.0 = bajada, 1.0 = subida
-    // Convención vanilla AnimationPhase: 0.0 = arriba, 1.0 = abajo
+    // Convencion LFPG: 0.0 = bajada, 1.0 = subida
+    // Convencion vanilla AnimationPhase: 0.0 = arriba, 1.0 = abajo
     //
-    // Conversión:  vanillaPhase = 1.0 - raiseProgress
+    // Conversion:  vanillaPhase = 1.0 - raiseProgress
     // ========================================================================
 
     // Calcula el raise progress ACTUAL basado en tiempo transcurrido
     // Llamar on-demand: en checks de build zone, al sincronizar, etc.
     float ComputeCurrentRaiseProgress()
     {
-        // Si nunca fue subida o no tiene remaining, está bajada
+        // Si nunca fue subida o no tiene remaining, esta bajada
         if (m_RemainingAtRaise <= 0.0)
             return 0.0;
 
@@ -129,7 +195,7 @@ class LFPG_FlagBase extends ItemBase
         if (remaining <= 0.0)
             return 0.0;
 
-        // Obtener duración total del tier desde config
+        // Obtener duracion total del tier desde config
         LFPG_TerritoryConfig config = GetTerritoryConfig();
         float tierDuration = 172800.0;
         if (config)
@@ -168,7 +234,7 @@ class LFPG_FlagBase extends ItemBase
         #endif
     }
 
-    // Incrementa el progress (durante acción de subir bandera)
+    // Incrementa el progress (durante accion de subir bandera)
     void IncrementRaiseProgress(float delta)
     {
         #ifdef SERVER
@@ -195,7 +261,7 @@ class LFPG_FlagBase extends ItemBase
         #endif
     }
 
-    // Decrementa el progress (durante acción de bajar bandera)
+    // Decrementa el progress (durante accion de bajar bandera)
     void DecrementRaiseProgress(float delta)
     {
         #ifdef SERVER
@@ -221,14 +287,14 @@ class LFPG_FlagBase extends ItemBase
         #endif
     }
 
-    // ¿Está la bandera completamente subida? (para checks de restricciones)
+    // ?Esta la bandera completamente subida? (para checks de restricciones)
     bool IsFullyRaised()
     {
         float progress = ComputeCurrentRaiseProgress();
         return (progress >= 1.0);
     }
 
-    // ¿Está la bandera completamente bajada? (restricciones OFF)
+    // ?Esta la bandera completamente bajada? (restricciones OFF)
     bool IsFullyLowered()
     {
         float progress = ComputeCurrentRaiseProgress();
@@ -254,9 +320,7 @@ class LFPG_FlagBase extends ItemBase
         SetSynchDirty();
 
         // One-shot CallLater es seguro (no afectado por bug 4.5h)
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(
-            DeactivateInviteMode, durationMs, false
-        );
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(DeactivateInviteMode, durationMs, false);
         #endif
     }
 
@@ -274,7 +338,7 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // MEMBER COUNT (SyncVar para UI rápida)
+    // MEMBER COUNT (SyncVar para UI rapida)
     // ========================================================================
     void SetMemberCount(int count)
     {
@@ -290,7 +354,7 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // CONFIG — Acceso a la config del servidor via GroupManager
+    // CONFIG - Acceso a la config del servidor via GroupManager
     // ========================================================================
     protected LFPG_TerritoryConfig GetTerritoryConfig()
     {
@@ -303,11 +367,11 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // PERSISTENCE — OnStoreSave / OnStoreLoad
+    // PERSISTENCE - OnStoreSave / OnStoreLoad
     //
-    // Versión de storage para forward-compatibility.
-    // Al añadir campos nuevos, incrementar LFPG_STORAGE_VERSION y
-    // manejar migración en OnStoreLoad.
+    // Version de storage para forward-compatibility.
+    // Al anadir campos nuevos, incrementar LFPG_STORAGE_VERSION y
+    // manejar migracion en OnStoreLoad.
     // ========================================================================
     override void OnStoreSave(ParamsWriteContext ctx)
     {
@@ -398,20 +462,29 @@ class LFPG_FlagBase extends ItemBase
     }
 
     // ========================================================================
-    // SYNCVAR CALLBACK (client-side) — Reaccionar a cambios
+    // SYNCVAR CALLBACK (client-side) - Reaccionar a cambios
     // ========================================================================
     override void OnVariablesSynchronized()
     {
         super.OnVariablesSynchronized();
 
-        // Actualizar visual de la bandera según raise progress recibido
+        // Actualizar visual de la bandera segun raise progress recibido
         UpdateAnimationPhase(m_RaiseProgressNet);
+
+        // FIX C3: Actualizar cache del cliente si esta bandera es la de nuestro grupo
+        if (!GetGame().IsDedicatedServer())
+        {
+            if (LFPG_ClientGroupCache.IsFlagAtPosition(GetPosition()))
+            {
+                LFPG_ClientGroupCache.s_FlagRaiseProgress = m_RaiseProgressNet;
+            }
+        }
     }
 
     // ========================================================================
     // RPC DISPATCHER
-    // Se ruteará al GroupManager para la lógica de negocio.
-    // La bandera es solo el TARGET del RPC, no contiene lógica de grupo.
+    // Se ruteara al GroupManager para la logica de negocio.
+    // La bandera es solo el TARGET del RPC, no contiene logica de grupo.
     // ========================================================================
     override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
     {
@@ -433,20 +506,25 @@ class LFPG_FlagBase extends ItemBase
         }
         #endif
 
-        // Client procesa S2C RPCs (via cache estático, no GroupManager)
-        if (!IsDedicatedServer())
+        // Client procesa S2C RPCs (via cache estatico, no GroupManager)
+        if (!GetGame().IsDedicatedServer())
         {
             LFPG_ClientGroupCache.HandleClientRPC(rpc_type, ctx, this);
         }
     }
 
     // ========================================================================
-    // ACTIONS — Se configuran en subclases y aquí
+    // ACTIONS - Se configuran en subclases y aqui
     // ========================================================================
     override void SetActions()
     {
         super.SetActions();
 
+        // Impedir que la bandera se pueda coger (take/drag)
+        RemoveAction(ActionTakeItem);
+        RemoveAction(ActionTakeItemToHands);
+
+        AddAction(LFPG_ActionRegisterTerritory);
         AddAction(LFPG_ActionRaiseFlag);
         AddAction(LFPG_ActionLowerFlag);
         AddAction(LFPG_ActionInvite);
@@ -458,7 +536,7 @@ class LFPG_FlagBase extends ItemBase
     // UTILITY
     // ========================================================================
 
-    // Para checks rápidos en hologram: ¿este jugador puede construir aquí?
+    // Para checks rapidos en hologram: ?este jugador puede construir aqui?
     bool IsPlayerInBuildZone(string playerUID, vector buildPos)
     {
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
