@@ -17,28 +17,13 @@
 
 modded class ItemBase
 {
-    // Helper: combina filtro de exclusion (3_Game) + config whitelist + IsDeployable (4_World)
+    // Set by OnPlacementComplete. The next hands-to-ground move is ignored once.
+    protected bool m_LFPG_JustPlaced;
+
+    // Helper: single furniture predicate shared with the recount.
     protected bool LFPG_IsFurniture()
     {
-        if (LFPG_IsExcludedFromDeploy(this))
-            return false;
-
-        // Exclusion configurable (BatteryCharger, Fireplace, ExpansionMarket, etc.)
-        LFPG_GroupManager mgrFurn = LFPG_GroupManager.Get();
-        if (mgrFurn)
-        {
-            LFPG_TerritoryConfig cfgFurn = mgrFurn.GetConfig();
-            if (cfgFurn && cfgFurn.IsTypeExcludedFromFurniture(this))
-                return false;
-        }
-
-        if (IsInherited(BaseBuildingBase))
-            return true;
-
-        if (IsDeployable())
-            return true;
-
-        return false;
+        return LFPG_CountsAsFurniture(this, false);
     }
 
     // Helper: determina si este item debe contar como plot (garden) en vez de mueble
@@ -91,8 +76,16 @@ modded class ItemBase
         if (IsBasebuildingKit())
             return;
 
-        if (!LFPG_IsFurniture())
+        // Placement counts a tent that is still packed. TryPitch runs after super.
+        if (!LFPG_CountsAsFurniture(this, true))
             return;
+
+        // ActionPlaceObject still holds the item in hands here and moves it to the
+        // ground afterwards (after IsBeingPlaced() is cleared). Mark only that pending
+        // move; a deployed tent is already on the ground and gets no mark.
+        InventoryLocation placedLoc = new InventoryLocation;
+        if (GetInventory().GetCurrentInventoryLocation(placedLoc) && placedLoc.GetType() == InventoryLocationType.HANDS)
+            m_LFPG_JustPlaced = true;
 
         PlayerBase pb = PlayerBase.Cast(player);
         if (!pb)
@@ -241,6 +234,9 @@ modded class ItemBase
         // oldLoc es GROUND y newLoc es CARGO/HANDS/ATTACHMENT.
         if (oldLocType == InventoryLocationType.GROUND && newLocType != InventoryLocationType.GROUND)
         {
+            // Leaving the ground ends any placement: a stale mark must never skip a later drop.
+            m_LFPG_JustPlaced = false;
+
             // BBB/Garden tienen sus propios handlers (y no se pueden "recoger")
             if (!IsInherited(BaseBuildingBase) && !IsInherited(GardenPlot))
             {
@@ -289,6 +285,13 @@ modded class ItemBase
         if (!fromPlayer)
             return;
 
+        // Placement already counted this item. Ignore the following hands-to-ground move once.
+        if (oldLocType == InventoryLocationType.HANDS && m_LFPG_JustPlaced)
+        {
+            m_LFPG_JustPlaced = false;
+            return;
+        }
+
         // Si viene del hologram, OnPlacementComplete ya lo maneja
         if (IsBeingPlaced())
             return;
@@ -306,6 +309,7 @@ modded class ItemBase
         LFPG_GroupManager mgrLists = LFPG_GroupManager.Get();
         bool isUnrestrictedDrop = false;
         bool isNoBaseReqDrop = false;
+        bool isListedNoDrop = false;
         if (mgrLists)
         {
             LFPG_TerritoryConfig cfgLists = mgrLists.GetConfig();
@@ -313,10 +317,58 @@ modded class ItemBase
             {
                 isUnrestrictedDrop = cfgLists.IsUnrestricted(this);
                 isNoBaseReqDrop = cfgLists.IsNoBaseRequired(this);
+                isListedNoDrop = cfgLists.IsNoDropInForeignTerritory(this);
             }
         }
 
-        // Lista B: sin restriccion alguna — no contar, no bloquear, exit
+        // Hierarchy root of the previous location. A vehicle root is not a player.
+        EntityAI oldParent = oldLoc.GetParent();
+        PlayerBase pb = null;
+        EntityAI hierRoot = null;
+        if (oldParent)
+        {
+            hierRoot = oldParent.GetHierarchyRoot();
+            if (hierRoot)
+                pb = PlayerBase.Cast(hierRoot);
+            if (!pb)
+                pb = PlayerBase.Cast(oldParent);
+        }
+
+        vector dropPos = newLoc.GetPos();
+
+        // Listed items are blocked in a foreign territory before the furniture exit.
+        // Applies to groupless players and does not use m_EnforceContainerDropRestrictions.
+        if (isListedNoDrop && pb)
+        {
+            PlayerIdentity listedIdentity = pb.GetIdentity();
+            if (listedIdentity)
+            {
+                LFPG_GroupManager mgrListed = mgrLists;
+                if (!mgrListed)
+                    mgrListed = LFPG_GroupManager.Get();
+                if (mgrListed)
+                {
+                    string listedUID = listedIdentity.GetPlainId();
+                    string listedGroup = mgrListed.GetPlayerGroupID(listedUID);
+                    string foreignOwner = mgrListed.GetForeignOwnerAt(dropPos, listedGroup);
+                    if (foreignOwner != "")
+                    {
+                        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_ReturnBlockedDrop, 250, false, this, pb);
+                        mgrListed.SendErrorToPlayer(listedIdentity, pb, "#STR_LFPG_ERR_DROP_RESTRICTED");
+                        string listedLog = "[SimpleGroup] Listed drop blocked for ";
+                        listedLog = listedLog + listedUID;
+                        listedLog = listedLog + " (";
+                        listedLog = listedLog + GetType();
+                        listedLog = listedLog + ") foreign=";
+                        listedLog = listedLog + foreignOwner;
+                        PrintToRPT(listedLog);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Lista B is skipped only after the blacklist. A listed item still blocks.
         if (isUnrestrictedDrop)
             return;
 
@@ -326,32 +378,15 @@ modded class ItemBase
 
         // --- A partir de aqui: es un mueble soltado al suelo por un jugador (o aparente) ---
 
-        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        LFPG_GroupManager mgr = mgrLists;
+        if (!mgr)
+            mgr = LFPG_GroupManager.Get();
         if (!mgr)
             return;
 
-        // Resolver el jugador que solto el item
-        EntityAI oldParent = oldLoc.GetParent();
-        PlayerBase pb = null;
-        if (oldParent)
-        {
-            pb = PlayerBase.Cast(oldParent);
-            if (!pb)
-            {
-                EntityAI hierRoot = oldParent.GetHierarchyRoot();
-                if (hierRoot)
-                {
-                    pb = PlayerBase.Cast(hierRoot);
-                }
-
-                // FIX D-13: Item caido de vehiculo (coche destruido con cargo).
-                // El hierRoot es Transport/CarScript, no un jugador. Skip.
-                if (!pb && hierRoot && (hierRoot.IsInherited(Transport) || hierRoot.IsInherited(CarScript)))
-                {
-                    return;
-                }
-            }
-        }
+        // FIX D-13: Item caido de vehiculo (coche destruido con cargo).
+        if (!pb && hierRoot && (hierRoot.IsInherited(Transport) || hierRoot.IsInherited(CarScript)))
+            return;
 
         if (!pb)
             return;
@@ -362,7 +397,6 @@ modded class ItemBase
 
         string playerUID = identity.GetPlainId();
         string groupID = mgr.GetPlayerGroupID(playerUID);
-        vector dropPos = newLoc.GetPos();
 
         // Determinar estado del drop respecto a territorios
         bool inOwnTerritory = false;
@@ -377,9 +411,62 @@ modded class ItemBase
 
         bool dropIsGreenhouse = LFPG_IsGreenhousePlot();
 
-        // CONTEO: solo si esta en territorio propio, NO cae en ajeno, y hay espacio.
-        // Items en lista A no cuentan (no son muebles persistentes en su flujo).
+        // Own-zone drops are allowed or refused once, then counted only if allowed.
+        // Wilderness stays allowed and is not counted.
         bool canCount = inOwnTerritory && !inOtherTerritory && !isNoBaseReqDrop;
+
+        LFPG_TerritoryConfig config = mgr.GetConfig();
+        bool enforceRestrictions = false;
+        if (config)
+        {
+            enforceRestrictions = config.m_EnforceContainerDropRestrictions;
+        }
+
+        int blockReason = LFPG_BLOCK_NONE;
+        if (enforceRestrictions)
+        {
+            if (isNoBaseReqDrop)
+            {
+                // Lista A: SOLO bloquear en territorio ajeno. Wilderness/sin grupo OK.
+                bool nbrInOther = false;
+                if (groupID != "")
+                    nbrInOther = inOtherTerritory;
+                else
+                    nbrInOther = mgr.IsPositionInTerritory(dropPos);
+
+                if (nbrInOther)
+                    blockReason = LFPG_BLOCK_OTHER_TERRITORY;
+            }
+            else if (inOtherTerritory)
+            {
+                blockReason = LFPG_BLOCK_OTHER_TERRITORY;
+            }
+            else if (inOwnTerritory)
+            {
+                if (dropIsGreenhouse && !mgr.CanPlaceGarden(groupID))
+                    blockReason = LFPG_BLOCK_GARDEN_LIMIT;
+                else if (!dropIsGreenhouse && !mgr.CanDeploy(groupID))
+                    blockReason = LFPG_BLOCK_DEPLOY_LIMIT;
+            }
+        }
+
+        if (blockReason != LFPG_BLOCK_NONE)
+        {
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_ReturnBlockedDrop, 250, false, this, pb);
+            string errKey = LFPG_GetBlockReasonMsg(blockReason);
+            if (errKey == "")
+                errKey = "#STR_LFPG_ERR_DROP_RESTRICTED";
+            mgr.SendErrorToPlayer(identity, pb, errKey);
+
+            string dropLog = "[SimpleGroup] Drop blocked for ";
+            dropLog = dropLog + playerUID;
+            dropLog = dropLog + " (";
+            dropLog = dropLog + GetType();
+            dropLog = dropLog + ") reason=";
+            dropLog = dropLog + blockReason.ToString();
+            PrintToRPT(dropLog);
+            return;
+        }
 
         if (canCount)
         {
@@ -412,78 +499,93 @@ modded class ItemBase
                 }
             }
         }
-
-        // RESTRICCION: solo bloquear drops en territorio ajeno (anti-grief) o por
-        // encima del limite en territorio propio. Drops en wilderness SIEMPRE
-        // permitidos para no romper swaps (pickup mientras tienes algo en manos
-        // hace auto-drop interno que no debe bloquearse nunca).
-        LFPG_TerritoryConfig config = mgr.GetConfig();
-        bool enforceRestrictions = false;
-        if (config)
-        {
-            enforceRestrictions = config.m_EnforceContainerDropRestrictions;
-        }
-
-        if (enforceRestrictions)
-        {
-            int blockReason = LFPG_BLOCK_NONE;
-
-            if (isNoBaseReqDrop)
-            {
-                // Lista A: SOLO bloquear en territorio ajeno. Wilderness/sin grupo OK.
-                bool nbrInOther = false;
-                if (groupID != "")
-                    nbrInOther = inOtherTerritory;
-                else
-                    nbrInOther = mgr.IsPositionInTerritory(dropPos);
-
-                if (nbrInOther)
-                    blockReason = LFPG_BLOCK_OTHER_TERRITORY;
-            }
-            else if (inOtherTerritory)
-            {
-                // Anti-grief: no dejar muebles en el territorio de otro grupo.
-                blockReason = LFPG_BLOCK_OTHER_TERRITORY;
-            }
-            else if (inOwnTerritory)
-            {
-                // En territorio propio: respetar los limites de conteo.
-                if (dropIsGreenhouse && !mgr.CanPlaceGarden(groupID))
-                    blockReason = LFPG_BLOCK_GARDEN_LIMIT;
-                else if (!dropIsGreenhouse && !mgr.CanDeploy(groupID))
-                    blockReason = LFPG_BLOCK_DEPLOY_LIMIT;
-            }
-            // else: wilderness drop, SIEMPRE permitido (necesario para swaps en pickup)
-
-            if (blockReason != LFPG_BLOCK_NONE)
-            {
-                // Devolver item al inventario del jugador
-                GameInventory inv = pb.GetInventory();
-                if (inv)
-                {
-                    bool returned = inv.TakeEntityToInventory(InventoryMode.PREDICTIVE, FindInventoryLocationType.CARGO, this);
-                    if (!returned)
-                    {
-                        int anySlot = FindInventoryLocationType.ANY;
-                        inv.TakeEntityToInventory(InventoryMode.PREDICTIVE, anySlot, this);
-                    }
-                }
-
-                // Error especifico segun motivo (en lugar del generico STR_LFPG_ERR_DROP_RESTRICTED)
-                string errKey = LFPG_GetBlockReasonMsg(blockReason);
-                if (errKey == "")
-                    errKey = "#STR_LFPG_ERR_DROP_RESTRICTED";
-                mgr.SendErrorToPlayer(identity, pb, errKey);
-
-                string dropLog = "[SimpleGroup] Drop blocked for ";
-                dropLog = dropLog + playerUID;
-                dropLog = dropLog + " (";
-                dropLog = dropLog + GetType();
-                dropLog = dropLog + ") reason=";
-                dropLog = dropLog + blockReason.ToString();
-                PrintToRPT(dropLog);
-            }
-        }
         #endif
     }
+
+    // Reject a swap that would leave a listed item on the ground in a foreign territory.
+    override bool CanSwapEntities(EntityAI otherItem, InventoryLocation otherDestination, InventoryLocation destination)
+    {
+        if (!super.CanSwapEntities(otherItem, otherDestination, destination))
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+            return true;
+
+        if (!destination)
+            return true;
+        if (destination.GetType() != InventoryLocationType.GROUND)
+            return true;
+
+        LFPG_GroupManager mgrSwap = LFPG_GroupManager.Get();
+        if (!mgrSwap)
+            return true;
+        LFPG_TerritoryConfig cfgSwap = mgrSwap.GetConfig();
+        if (!cfgSwap)
+            return true;
+        if (!cfgSwap.IsNoDropInForeignTerritory(this))
+            return true;
+
+        Man swapRoot = GetHierarchyRootPlayer();
+        PlayerBase swapPlayer = PlayerBase.Cast(swapRoot);
+        if (!swapPlayer)
+            return true;
+
+        if (LFPG_IsListedDropBlocked(this, swapPlayer, destination.GetPos()))
+            return false;
+        return true;
+    }
 };
+
+// Deferred server return. CallLater cannot target a modded-class method.
+// Hands when empty, otherwise any inventory location. Never deletes the item.
+void LFPG_ReturnBlockedDrop(EntityAI item, PlayerBase player)
+{
+    if (!item)
+        return;
+    if (!player)
+        return;
+    if (!player.IsAlive())
+        return;
+
+    GameInventory itemInv = item.GetInventory();
+    if (!itemInv)
+        return;
+
+    InventoryLocation currentLoc = new InventoryLocation;
+    bool hasLoc = itemInv.GetCurrentInventoryLocation(currentLoc);
+    if (!hasLoc)
+        return;
+    if (currentLoc.GetType() != InventoryLocationType.GROUND)
+        return;
+
+    EntityAI handsItem = player.GetEntityInHands();
+    if (!handsItem)
+        player.ServerTakeEntityToHands(item);
+    else
+        player.ServerTakeEntityToInventory(FindInventoryLocationType.ANY, item);
+
+    // The move is queued. Log only if it is still on the ground a second later.
+    GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_LogDropReturnIfStillGround, 1000, false, item);
+}
+
+void LFPG_LogDropReturnIfStillGround(EntityAI item)
+{
+    if (!item)
+        return;
+
+    GameInventory laterInv = item.GetInventory();
+    if (!laterInv)
+        return;
+
+    InventoryLocation laterLoc = new InventoryLocation;
+    bool laterHasLoc = laterInv.GetCurrentInventoryLocation(laterLoc);
+    if (!laterHasLoc)
+        return;
+    if (laterLoc.GetType() != InventoryLocationType.GROUND)
+        return;
+
+    string leftMsg = "[SimpleGroup] Could not return dropped item ";
+    leftMsg = leftMsg + item.GetType();
+    leftMsg = leftMsg + "; left on the ground.";
+    PrintToRPT(leftMsg);
+}
