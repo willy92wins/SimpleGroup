@@ -20,6 +20,9 @@
 
 class LFPG_FlagBase extends ItemBase
 {
+    // Group-owned flags stay in the CE for 45 days and are topped up while registered.
+    static const float LFPG_GROUP_FLAG_LIFETIME = 3888000.0;
+
     // ========================================================================
     // PERSISTED FIELDS - guardados en OnStoreSave, restaurados en OnStoreLoad
     // ========================================================================
@@ -43,6 +46,7 @@ class LFPG_FlagBase extends ItemBase
     protected float m_RemainingAtRaise;
     protected bool m_IsRegisteredWithManager;
     protected int m_LoadedStorageVersion;
+    protected bool m_GroupLifetimeLogged;
 
     // ========================================================================
     // CONSTRUCTOR - Registro de SyncVars (DEBE ser aqui, NO en EEInit)
@@ -60,6 +64,7 @@ class LFPG_FlagBase extends ItemBase
         m_RemainingAtRaise = 0.0;
         m_IsRegisteredWithManager = false;
         m_LoadedStorageVersion = 0;
+        m_GroupLifetimeLogged = false;
         m_SkipDissolveOnDelete = false;
 
         // SyncVar registration - string var names assigned to locals first
@@ -124,10 +129,24 @@ class LFPG_FlagBase extends ItemBase
             LFPG_GroupManager mgr = LFPG_GroupManager.Get();
             if (mgr)
             {
-                string dissolveMsg = "EEDelete: dissolving group=";
-                dissolveMsg = dissolveMsg + m_GroupID;
-                LFPG_Log.Info(dissolveMsg);
-                mgr.DissolveGroup(m_GroupID);
+                // Only the flag the manager still has registered for this group
+                // may dissolve it. A duplicate with the same id only drops its
+                // own pending/abandoned cache row.
+                LFPG_FlagBase registeredFlag = mgr.GetGroupFlag(m_GroupID);
+                if (registeredFlag == this)
+                {
+                    string dissolveMsg = "EEDelete: dissolving group=";
+                    dissolveMsg = dissolveMsg + m_GroupID;
+                    LFPG_Log.Info(dissolveMsg);
+                    mgr.DissolveGroup(m_GroupID);
+                }
+                else
+                {
+                    mgr.ReleaseUnregisteredFlag(this);
+                    string keepMsg = "EEDelete: not the registered flag, group kept=";
+                    keepMsg = keepMsg + m_GroupID;
+                    LFPG_Log.Info(keepMsg);
+                }
             }
             else
             {
@@ -340,6 +359,39 @@ class LFPG_FlagBase extends ItemBase
         SetSynchDirty();
 
         UpdateAnimationPhase(1.0);
+
+        // Raise action calls this when progress reaches full.
+        // Refresh the base once, outside the validation-tick budget.
+        LFPG_GroupManager raiseMgr = LFPG_GroupManager.Get();
+        if (raiseMgr)
+        {
+            raiseMgr.NotifyFlagRaised(this);
+        }
+        #endif
+    }
+
+    // Server only. Sets the CE lifetime used while this flag belongs to a group.
+    // Logs the values once per entity, at the first application (registration).
+    void ApplyGroupLifetime()
+    {
+        #ifdef SERVER
+        if (m_GroupID == "")
+            return;
+
+        SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
+        SetLifetime(LFPG_GROUP_FLAG_LIFETIME);
+
+        if (!m_GroupLifetimeLogged)
+        {
+            m_GroupLifetimeLogged = true;
+            string lifeMsg = "Flag lifetime at registration: remaining=";
+            lifeMsg = lifeMsg + GetLifetime().ToString();
+            lifeMsg = lifeMsg + " max=";
+            lifeMsg = lifeMsg + GetLifetimeMax().ToString();
+            lifeMsg = lifeMsg + " group=";
+            lifeMsg = lifeMsg + m_GroupID;
+            LFPG_Log.Info(lifeMsg);
+        }
         #endif
     }
 
@@ -597,17 +649,17 @@ class LFPG_FlagBase extends ItemBase
             return false;
         }
 
-        m_LoadedStorageVersion = storageVer;
-
-        // v1+ fields (presentes en todas las versiones)
+        // v1+ fields. Keep every value local until the whole record has been read.
         string groupID = "";
         if (!ctx.Read(groupID))
             return false;
-        m_GroupID = groupID;
 
         float remaining = 0.0;
         if (!ctx.Read(remaining))
             return false;
+
+        m_LoadedStorageVersion = storageVer;
+        m_GroupID = groupID;
         m_RemainingSeconds = remaining;
 
         return true;
