@@ -255,7 +255,7 @@ class LFPG_GroupPanelController extends ViewController
             }
             if (flagFill)
             {
-                float barW = 288.0 * progress;
+                float barW = 308.0 * progress;
                 flagFill.SetSize(barW, 6.0);
                 flagFill.SetColor(barColor);
                 flagFill.Show(true);
@@ -266,19 +266,19 @@ class LFPG_GroupPanelController extends ViewController
     // Members never warn. Furniture and gardens warn from 75 percent and at the cap.
     protected void ApplyLimit(string valueWidget, string fillWidget, int count, int max, bool warn)
     {
-        float fillW = 90.0;
+        float fillW = 97.0;
         if (max > 0)
         {
-            fillW = 90.0 * count;
+            fillW = 97.0 * count;
             fillW = fillW / max;
         }
         if (fillW < 0.0)
         {
             fillW = 0.0;
         }
-        if (fillW > 90.0)
+        if (fillW > 97.0)
         {
-            fillW = 90.0;
+            fillW = 97.0;
         }
 
         int valueColor = COLOR_TEXT;
@@ -614,12 +614,12 @@ class LFPG_GroupPanel extends ScriptViewMenu
         float padding = 12.0;
         float tooltipHeight = (lineCount * lineHeight) + padding;
         float textHeight = lineCount * lineHeight;
-        tooltip.SetSize(288.0, tooltipHeight);
+        tooltip.SetSize(308.0, tooltipHeight);
         if (tooltipBg)
         {
-            tooltipBg.SetSize(288.0, tooltipHeight);
+            tooltipBg.SetSize(308.0, tooltipHeight);
         }
-        tooltipText.SetSize(268.0, textHeight);
+        tooltipText.SetSize(288.0, textHeight);
 
         tooltip.Show(true);
         return true;

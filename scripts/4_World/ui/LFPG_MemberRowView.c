@@ -105,11 +105,11 @@ class LFPG_MemberRowController extends ViewController
             {
                 if (showButtons)
                 {
-                    nameText.SetSize(102.0, 34.0);
+                    nameText.SetSize(106.0, 34.0);
                 }
                 else
                 {
-                    nameText.SetSize(172.0, 34.0);
+                    nameText.SetSize(190.0, 34.0);
                 }
             }
         }

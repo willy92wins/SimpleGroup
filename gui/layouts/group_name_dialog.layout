@@ -1,6 +1,6 @@
 FrameWidgetClass LFPG_GroupNameDialog {
  position 0 0
- size 360 212
+ size 360 236
  hexactpos 1
  vexactpos 1
  hexactsize 1
@@ -10,7 +10,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
  {
   ImageWidgetClass DialogBg {
    position 0 0
-   size 360 212
+   size 360 236
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -59,21 +59,21 @@ FrameWidgetClass LFPG_GroupNameDialog {
   }
 
   MultilineTextWidgetClass DialogHintText {
-   position 16 62
-   size 328 36
+   position 16 60
+   size 328 60
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
    color 0.604 0.604 0.604 1
-   font "gui/fonts/MetronBook12"
+   font "gui/fonts/MetronBook16"
    text "#STR_LFPG_UI_NAME_RULES"
    wrap 1
    ignorepointer 1
   }
 
   ImageWidgetClass NameFieldBg {
-   position 16 104
+   position 16 128
    size 328 36
    hexactpos 1
    vexactpos 1
@@ -85,7 +85,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
   }
 
   ImageWidgetClass NameFieldLine {
-   position 16 139
+   position 16 163
    size 328 1
    hexactpos 1
    vexactpos 1
@@ -98,7 +98,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
 
   EditBoxWidgetClass NameEditBox {
    scriptclass "ViewBinding"
-   position 24 104
+   position 24 128
    size 312 36
    hexactpos 1
    vexactpos 1
@@ -117,7 +117,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
 
   TextWidgetClass ErrorText {
    scriptclass "ViewBinding"
-   position 16 142
+   position 16 166
    size 328 20
    hexactpos 1
    vexactpos 1
@@ -136,7 +136,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
 
   ButtonWidgetClass BtnCancel {
    scriptclass "ViewBinding"
-   position 16 164
+   position 16 188
    size 160 32
    hexactpos 1
    vexactpos 1
@@ -169,7 +169,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
 
   ButtonWidgetClass BtnConfirm {
    scriptclass "ViewBinding"
-   position 184 164
+   position 184 188
    size 160 32
    hexactpos 1
    vexactpos 1

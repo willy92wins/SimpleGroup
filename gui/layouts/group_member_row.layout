@@ -1,6 +1,6 @@
 FrameWidgetClass LFPG_MemberRow {
  position 0 0
- size 288 38
+ size 308 38
  hexactpos 1
  vexactpos 1
  hexactsize 1
@@ -8,7 +8,7 @@ FrameWidgetClass LFPG_MemberRow {
  {
   ImageWidgetClass RowBg {
    position 0 0
-   size 288 34
+   size 308 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -33,7 +33,7 @@ FrameWidgetClass LFPG_MemberRow {
   TextWidgetClass MemberNameText {
    scriptclass "ViewBinding"
    position 26 0
-   size 172 34
+   size 190 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -51,8 +51,8 @@ FrameWidgetClass LFPG_MemberRow {
 
   TextWidgetClass LeaderTagText {
    scriptclass "ViewBinding"
-   position 200 0
-   size 78 34
+   position 220 0
+   size 80 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -71,8 +71,8 @@ FrameWidgetClass LFPG_MemberRow {
 
   ButtonWidgetClass BtnTransfer {
    scriptclass "ViewBinding"
-   position 132 5
-   size 80 24
+   position 136 5
+   size 90 24
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -83,7 +83,7 @@ FrameWidgetClass LFPG_MemberRow {
    {
     TextWidgetClass BtnTransferLabel {
      position 0 0
-     size 80 24
+     size 90 24
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -105,8 +105,8 @@ FrameWidgetClass LFPG_MemberRow {
 
   ButtonWidgetClass BtnKick {
    scriptclass "ViewBinding"
-   position 216 5
-   size 66 24
+   position 230 5
+   size 72 24
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -117,7 +117,7 @@ FrameWidgetClass LFPG_MemberRow {
    {
     TextWidgetClass BtnKickLabel {
      position 0 0
-     size 66 24
+     size 72 24
      hexactpos 1
      vexactpos 1
      hexactsize 1
