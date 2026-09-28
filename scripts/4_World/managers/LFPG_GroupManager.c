@@ -157,56 +157,22 @@ class LFPG_GroupManager
             string tmpFinal = LFPG_TerritoryConfig.GetGroupsPath();
             bool tmpRecovered = false;
 
-            LFPG_GroupsFileData tmpData = new LFPG_GroupsFileData();
-            string tmpErr = "";
-            bool tmpParsed = false;
-            if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(staleTmp, tmpData, tmpErr))
-            {
-                if (tmpData && tmpData.m_Groups)
-                    tmpParsed = true;
-            }
-
             if (!FileExist(tmpFinal))
             {
-                if (tmpParsed && tmpData.m_Groups.Count() > 0)
+                LFPG_GroupsFileData tmpData = new LFPG_GroupsFileData();
+                string tmpErr = "";
+                if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(staleTmp, tmpData, tmpErr))
                 {
-                    if (CopyFile(staleTmp, tmpFinal))
+                    if (tmpData.m_Groups && tmpData.m_Groups.Count() > 0)
                     {
-                        tmpRecovered = true;
-                        string recMsg = "Init: groups.json missing; recovered from tmp with ";
-                        recMsg = recMsg + tmpData.m_Groups.Count().ToString();
-                        recMsg = recMsg + " groups.";
-                        LFPG_Log.Info(recMsg);
-                    }
-                }
-            }
-            else
-            {
-                // Primary is on disk but unreadable, and the tmp parses (even with
-                // 0 groups). Promoting beats deleting the last good copy.
-                LFPG_GroupsFileData primaryData = new LFPG_GroupsFileData();
-                string primaryErr = "";
-                bool primaryParsed = false;
-                if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpFinal, primaryData, primaryErr))
-                {
-                    if (primaryData && primaryData.m_Groups)
-                        primaryParsed = true;
-                }
-                if (!primaryParsed && tmpParsed)
-                {
-                    bool promoted = CopyFile(staleTmp, tmpFinal);
-                    if (!promoted)
-                    {
-                        DeleteFile(tmpFinal);
-                        promoted = CopyFile(staleTmp, tmpFinal);
-                    }
-                    if (promoted)
-                    {
-                        tmpRecovered = true;
-                        string promoteMsg = "Init: groups.json unreadable; promoted tmp with ";
-                        promoteMsg = promoteMsg + tmpData.m_Groups.Count().ToString();
-                        promoteMsg = promoteMsg + " groups.";
-                        LFPG_Log.Info(promoteMsg);
+                        if (CopyFile(staleTmp, tmpFinal))
+                        {
+                            tmpRecovered = true;
+                            string recMsg = "Init: groups.json missing; recovered from tmp with ";
+                            recMsg = recMsg + tmpData.m_Groups.Count().ToString();
+                            recMsg = recMsg + " groups.";
+                            LFPG_Log.Info(recMsg);
+                        }
                     }
                 }
             }
