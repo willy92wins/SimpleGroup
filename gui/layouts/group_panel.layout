@@ -1,7 +1,7 @@
 WrapSpacerWidgetClass LFPG_GroupPanel {
  color 0.1176 0.1176 0.1176 0.9804
  position 16 16
- size 340 300
+ size 400 300
  halign right_ref
  valign top_ref
  hexactpos 1
@@ -16,7 +16,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
  {
   FrameWidgetClass HeaderFrame {
    position 0 0
-   size 340 52
+   size 400 52
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -27,7 +27,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
      ignorepointer 1
      color 1 1 1 1
      position 40 12
-     size 260 32
+     size 320 32
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -46,7 +46,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
 
     ButtonWidgetClass BtnClose {
      scriptclass "ViewBinding"
-     position 300 12
+     position 360 12
      size 28 28
      hexactpos 1
      vexactpos 1
@@ -94,7 +94,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapTitle {
    ignorepointer 1
    position 0 0
-   size 340 2
+   size 400 2
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -105,7 +105,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
    ignorepointer 1
    color 0.7569 0.0941 0.0941 0.7843
    position 0 0
-   size 290 3
+   size 340 3
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -116,7 +116,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapAccent {
    ignorepointer 1
    position 0 0
-   size 340 8
+   size 400 8
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -128,7 +128,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
    ignorepointer 1
    color 0.627 0.627 0.627 1
    position 0 0
-   size 340 26
+   size 400 26
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -148,7 +148,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapList {
    ignorepointer 1
    position 0 0
-   size 340 12
+   size 400 12
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -158,7 +158,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   GridSpacerWidgetClass MemberList {
    scriptclass "ViewBinding"
    position 0 0
-   size 308 34
+   size 368 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -178,7 +178,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapDivider {
    ignorepointer 1
    position 0 0
-   size 340 10
+   size 400 10
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -189,7 +189,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
    ignorepointer 1
    color 0.196 0.196 0.196 1
    position 0 0
-   size 308 1
+   size 368 1
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -200,7 +200,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapLeave {
    ignorepointer 1
    position 0 0
-   size 340 12
+   size 400 12
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -210,7 +210,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   ButtonWidgetClass BtnLeave {
    scriptclass "ViewBinding"
    position 0 0
-   size 308 40
+   size 368 40
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -221,7 +221,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
      ignorepointer 1
      color 0 0 0 0
      position 0 0
-     size 308 40
+     size 368 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -233,7 +233,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
      ignorepointer 1
      color 1 1 1 1
      position 0 0
-     size 308 40
+     size 368 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -241,7 +241,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
      text "#STR_LFPG_UI_LEAVE_GROUP"
      font "gui/fonts/sdf_MetronBook24"
      "exact text" 1
-     "exact text size" 20
+     "exact text size" 18
      "text halign" center
      "text valign" center
     }
@@ -256,7 +256,7 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
   FrameWidgetClass GapBottom {
    ignorepointer 1
    position 0 0
-   size 340 14
+   size 400 14
    hexactpos 1
    vexactpos 1
    hexactsize 1

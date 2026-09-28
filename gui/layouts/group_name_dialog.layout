@@ -135,7 +135,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
   ButtonWidgetClass BtnCancel {
    scriptclass "ViewBinding"
    position 16 196
-   size 140 40
+   size 160 40
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -146,7 +146,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
      ignorepointer 1
      color 0 0 0 0
      position 0 0
-     size 140 40
+     size 160 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -158,7 +158,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
      ignorepointer 1
      color 1 1 1 1
      position 0 0
-     size 140 40
+     size 160 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -180,8 +180,8 @@ FrameWidgetClass LFPG_GroupNameDialog {
 
   ButtonWidgetClass BtnConfirm {
    scriptclass "ViewBinding"
-   position 304 196
-   size 140 40
+   position 284 196
+   size 160 40
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -192,7 +192,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
      ignorepointer 1
      color 0 0 0 0
      position 0 0
-     size 140 40
+     size 160 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -204,7 +204,7 @@ FrameWidgetClass LFPG_GroupNameDialog {
      ignorepointer 1
      color 1 1 1 1
      position 0 0
-     size 140 40
+     size 160 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
