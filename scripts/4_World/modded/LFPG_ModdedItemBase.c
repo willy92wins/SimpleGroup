@@ -80,9 +80,12 @@ modded class ItemBase
         if (!LFPG_CountsAsFurniture(this, true))
             return;
 
-        // Hologram placement moves the item hands-to-ground after IsBeingPlaced()
-        // is cleared. Count here, and ignore that following move once.
-        m_LFPG_JustPlaced = true;
+        // ActionPlaceObject still holds the item in hands here and moves it to the
+        // ground afterwards (after IsBeingPlaced() is cleared). Mark only that pending
+        // move; a deployed tent is already on the ground and gets no mark.
+        InventoryLocation placedLoc = new InventoryLocation;
+        if (GetInventory().GetCurrentInventoryLocation(placedLoc) && placedLoc.GetType() == InventoryLocationType.HANDS)
+            m_LFPG_JustPlaced = true;
 
         PlayerBase pb = PlayerBase.Cast(player);
         if (!pb)
@@ -231,6 +234,9 @@ modded class ItemBase
         // oldLoc es GROUND y newLoc es CARGO/HANDS/ATTACHMENT.
         if (oldLocType == InventoryLocationType.GROUND && newLocType != InventoryLocationType.GROUND)
         {
+            // Leaving the ground ends any placement: a stale mark must never skip a later drop.
+            m_LFPG_JustPlaced = false;
+
             // BBB/Garden tienen sus propios handlers (y no se pueden "recoger")
             if (!IsInherited(BaseBuildingBase) && !IsInherited(GardenPlot))
             {
