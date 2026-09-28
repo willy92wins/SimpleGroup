@@ -335,13 +335,16 @@ class LFPG_TerritoryConfig
         if (m_ValidationTickSeconds <= 0)
             m_ValidationTickSeconds = 60;
 
-        // Si FurnitureExcludedTypes esta vacio pero el admin lo habia configurado como vacio
-        // intencionalmente, no restaurar. Solo restaurar si es NULL o size 1 (posible valor legado "BatteryCharger")
-        if (!m_FurnitureExcludedTypes || m_FurnitureExcludedTypes.Count() <= 1)
+        // The one-entry reset is the pre-v2 legacy list ("BatteryCharger" only).
+        // v2 and newer keep the admin list, including an empty list or a single entry.
+        // m_ConfigVersion is still the value loaded from disk here.
+        if (m_ConfigVersion < 2)
         {
-            // Reset a defaults ampliados
-            LFPG_TerritoryConfig tmp = new LFPG_TerritoryConfig();
-            m_FurnitureExcludedTypes = tmp.m_FurnitureExcludedTypes;
+            if (!m_FurnitureExcludedTypes || m_FurnitureExcludedTypes.Count() <= 1)
+            {
+                LFPG_TerritoryConfig tmp = new LFPG_TerritoryConfig();
+                m_FurnitureExcludedTypes = tmp.m_FurnitureExcludedTypes;
+            }
         }
 
         // v3: si los nuevos arrays no existen en el config del disco, crear con defaults.

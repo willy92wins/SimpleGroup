@@ -793,13 +793,19 @@ class LFPG_GroupManager
     // live raise progress is above zero. Cached progress is used only when that
     // group has no registered flag entity. Empty string means no foreign owner.
     // A groupless actor passes "" and any such group is foreign.
-    string GetForeignOwnerAt(vector pos, string actorGroupID)
+    // extraMeters widens the search past the build radius. Crafting uses it so a
+    // result spawned ahead of the player cannot land inside a foreign zone.
+    string GetForeignOwnerAt(vector pos, string actorGroupID, float extraMeters = 0)
     {
         if (!m_Config)
             return "";
 
+        float searchRadius = m_Config.m_BuildRadiusMeters;
+        if (extraMeters > 0.0)
+            searchRadius = searchRadius + extraMeters;
+
         string nearestID = "";
-        float nearestDistSq = m_Config.m_BuildRadiusSq;
+        float nearestDistSq = searchRadius * searchRadius;
 
         int fo;
         int foCount = m_FlagPositions.Count();
@@ -1021,7 +1027,7 @@ class LFPG_GroupManager
                 continue;
             }
 
-            if (LFPG_CountsAsFurniture(ent))
+            if (LFPG_CountsAsFurniture(ent, false))
             {
                 deployCount = deployCount + 1;
                 LFPG_DeployTracker.Track(ent, groupID);

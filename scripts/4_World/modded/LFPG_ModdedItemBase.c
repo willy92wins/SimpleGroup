@@ -23,7 +23,7 @@ modded class ItemBase
     // Helper: single furniture predicate shared with the recount.
     protected bool LFPG_IsFurniture()
     {
-        return LFPG_CountsAsFurniture(this);
+        return LFPG_CountsAsFurniture(this, false);
     }
 
     // Helper: determina si este item debe contar como plot (garden) en vez de mueble
@@ -76,7 +76,8 @@ modded class ItemBase
         if (IsBasebuildingKit())
             return;
 
-        if (!LFPG_IsFurniture())
+        // Placement counts a tent that is still packed. TryPitch runs after super.
+        if (!LFPG_CountsAsFurniture(this, true))
             return;
 
         // Hologram placement moves the item hands-to-ground after IsBeingPlaced()
@@ -314,10 +315,6 @@ modded class ItemBase
             }
         }
 
-        // Lista B: sin restriccion alguna — no contar, no bloquear, exit
-        if (isUnrestrictedDrop)
-            return;
-
         // Hierarchy root of the previous location. A vehicle root is not a player.
         EntityAI oldParent = oldLoc.GetParent();
         PlayerBase pb = null;
@@ -364,6 +361,10 @@ modded class ItemBase
                 }
             }
         }
+
+        // Lista B is skipped only after the blacklist. A listed item still blocks.
+        if (isUnrestrictedDrop)
+            return;
 
         // Solo muebles deployables o items en lista A (no-base-required)
         if (!LFPG_IsFurniture() && !isNoBaseReqDrop)
@@ -557,10 +558,24 @@ void LFPG_ReturnBlockedDrop(EntityAI item, PlayerBase player)
     else
         player.ServerTakeEntityToInventory(FindInventoryLocationType.ANY, item);
 
-    bool stillGround = itemInv.GetCurrentInventoryLocation(currentLoc);
-    if (!stillGround)
+    // The move is queued. Log only if it is still on the ground a second later.
+    GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_LogDropReturnIfStillGround, 1000, false, item);
+}
+
+void LFPG_LogDropReturnIfStillGround(EntityAI item)
+{
+    if (!item)
         return;
-    if (currentLoc.GetType() != InventoryLocationType.GROUND)
+
+    GameInventory laterInv = item.GetInventory();
+    if (!laterInv)
+        return;
+
+    InventoryLocation laterLoc = new InventoryLocation;
+    bool laterHasLoc = laterInv.GetCurrentInventoryLocation(laterLoc);
+    if (!laterHasLoc)
+        return;
+    if (laterLoc.GetType() != InventoryLocationType.GROUND)
         return;
 
     string leftMsg = "[SimpleGroup] Could not return dropped item ";
