@@ -18,7 +18,8 @@
 // se mergen defaults de los campos nuevos sin sobrescribir los existentes.
 // v2 -> v3: anadidos m_NoBaseRequiredTypes y m_UnrestrictedTypes
 // v3 -> v4: m_FurnitureCountedTypes and m_NoDropInForeignTerritoryTypes
-const int LFPG_CONFIG_VERSION = 4;
+// v4 -> v5: m_MinRefreshLifetime (seconds). Negative disables base refresh.
+const int LFPG_CONFIG_VERSION = 5;
 
 class LFPG_TerritoryConfig
 {
@@ -89,6 +90,10 @@ class LFPG_TerritoryConfig
     // --- Recalibracion ---
     // FIX G-3: Interval largo por default (integrity check). Recalibrate es on-demand.
     int m_RecalibrationIntervalSeconds;
+
+    // While a flag is raised, objects inside the build radius whose max lifetime
+    // is at least this many seconds are reset to that max. Negative disables it.
+    int m_MinRefreshLifetime;
 
     // --- Energia T3 ---
     float m_BatteryDrainPerSecond;
@@ -165,6 +170,7 @@ class LFPG_TerritoryConfig
         // FIX G-3: Recalibrate default 30min (antes 30s). Es fallback integrity check;
         // el flujo normal es on-demand por grupo.
         m_RecalibrationIntervalSeconds = 1800;
+        m_MinRefreshLifetime = 86400;
 
         // Garden plots: conteo separado por defecto
         m_EnablePlots = true;
@@ -370,6 +376,14 @@ class LFPG_TerritoryConfig
         {
             LFPG_TerritoryConfig tmpNoDrop = new LFPG_TerritoryConfig();
             m_NoDropInForeignTerritoryTypes = tmpNoDrop.m_NoDropInForeignTerritoryTypes;
+        }
+
+        // v5: one new scalar. Older files do not carry it; do not rewrite other fields.
+        // A stored negative value on v5 means "disabled" and is left alone (Load skips
+        // this method once the file is already v5).
+        if (m_ConfigVersion < 5)
+        {
+            m_MinRefreshLifetime = 86400;
         }
 
         m_ConfigVersion = LFPG_CONFIG_VERSION;

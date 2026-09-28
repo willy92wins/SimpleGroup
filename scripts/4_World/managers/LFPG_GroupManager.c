@@ -18,6 +18,8 @@ const int LFPG_GROUPS_FILE_VERSION = 1;
 
 class LFPG_GroupManager
 {
+    // Radius scans per validation tick. The interval still gates each flag.
+    static const int LFPG_BASE_REFRESH_BATCH = 4;
     // ========================================================================
     // SINGLETON
     // ========================================================================
@@ -107,6 +109,10 @@ class LFPG_GroupManager
     protected bool m_NeedsCounterRecalibration;
     protected int m_RecalibrationTickCounter;
 
+    // Last base-lifetime refresh time (ms) per group. Allocated once, not per tick.
+    protected ref map<string, int> m_BaseRefreshAt;
+    protected int m_BaseRefreshCursor;
+
     // ========================================================================
     // CONSTRUCTOR
     // ========================================================================
@@ -134,6 +140,8 @@ class LFPG_GroupManager
         m_LoggedRetiredRpc = false;
         m_NeedsCounterRecalibration = true;
         m_RecalibrationTickCounter = 0;
+        m_BaseRefreshAt = new map<string, int>;
+        m_BaseRefreshCursor = 0;
     }
 
     void ~LFPG_GroupManager()
@@ -613,6 +621,192 @@ class LFPG_GroupManager
                 syncFlag.RefreshVisualProgress();
             }
         }
+
+        MaintainRegisteredFlagLifetimes();
+        RefreshRaisedBases();
+    }
+
+    // Top up every flag that still belongs to a group. Abandoned flags are not in the map.
+    protected void MaintainRegisteredFlagLifetimes()
+    {
+        int lifeCount = m_GroupFlags.Count();
+        int lifeIdx;
+        for (lifeIdx = 0; lifeIdx < lifeCount; lifeIdx = lifeIdx + 1)
+        {
+            LFPG_FlagBase lifeFlag = m_GroupFlags.GetElement(lifeIdx);
+            if (!lifeFlag)
+                continue;
+            if (lifeFlag.GetGroupID() == "")
+                continue;
+            lifeFlag.ApplyGroupLifetime();
+        }
+    }
+
+    // At most LFPG_BASE_REFRESH_BATCH radius scans per tick, and each group at most
+    // once per m_RecalibrationIntervalSeconds. Lowered flags (progress <= 0) are skipped.
+    protected void RefreshRaisedBases()
+    {
+        if (!m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+
+        int refreshCount = m_GroupFlags.Count();
+        if (refreshCount == 0)
+            return;
+
+        int nowMs = GetGame().GetTime();
+        int intervalMs = m_Config.m_RecalibrationIntervalSeconds * 1000;
+        int scanned = 0;
+        int seen = 0;
+
+        if (m_BaseRefreshCursor >= refreshCount)
+            m_BaseRefreshCursor = 0;
+
+        while (seen < refreshCount && scanned < LFPG_BASE_REFRESH_BATCH)
+        {
+            string refreshID = m_GroupFlags.GetKey(m_BaseRefreshCursor);
+            m_BaseRefreshCursor = m_BaseRefreshCursor + 1;
+            if (m_BaseRefreshCursor >= refreshCount)
+                m_BaseRefreshCursor = 0;
+            seen = seen + 1;
+
+            LFPG_FlagBase refreshFlag = m_GroupFlags.Get(refreshID);
+            if (!refreshFlag)
+                continue;
+            if (!IsOwnedRegisteredFlag(refreshFlag))
+                continue;
+
+            float refreshProgress = refreshFlag.ComputeCurrentRaiseProgress();
+            if (refreshProgress <= 0.0)
+                continue;
+
+            int lastRefresh = 0;
+            bool hasStamp = m_BaseRefreshAt.Find(refreshID, lastRefresh);
+            if (hasStamp)
+            {
+                int sinceRefresh = nowMs - lastRefresh;
+                if (sinceRefresh >= 0 && sinceRefresh < intervalMs)
+                    continue;
+            }
+
+            RefreshBaseAroundFlag(refreshFlag);
+            m_BaseRefreshAt.Set(refreshID, nowMs);
+            scanned = scanned + 1;
+        }
+    }
+
+    // Same radius query the furniture recount uses. Resets remaining lifetime to max
+    // for objects at or above m_MinRefreshLifetime. Players, creatures and the flag are skipped.
+    void RefreshBaseAroundFlag(LFPG_FlagBase flag)
+    {
+        if (!flag || !m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
+            return;
+
+        vector refreshPos = flag.GetPosition();
+        float refreshRadius = m_Config.m_BuildRadiusMeters;
+
+        m_RecalObjectBuffer.Clear();
+        m_RecalCargoBuffer.Clear();
+        GetGame().GetObjectsAtPosition(refreshPos, refreshRadius, m_RecalObjectBuffer, m_RecalCargoBuffer);
+
+        float lifeThreshold = m_Config.m_MinRefreshLifetime;
+        int refreshObjCount = m_RecalObjectBuffer.Count();
+        int refreshObj;
+        for (refreshObj = 0; refreshObj < refreshObjCount; refreshObj = refreshObj + 1)
+        {
+            Object refreshObjRef = m_RecalObjectBuffer[refreshObj];
+            if (!refreshObjRef)
+                continue;
+            if (refreshObjRef == flag)
+                continue;
+
+            EntityAI refreshEnt = EntityAI.Cast(refreshObjRef);
+            if (!refreshEnt)
+                continue;
+            if (refreshEnt.IsMan())
+                continue;
+            if (refreshEnt.IsPlayer())
+                continue;
+            if (refreshEnt.IsAnimal())
+                continue;
+            if (refreshEnt.IsZombie())
+                continue;
+            if (refreshEnt.IsDayZCreature())
+                continue;
+
+            float lifeMax = refreshEnt.GetLifetimeMax();
+            if (lifeMax < lifeThreshold)
+                continue;
+
+            refreshEnt.SetLifetime(lifeMax);
+        }
+    }
+
+    // Called from LFPG_FlagBase.SetFullyRaised when a raise finishes.
+    // Abandoned flags (T3 power latch included) are not registered and do not refresh.
+    void NotifyFlagRaised(LFPG_FlagBase flag)
+    {
+        if (!flag || !m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
+            return;
+
+        RefreshBaseAroundFlag(flag);
+
+        string raisedID = flag.GetGroupID();
+        if (raisedID != "")
+        {
+            m_BaseRefreshAt.Set(raisedID, GetGame().GetTime());
+        }
+    }
+
+    // Duplicate or leftover flag: drop pending registration and an abandoned
+    // position row at this spot. Does not touch the group's registered cache.
+    void ReleaseUnregisteredFlag(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return;
+
+        int pendIdx;
+        int pendCount = m_PendingFlags.Count();
+        for (pendIdx = 0; pendIdx < pendCount; pendIdx = pendIdx + 1)
+        {
+            if (m_PendingFlags[pendIdx] == flag)
+            {
+                m_PendingFlags.Remove(pendIdx);
+                break;
+            }
+        }
+
+        RemoveAbandonedFlagPosition(flag.GetPosition());
+    }
+
+    // True only when this entity is the flag registered for a group that still exists.
+    bool IsOwnedRegisteredFlag(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return false;
+
+        string ownedID = flag.GetGroupID();
+        if (ownedID == "")
+            return false;
+        if (!m_Groups.Contains(ownedID))
+            return false;
+
+        LFPG_FlagBase ownedFlag = GetGroupFlag(ownedID);
+        if (!ownedFlag)
+            return false;
+        if (ownedFlag != flag)
+            return false;
+
+        return true;
     }
 
     // ========================================================================
@@ -642,6 +836,7 @@ class LFPG_GroupManager
 
         m_GroupFlags.Set(groupID, flag);
         UpdateFlagPositionCache(groupID, flag.GetPosition(), flag.ComputeCurrentRaiseProgress(), flag.GetTier());
+        flag.ApplyGroupLifetime();
 
         // FIX C4: Restaurar MemberCount desde datos del grupo (tras restart)
         // + Sincronizar posicion persistida para fallback en LIGHTWEIGHT_SYNC
@@ -680,6 +875,10 @@ class LFPG_GroupManager
             m_GroupFlags.Remove(groupID);
         }
         RemoveFlagPositionCache(groupID);
+        if (m_BaseRefreshAt.Contains(groupID))
+        {
+            m_BaseRefreshAt.Remove(groupID);
+        }
     }
 
     // ========================================================================
