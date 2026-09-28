@@ -270,20 +270,9 @@ modded class ActionBuildShelter
 
 modded class ActionCreateGreenhouseGardenPlot
 {
-    override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
-    {
-        if (!super.ActionCondition(player, target, item))
-            return false;
-
-        if (LFPG_BuildGate.GreenhouseCreateUnrestricted(target))
-            return true;
-
-        if (GetGame().IsDedicatedServer())
-            return true;
-
-        return LFPG_BuildGate.AllowsPartClient(target);
-    }
-
+    // No client-side check here: whether the created plot type is unrestricted comes from the
+    // server config, which a player without a group never receives. The action stays offered
+    // and the server decides in ActionConditionContinue.
     override bool ActionConditionContinue(ActionData action_data)
     {
         if (!super.ActionConditionContinue(action_data))
