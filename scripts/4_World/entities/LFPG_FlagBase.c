@@ -47,6 +47,11 @@ class LFPG_FlagBase extends ItemBase
     protected bool m_IsRegisteredWithManager;
     protected int m_LoadedStorageVersion;
     protected bool m_GroupLifetimeLogged;
+    // Filled by OnStoreLoad. Copied onto the live fields in AfterStoreLoad,
+    // which runs only after the whole entity load, including LFPG_Flag_T3, succeeds.
+    protected string m_PendingGroupID;
+    protected float m_PendingRemainingSeconds;
+    protected bool m_HasPendingStore;
 
     // ========================================================================
     // CONSTRUCTOR - Registro de SyncVars (DEBE ser aqui, NO en EEInit)
@@ -65,6 +70,9 @@ class LFPG_FlagBase extends ItemBase
         m_IsRegisteredWithManager = false;
         m_LoadedStorageVersion = 0;
         m_GroupLifetimeLogged = false;
+        m_PendingGroupID = "";
+        m_PendingRemainingSeconds = 0.0;
+        m_HasPendingStore = false;
         m_SkipDissolveOnDelete = false;
 
         // SyncVar registration - string var names assigned to locals first
@@ -360,8 +368,8 @@ class LFPG_FlagBase extends ItemBase
 
         UpdateAnimationPhase(1.0);
 
-        // Raise action calls this when progress reaches full.
-        // Refresh the base once, outside the validation-tick budget.
+        // Raise action and the T3 power latch both call this when the flag goes full.
+        // The manager refreshes only when this entity is the registered flag of a live group.
         LFPG_GroupManager raiseMgr = LFPG_GroupManager.Get();
         if (raiseMgr)
         {
@@ -370,12 +378,15 @@ class LFPG_FlagBase extends ItemBase
         #endif
     }
 
-    // Server only. Sets the CE lifetime used while this flag belongs to a group.
-    // Logs the values once per entity, at the first application (registration).
+    // Server only. Sets the CE lifetime used while this flag is the registered flag
+    // of a live group. Logs the values once per entity, at the first application.
     void ApplyGroupLifetime()
     {
         #ifdef SERVER
-        if (m_GroupID == "")
+        LFPG_GroupManager lifeMgr = LFPG_GroupManager.Get();
+        if (!lifeMgr)
+            return;
+        if (!lifeMgr.IsOwnedRegisteredFlag(this))
             return;
 
         SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
@@ -649,7 +660,9 @@ class LFPG_FlagBase extends ItemBase
             return false;
         }
 
-        // v1+ fields. Keep every value local until the whole record has been read.
+        // v1+ fields. Keep them pending until AfterStoreLoad. LFPG_Flag_T3 reads
+        // m_LoadedStorageVersion before its own OnStoreLoad returns, so the version
+        // itself cannot wait.
         string groupID = "";
         if (!ctx.Read(groupID))
             return false;
@@ -659,8 +672,9 @@ class LFPG_FlagBase extends ItemBase
             return false;
 
         m_LoadedStorageVersion = storageVer;
-        m_GroupID = groupID;
-        m_RemainingSeconds = remaining;
+        m_PendingGroupID = groupID;
+        m_PendingRemainingSeconds = remaining;
+        m_HasPendingStore = true;
 
         return true;
     }
@@ -668,6 +682,13 @@ class LFPG_FlagBase extends ItemBase
     override void AfterStoreLoad()
     {
         super.AfterStoreLoad();
+
+        if (m_HasPendingStore)
+        {
+            m_GroupID = m_PendingGroupID;
+            m_RemainingSeconds = m_PendingRemainingSeconds;
+            m_HasPendingStore = false;
+        }
 
         // Restaurar estado de raise desde datos persistidos
         m_RaisedAtTime = GetGame().GetTime();

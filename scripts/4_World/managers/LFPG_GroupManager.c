@@ -590,6 +590,8 @@ class LFPG_GroupManager
             LFPG_FlagBase refreshFlag = m_GroupFlags.Get(refreshID);
             if (!refreshFlag)
                 continue;
+            if (!IsOwnedRegisteredFlag(refreshFlag))
+                continue;
 
             float refreshProgress = refreshFlag.ComputeCurrentRaiseProgress();
             if (refreshProgress <= 0.0)
@@ -617,6 +619,8 @@ class LFPG_GroupManager
         if (!flag || !m_Config)
             return;
         if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
             return;
 
         vector refreshPos = flag.GetPosition();
@@ -660,11 +664,14 @@ class LFPG_GroupManager
     }
 
     // Called from LFPG_FlagBase.SetFullyRaised when a raise finishes.
+    // Abandoned flags (T3 power latch included) are not registered and do not refresh.
     void NotifyFlagRaised(LFPG_FlagBase flag)
     {
         if (!flag || !m_Config)
             return;
         if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
             return;
 
         RefreshBaseAroundFlag(flag);
@@ -695,6 +702,27 @@ class LFPG_GroupManager
         }
 
         RemoveAbandonedFlagPosition(flag.GetPosition());
+    }
+
+    // True only when this entity is the flag registered for a group that still exists.
+    bool IsOwnedRegisteredFlag(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return false;
+
+        string ownedID = flag.GetGroupID();
+        if (ownedID == "")
+            return false;
+        if (!m_Groups.Contains(ownedID))
+            return false;
+
+        LFPG_FlagBase ownedFlag = GetGroupFlag(ownedID);
+        if (!ownedFlag)
+            return false;
+        if (ownedFlag != flag)
+            return false;
+
+        return true;
     }
 
     // ========================================================================
