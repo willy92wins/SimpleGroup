@@ -15,9 +15,47 @@ modded class PlayerBase
         super.EEInit();
 
         #ifdef SERVER
-        // Solo en servidor: enviar sync si el jugador tiene grupo
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_DelayedPlayerSync, 2000, false, this);
+        // FIX M-2: delay configurable
+        int delayMs = 2000;
+        LFPG_GroupManager mgrInit = LFPG_GroupManager.Get();
+        if (mgrInit)
+        {
+            LFPG_TerritoryConfig cfgInit = mgrInit.GetConfig();
+            if (cfgInit && cfgInit.m_PlayerSyncDelayMs > 0)
+                delayMs = cfgInit.m_PlayerSyncDelayMs;
+        }
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_DelayedPlayerSync, delayMs, false, this);
         #endif
+    }
+
+    // RPCs via PlayerBase: permite enviar/recibir sin depender de la flag entity
+    // Server: rutea C2S RPCs (Leave, Kick, Transfer, RequestData) al GroupManager
+    // Client: rutea S2C RPCs (LightweightSync, GroupDissolved) al ClientGroupCache
+    override void OnRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx)
+    {
+        super.OnRPC(sender, rpc_type, ctx);
+
+        // Solo RPCs de nuestro rango
+        if (rpc_type < 74521600 || rpc_type > 74521699)
+            return;
+
+        // SERVER: C2S RPCs enviados via PlayerBase (UI: leave, kick, transfer, requestdata)
+        #ifdef SERVER
+        if (sender)
+        {
+            LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+            if (mgr)
+            {
+                mgr.HandleRPC(sender, rpc_type, ctx, null);
+            }
+        }
+        #endif
+
+        // CLIENT: S2C RPCs enviados via PlayerBase (reconnect sync, dissolve)
+        if (!GetGame().IsDedicatedServer())
+        {
+            LFPG_ClientGroupCache.HandleClientRPC(rpc_type, ctx, null);
+        }
     }
 };
 

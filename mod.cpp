@@ -3,4 +3,4 @@ author = "LFPG";
 url = "";
 type = "mod";
 
-dependencies[] = { "Community Framework" };
+dependencies[] = { "DF_Scripts" };

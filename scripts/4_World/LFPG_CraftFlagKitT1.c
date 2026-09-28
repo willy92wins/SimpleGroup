@@ -48,9 +48,9 @@ class LFPG_CraftFlagKitT1 extends RecipeBase
         m_ResultSetFullQuantity[0] = false;
         m_ResultSetQuantity[0] = -1;
         m_ResultSetHealth[0] = -1;
-        m_ResultInheritsHealth[0] = -2;
+        m_ResultInheritsHealth[0] = -1;
         m_ResultInheritsColor[0] = -1;
-        m_ResultToInventory[0] = -2;
+        m_ResultToInventory[0] = -1;
         m_ResultUseSoftSkills[0] = false;
         m_ResultReplacesIngredient[0] = -1;
     }

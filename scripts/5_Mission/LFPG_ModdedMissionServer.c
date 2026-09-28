@@ -7,17 +7,20 @@ modded class MissionServer
 {
     override void OnInit()
     {
+        // FIX I-12: Crear singleton ANTES de super.OnInit para que cualquier
+        // BBB/Item callback disparado durante la carga inicial tenga acceso al manager.
+        LFPG_GroupManager.Create();
+
         super.OnInit();
 
-        // Crear e inicializar el GroupManager singleton
-        LFPG_GroupManager.Create();
+        // Init despues de super (usa JsonFileLoader / config loading que necesitan estar listos)
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
             mgr.Init();
         }
 
-        Print("[SimpleGroup] MissionServer initialized.");
+        LFPG_Log.Info("MissionServer initialized.");
     }
 
     override void OnMissionFinish()
@@ -26,6 +29,10 @@ modded class MissionServer
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
+            // El orden importa: marcar el apagado ANTES del save. Si el engine
+            // borra entidades durante el teardown, cada EEDelete intentaria
+            // disolver su grupo y el save final escribiria un fichero vacio.
+            mgr.SetShuttingDown();
             mgr.SaveGroups();
         }
 

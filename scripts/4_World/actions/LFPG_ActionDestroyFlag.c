@@ -15,30 +15,29 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINonRuined;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor(5.0);
     }
 
-    override bool HasTarget()
-    {
-        return true;
-    }
 
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
         if (!player || !target)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
-        // Necesita Hatchet en manos (ambos lados)
+        // Necesita Hatchet/Axe en manos (ambos lados) — FIX M-14 via ToolMatcher
         EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
         if (!itemInHands)
             return false;
 
-        string kindHatchet = "Hatchet";
-        if (!itemInHands.IsKindOf(kindHatchet))
+        if (!LFPG_IsHatchet(itemInHands))
             return false;
 
         // FIX 3: Client-side usa SOLO el cache

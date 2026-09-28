@@ -20,6 +20,7 @@ class LFPG_MemberRowController extends ViewController
     string m_MemberUID;
     bool m_IsLeader;
     bool m_IsSelf;
+    bool m_IsOnline;
 
     // Buttons (loaded by LoadWidgetsAsVariables)
     ButtonWidget BtnTransfer;
@@ -32,9 +33,10 @@ class LFPG_MemberRowController extends ViewController
         m_MemberUID = "";
         m_IsLeader = false;
         m_IsSelf = false;
+        m_IsOnline = false;
     }
 
-    void SetData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader)
+    void SetData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
     {
         m_MemberUID = uid;
         m_IsLeader = isLeader;
@@ -73,6 +75,9 @@ class LFPG_MemberRowController extends ViewController
         {
             BtnKick.Show(showButtons);
         }
+
+        // Indicador online/offline
+        m_IsOnline = isOnline;
     }
 
     // Relay_Command: transferir liderazgo a este miembro
@@ -95,16 +100,16 @@ class LFPG_MemberRowController extends ViewController
         return true;
     }
 
-    // FIX C1: Usa helper centralizado del cache
+    // Envia via PlayerBase (funciona desde cualquier distancia)
     protected void SendMemberRPC(int rpcType, string targetUID)
     {
-        LFPG_FlagBase flag = LFPG_ClientGroupCache.FindLocalGroupFlag();
-        if (!flag)
+        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+        if (!player)
             return;
 
         ScriptRPC rpc = new ScriptRPC();
         rpc.Write(targetUID);
-        rpc.Send(flag, rpcType, true, null);
+        rpc.Send(player, rpcType, true, null);
     }
 };
 
@@ -133,12 +138,70 @@ class LFPG_MemberRowView extends ScriptView
         return LFPG_MemberRowController.Cast(GetController());
     }
 
-    void SetMemberData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader)
+    void SetMemberData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
     {
         LFPG_MemberRowController ctrl = GetRowController();
         if (ctrl)
         {
-            ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader);
+            ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
+        }
+
+        // FIX AUDIT: Forzar carga de imagen procedural en RowBg y OnlineIndicator
+        InitRowBackground();
+        InitOnlineIndicator(isOnline);
+    }
+
+    // FIX I-20: Update in-place (mismo row reciclado, evita recrear widgets)
+    void UpdateMemberData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
+    {
+        LFPG_MemberRowController ctrl = GetRowController();
+        if (ctrl)
+        {
+            ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
+        }
+        // Indicator puede cambiar online/offline
+        InitOnlineIndicator(isOnline);
+    }
+
+    // Indicador online: verde = online, gris = offline
+    protected void InitOnlineIndicator(bool isOnline)
+    {
+        Widget root = GetLayoutRoot();
+        if (!root)
+            return;
+
+        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
+        string nameIndicator = "OnlineIndicator";
+        ImageWidget indicator = ImageWidget.Cast(root.FindAnyWidget(nameIndicator));
+        if (indicator)
+        {
+            indicator.LoadImageFile(0, colorTex);
+            if (isOnline)
+            {
+                indicator.SetColor(ARGB(255, 80, 200, 80));
+            }
+            else
+            {
+                indicator.SetColor(ARGB(255, 100, 100, 100));
+            }
+        }
+    }
+
+    // FIX AUDIT: ImageWidget necesita LoadImageFile() + SetColor() para colores procedurales
+    protected void InitRowBackground()
+    {
+        Widget root = GetLayoutRoot();
+        if (!root)
+            return;
+
+        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
+        string nameBg = "RowBg";
+        ImageWidget rowBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
+        if (rowBg)
+        {
+            // Layout color 0.15 0.15 0.18 0.5 → ARGB(128, 38, 38, 46)
+            rowBg.LoadImageFile(0, colorTex);
+            rowBg.SetColor(ARGB(128, 38, 38, 46));
         }
     }
 };

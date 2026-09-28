@@ -3,10 +3,10 @@
 // Sistema de Grupos / Territorio / Restriccion de Construccion
 // Herencia: ItemBase (NO Flag_Base) — TechRef FINAL v2
 //
-// PLACEHOLDER MODELS:
-//   Kit T1  → WoodenCrate
-//   Banderas → WoodenCrate
-//   VERIFICAR RUTAS .p3d antes de empaquetar!
+// MODELOS:
+//   T1 → SimpleGroup\data\T1\T1_Flagpole.p3d
+//   T2 → SimpleGroup\data\T2\T2_Flagpole.p3d
+//   T3 → SimpleGroup\data\T3\T3_Flagpole.p3d (con slot bateria)
 // ============================================================================
 
 // ============================================================================
@@ -19,14 +19,14 @@ class CfgSlots
     {
         name = "LFPG_FlagLog";
         displayName = "Wooden Log";
-        ghostIcon = "planks";
+        ghostIcon = "woodenlog";
         stackMax = 1;
     };
     class Slot_LFPG_FlagRope
     {
         name = "LFPG_FlagRope";
         displayName = "Rope";
-        ghostIcon = "metalwire";
+        ghostIcon = "rope";
         stackMax = 1;
     };
     // T2 -> T3 upgrade slots
@@ -49,7 +49,15 @@ class CfgSlots
         name = "LFPG_FlagStones";
         displayName = "Stones";
         ghostIcon = "stones";
-        stackMax = 16;
+        stackMax = 10;
+    };
+    // T3 power slot
+    class Slot_LFPG_FlagBattery
+    {
+        name = "LFPG_FlagBattery";
+        displayName = "Car Battery";
+        ghostIcon = "carbattery";
+        stackMax = 1;
     };
 };
 
@@ -61,6 +69,7 @@ class CfgPatches
         {
             "LFPG_FlagKit_T1",
             "LFPG_Flag_T1_Placing",
+            "LFPG_FlagBase",
             "LFPG_Flag_T1",
             "LFPG_Flag_T2",
             "LFPG_Flag_T3"
@@ -74,7 +83,7 @@ class CfgPatches
             "DZ_Gear_Camping",
             "DZ_Gear_Consumables",
             "DZ_Gear_Crafting",
-            "JM_CF_Scripts"
+            "DF_Scripts"
         };
     };
 };
@@ -95,7 +104,7 @@ class CfgVehicles
         scope = 2;
         displayName = "$STR_LFPG_FLAGKIT_T1";
         descriptionShort = "$STR_LFPG_FLAGKIT_T1_DESC";
-        model = "\dz\gear\camping\wooden_case.p3d";
+        model = "\SimpleGroup\data\T1\T1_FlagKit.p3d";
         projectionTypename = "LFPG_Flag_T1_Placing";
         rotationFlags = 16;
         weight = 800;
@@ -105,31 +114,11 @@ class CfgVehicles
         varQuantityInit = 0;
         varQuantityMin = 0;
         varQuantityMax = 0;
-    };
-
-    // ========================================================================
-    // LFPG_Flag_T1_Placing — Entidad SOLO para hologram preview
-    // ========================================================================
-    class LFPG_Flag_T1_Placing: Inventory_Base
-    {
-        scope = 1;
-        model = "\dz\gear\camping\wooden_case.p3d";
-        storageCategory = 1;
-    };
-
-    // ========================================================================
-    // LFPG_FlagBase — Base abstracta de banderas
-    // ========================================================================
-    class LFPG_FlagBase: Inventory_Base
-    {
-        scope = 0;
-        displayName = "LFPG Flag Base";
-        descriptionShort = "Base class - not spawnable";
-        storageCategory = 1;
-        lifetime = 3888000;
-        isMeleeWeapon = 0;
-        weight = 5000;
-        itemSize[] = { 10, 10 };
+        hiddenSelections[] = {"T1_Rag"};
+        hiddenSelectionsTextures[] = {"DZ\gear\consumables\data\rag_co.paa"};
+        hiddenSelectionsMaterials[] = {"SimpleGroup\data\Textures\rags_bandages.rvmat"};
+        hologramMaterial = "hologram";
+        hologramMaterialPath = "dz\data";
 
         class AnimationSources
         {
@@ -143,6 +132,83 @@ class CfgVehicles
     };
 
     // ========================================================================
+    // LFPG_Flag_T1_Placing — Entidad SOLO para hologram preview
+    // ========================================================================
+    class LFPG_Flag_T1_Placing: Inventory_Base
+    {
+        scope = 1;
+        autocenter = 0;
+        model = "\SimpleGroup\data\T1\T1_Flagpole.p3d";
+        storageCategory = 1;
+        hiddenSelections[] = {"T1_Rag"};
+        hiddenSelectionsTextures[] = {"DZ\gear\consumables\data\rag_co.paa"};
+        hiddenSelectionsMaterials[] = {"SimpleGroup\data\Textures\rags_bandages.rvmat"};
+
+        class AnimationSources
+        {
+            class flag_mast
+            {
+                source = "user";
+                animPeriod = 0.5;
+                initPhase = 1;
+            };
+        };
+    };
+
+    // ========================================================================
+    // LFPG_FlagBase — Base abstracta de banderas
+    // ========================================================================
+    class LFPG_FlagBase: Inventory_Base
+    {
+        scope = 0;
+        autocenter = 0;
+        displayName = "LFPG Flag Base";
+        descriptionShort = "Base class - not spawnable";
+        storageCategory = 1;
+        lifetime = 3888000;
+        isMeleeWeapon = 0;
+        weight = 5000;
+        itemSize[] = { 10, 10 };
+        physLayer = "item_large";
+        carveNavmesh = 1;
+        isDeployable = 0;
+
+        class AnimationSources
+        {
+            class flag_mast
+            {
+                source = "user";
+                animPeriod = 0.5;
+                initPhase = 1;
+            };
+        };
+
+        class DamageSystem
+        {
+            class GlobalHealth
+            {
+                class Health
+                {
+                    hitpoints = 1000;
+                };
+            };
+            class DamageZones
+            {
+                class Body
+                {
+                    class Health
+                    {
+                        hitpoints = 1000;
+                        transferToGlobalCoef = 1.0;
+                    };
+                    componentNames[] = {"Component01"};
+                    fatalInjuryCoef = -1;
+                };
+            };
+        };
+    };
+
+    // ========================================================================
     // LFPG_Flag_T1 — Tier 1
     // Slots custom para upgrade a T2: WoodenLog + Rope
     // ========================================================================
@@ -151,7 +217,7 @@ class CfgVehicles
         scope = 2;
         displayName = "$STR_LFPG_FLAG_T1";
         descriptionShort = "$STR_LFPG_FLAG_T1_DESC";
-        model = "\dz\gear\camping\wooden_case.p3d";
+        model = "\SimpleGroup\data\T1\T1_Flagpole.p3d";
         weight = 3000;
         itemSize[] = { 10, 10 };
 
@@ -181,7 +247,7 @@ class CfgVehicles
         scope = 2;
         displayName = "$STR_LFPG_FLAG_T2";
         descriptionShort = "$STR_LFPG_FLAG_T2_DESC";
-        model = "\dz\gear\camping\wooden_case.p3d";
+        model = "\SimpleGroup\data\T2\T2_Flagpole.p3d";
         weight = 8000;
         itemSize[] = { 10, 10 };
 
@@ -205,27 +271,34 @@ class CfgVehicles
 
     // ========================================================================
     // LFPG_Flag_T3 — Tier 3 (max, sin slots de upgrade)
+    // Slot de bateria para sistema de energia
     // ========================================================================
     class LFPG_Flag_T3: LFPG_FlagBase
     {
         scope = 2;
         displayName = "$STR_LFPG_FLAG_T3";
         descriptionShort = "$STR_LFPG_FLAG_T3_DESC";
-        model = "\dz\gear\camping\wooden_case.p3d";
+        model = "\SimpleGroup\data\T3\T3_Flagpole.p3d";
         weight = 15000;
         itemSize[] = { 10, 10 };
+
+        attachments[] = { "LFPG_FlagBattery" };
+        class GUIInventoryAttachmentsProps
+        {
+            class PowerSupply
+            {
+                name = "Power Supply";
+                description = "";
+                attachmentSlots[] = {"LFPG_FlagBattery"};
+                icon = "set:dayz_inventory image:cat_common_cargo";
+            };
+        };
     };
 
     // ========================================================================
-    // Vanilla item overrides — anadir inventorySlot custom (patron PowerGrid)
-    // IMPORTANTE: parent class explicito para no crear clase nueva scope=0
-    //
-    // WoodenLog y Nail usan inventorySlot[] (array) en vanilla -> += funciona
-    // Rope usa inventorySlot = "Material_FPole_Rope" en vanilla (string) ->
-    //   redeclarar como array incluyendo el slot vanilla original
-    // Stone y Firewood usan inventorySlot = "string" en vanilla ->
-    //   += falla silenciosamente (Bohemia T148506), hay que redeclarar
-    //   el array completo incluyendo el slot vanilla original
+    // Vanilla item overrides — anadir inventorySlot custom
+    // Desde DayZ 1.07+ todos los items usan inventorySlot[] (array)
+    // += funciona correctamente en todos los casos
     // ========================================================================
     class WoodenLog: Inventory_Base
     {
@@ -233,11 +306,11 @@ class CfgVehicles
     };
     class Rope: Inventory_Base
     {
-        inventorySlot[] = {"Material_FPole_Rope", "LFPG_FlagRope"};
+        inventorySlot[] += {"LFPG_FlagRope"};
     };
     class Firewood: Inventory_Base
     {
-        inventorySlot[] = {"Firewood", "LFPG_FlagFirewood"};
+        inventorySlot[] += {"LFPG_FlagFirewood"};
     };
     class Nail: Inventory_Base
     {
@@ -245,8 +318,11 @@ class CfgVehicles
     };
     class Stone: Inventory_Base
     {
-        inventorySlot[] = {"Stones", "LFPG_FlagStones"};
-        varQuantityMax = 16.0;
+        inventorySlot[] += {"LFPG_FlagStones"};
+    };
+    class CarBattery: Inventory_Base
+    {
+        inventorySlot[] += {"LFPG_FlagBattery"};
     };
 };
 

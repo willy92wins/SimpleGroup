@@ -1,13 +1,28 @@
 // ============================================================================
 // LFPG_ActionJoinGroup.c - 4_World/actions
-// Accion: unirse al grupo via bandera en invite mode
-// Condicion: sin grupo + bandera en invite mode + grupo no lleno
+// Accion continua: mantener F para unirse al grupo via bandera en invite mode
+// ActionContinuousBase con CAContinuousTime(2.0)
+// Condicion: sin grupo + bandera en invite mode
 // ============================================================================
 
-class LFPG_ActionJoinGroup extends ActionInteractBase
+class LFPG_ActionJoinGroupCB extends ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        m_ActionData.m_ActionComponent = new CAContinuousTime(2.0);
+    }
+};
+
+class LFPG_ActionJoinGroup extends ActionContinuousBase
 {
     void LFPG_ActionJoinGroup()
     {
+        m_CallbackClass = LFPG_ActionJoinGroupCB;
+        // CMD_ACTIONFB_INTERACT: funciona con manos vacias (CCINone) en cualquier modelo.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+
         string text = "#STR_LFPG_ACTION_JOIN_GROUP";
         m_Text = text;
     }
@@ -15,11 +30,20 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor;
     }
 
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
+    }
 
     override bool HasTarget()
+    {
+        return true;
+    }
+
+    override bool HasProgress()
     {
         return true;
     }
@@ -29,7 +53,11 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
         if (!player || !target)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
@@ -43,14 +71,23 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
             if (LFPG_ClientGroupCache.HasGroup())
                 return false;
         }
+        else
+        {
+            // FIX AUDIT: Validacion server-side - evita hold de 2s que falla silenciosamente
+            PlayerIdentity identity = player.GetIdentity();
+            if (identity)
+            {
+                LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+                if (mgr && mgr.HasGroup(identity.GetPlainId()))
+                    return false;
+            }
+        }
 
         return true;
     }
 
-    override void OnStartServer(ActionData action_data)
+    override void OnFinishProgressServer(ActionData action_data)
     {
-        super.OnStartServer(action_data);
-
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;
@@ -70,16 +107,33 @@ class LFPG_ActionJoinGroup extends ActionInteractBase
         if (!mgr)
             return;
 
+        // FIX G-16: Re-validar condiciones que pudieron cambiar durante el hold de 2s
+        if (!flag.IsInviteModeActive())
+        {
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_INVITE_EXPIRED");
+            return;
+        }
+
         string groupID = flag.GetGroupID();
         if (groupID == "")
+        {
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_JOIN_FAILED");
             return;
+        }
+
+        // FIX G-16: Re-validar que el grupo sigue existiendo (podria haberse disuelto durante los 2s)
+        if (!mgr.GroupExists(groupID))
+        {
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_JOIN_FAILED");
+            return;
+        }
 
         bool added = mgr.AddMember(groupID, playerUID, playerName);
         if (!added)
         {
-            // Join failed - group full, already member, etc.
+            // FIX AUDIT: Enviar feedback al cliente cuando join falla
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_JOIN_FAILED");
             return;
         }
-        // AddMember already sends GROUP_SYNC_FULL to all members including the new one
     }
 };

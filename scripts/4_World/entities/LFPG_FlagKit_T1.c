@@ -24,6 +24,20 @@ class LFPG_FlagKit_T1 extends ItemBase
         return true;
     }
 
+    // Sonido durante la barra de progreso de deploy
+    // ActionDeployObject usa esto — sin soundset, el deploy puede fallar
+    override string GetLoopDeploySoundset()
+    {
+        string snd = "placeObject_SoundSet";
+        return snd;
+    }
+
+    override string GetDeploySoundset()
+    {
+        string snd = "putDown_FenceKit_SoundSet";
+        return snd;
+    }
+
     override bool PlacementCanBeRotated()
     {
         return true;
@@ -44,15 +58,32 @@ class LFPG_FlagKit_T1 extends ItemBase
         if (!super.CanBePlaced(player, position))
             return false;
 
-        // Server-side: verificar overlap de territorio via GroupManager
-        #ifdef SERVER
-        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (mgr)
+        // FIX AUDIT: Jugador con grupo existente no puede colocar otra bandera
+        PlayerBase pb = PlayerBase.Cast(player);
+        if (pb)
         {
-            if (mgr.IsPositionInTerritory(position))
+            #ifdef SERVER
+            PlayerIdentity identity = pb.GetIdentity();
+            if (identity)
+            {
+                LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+                if (mgr)
+                {
+                    // Limpiar grupo zombi primero (defensivo)
+                    mgr.CleanupStaleGroupForPlayer(identity.GetPlainId());
+
+                    if (mgr.HasGroup(identity.GetPlainId()))
+                        return false;
+
+                    if (mgr.IsPositionInTerritory(position))
+                        return false;
+                }
+            }
+            #else
+            if (LFPG_ClientGroupCache.HasGroup())
                 return false;
+            #endif
         }
-        #endif
 
         return true;
     }
@@ -88,24 +119,27 @@ class LFPG_FlagKit_T1 extends ItemBase
             // Validar overlap de territorio server-side
             if (mgr.IsPositionInTerritory(position))
             {
-                string overlapMsg = "[SimpleGroup] Territory overlap rejected server-side at ";
+                string overlapMsg = "Territory overlap rejected server-side at ";
                 overlapMsg = overlapMsg + position.ToString();
-                Print(overlapMsg);
-                // No se puede evitar que ActionDeployObject borre el kit,
-                // pero NO spawnear la bandera — el jugador pierde el kit
-                // TODO: Notificar al jugador via RPC
+                LFPG_Log.Error(overlapMsg);
+
+                // Notificar al jugador via RPC (ERROR_MSG via PlayerBase)
+                ScriptRPC errRpc = new ScriptRPC();
+                string errKey = "#STR_LFPG_ERR_TERRITORY_BLOCKED";
+                errRpc.Write(errKey);
+                errRpc.Send(pb, LFPG_RPC_S2C_ERROR_MSG, true, identity);
                 return;
             }
 
-            // Spawnar bandera T1
+            // Spawnar bandera T1 en la posicion del hologram
             string flagClass = "LFPG_Flag_T1";
-            Object obj = GetGame().CreateObjectEx(flagClass, position, ECE_PLACE_ON_SURFACE);
+            Object obj = GetGame().CreateObjectEx(flagClass, position, ECE_CREATEPHYSICS | ECE_PLACE_ON_SURFACE);
             LFPG_FlagBase flag = LFPG_FlagBase.Cast(obj);
             if (!flag)
             {
-                string errMsg = "[SimpleGroup] ERROR: Failed to spawn LFPG_Flag_T1 at ";
+                string errMsg = "Failed to spawn LFPG_Flag_T1 at ";
                 errMsg = errMsg + position.ToString();
-                Print(errMsg);
+                LFPG_Log.Error(errMsg);
                 return;
             }
 
@@ -115,35 +149,29 @@ class LFPG_FlagKit_T1 extends ItemBase
             // Auto-registrar al jugador como dueno
             if (!mgr.HasGroup(playerUID))
             {
-                string tempName = "#TEMP#";
-                int uidLen = playerUID.Length();
-                if (uidLen > 4)
-                {
-                    int startIdx = uidLen - 4;
-                    string suffix = playerUID.Substring(startIdx, 4);
-                    tempName = tempName + suffix;
-                }
-                else
-                {
-                    tempName = tempName + playerUID;
-                }
-
+                string tempName = LFPG_GroupData.GenerateTempName(playerUID);
                 string groupID = mgr.CreateGroup(playerUID, playerName, tempName, flag);
                 if (groupID != "")
                 {
                     mgr.SendOpenNameDialog(identity, flag, groupID);
-                    mgr.SendGroupSyncFull(identity, groupID, flag);
+                    mgr.SendGroupSyncFull(identity, groupID, flag, flag);
 
-                    string logMsg = "[SimpleGroup] Territory placed + auto-registered: ";
+                    // Fallback fiable: enviar tambien via PlayerBase (siempre existe en client).
+                    // GROUP_SYNC_FULL via flag puede perderse si la entidad flag
+                    // no se ha replicado al cliente aun (race condition de JIP).
+                    // LIGHTWEIGHT_SYNC via PlayerBase garantiza que s_HasGroup=true.
+                    mgr.SendLightweightSync(identity, groupID, flag, pb);
+
+                    string logMsg = "Territory placed + auto-registered: ";
                     logMsg = logMsg + playerUID;
-                    Print(logMsg);
+                    LFPG_Log.Info(logMsg);
                 }
             }
             else
             {
-                string warnMsg = "[SimpleGroup] Player already has group, flag placed but no group created: ";
+                string warnMsg = "Player already has group, flag placed but no group created: ";
                 warnMsg = warnMsg + playerUID;
-                Print(warnMsg);
+                LFPG_Log.Error(warnMsg);
             }
 
             // Patron FenceKit: ocultar el kit, NO borrarlo manualmente

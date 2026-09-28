@@ -18,11 +18,16 @@ class LFPG_MemberData
     string m_PlayerName;
     int m_JoinTimestamp;
 
+    // Runtime only (no JSON, no persistence) - status online para UI
+    [NonSerialized()]
+    bool m_IsOnline;
+
     void LFPG_MemberData()
     {
         m_PlayerUID = "";
         m_PlayerName = "";
         m_JoinTimestamp = 0;
+        m_IsOnline = false;
     }
 
     void Set(string uid, string name, int timestamp)
@@ -46,12 +51,20 @@ class LFPG_GroupData
     int m_Tier;
     int m_DeployedCount;
     int m_GardenPlotCount;
+    vector m_FlagPosition;
 
     // --- Campos runtime-only (NO se guardan en JSON) ---
     [NonSerialized()]
     int m_FlagNetLow;
     [NonSerialized()]
     int m_FlagNetHigh;
+
+    // Nombres localizados de items desplegados (para tooltip UI)
+    // Se llenan en RecalibrateCounters y se envian en Full Sync RPC
+    [NonSerialized()]
+    ref array<string> m_DeployedItemNames;
+    [NonSerialized()]
+    ref array<string> m_GardenItemNames;
 
     void LFPG_GroupData()
     {
@@ -62,17 +75,53 @@ class LFPG_GroupData
         m_Tier = 1;
         m_DeployedCount = 0;
         m_GardenPlotCount = 0;
+        m_FlagPosition = vector.Zero;
         m_FlagNetLow = 0;
         m_FlagNetHigh = 0;
+        m_DeployedItemNames = new array<string>;
+        m_GardenItemNames = new array<string>;
     }
 
-    // Genera un ID unico: timestamp del server + random + sufijo del UID
+    // Genera nombre temporal para grupo recien creado
+    // Prefijo "#TEMP#" contiene '#' que no esta en LFPG_NAME_ALLOWED_CHARS,
+    // imposible que un jugador lo escriba manualmente
+    // FIX C-5: Anade timestamp + random para evitar colisiones incluso para mismo jugador
+    static string GenerateTempName(string playerUID)
+    {
+        string tempName = "#TEMP#";
+        int uidLen = playerUID.Length();
+        if (uidLen > 4)
+        {
+            int startIdx = uidLen - 4;
+            tempName = tempName + playerUID.Substring(startIdx, 4);
+        }
+        else
+        {
+            tempName = tempName + playerUID;
+        }
+        // Timestamp + random para unicidad (evita colision con tempnames anteriores)
+        int ts = GetGame().GetTime();
+        int rnd = Math.RandomInt(100, 999);
+        tempName = tempName + "_";
+        tempName = tempName + ts.ToString();
+        tempName = tempName + "_";
+        tempName = tempName + rnd.ToString();
+        return tempName;
+    }
+
+    // Genera un ID unico: timestamp del server + tickTime + random + sufijo del UID
+    // FIX M-23: Anade GetTickTime() como nonce adicional para evitar colisiones
+    // en la ventana tras restart donde GetTime() empieza desde 0.
     static string GenerateGroupID(string leaderUID)
     {
         int gameTime = GetGame().GetTime();
+        float tickT = GetGame().GetTickTime();
+        int tickInt = tickT * 1000;
         int rnd = Math.RandomInt(1000, 999999);
         string id = "grp_";
         id = id + gameTime.ToString();
+        id = id + "_";
+        id = id + tickInt.ToString();
         id = id + "_";
         id = id + rnd.ToString();
         id = id + "_";

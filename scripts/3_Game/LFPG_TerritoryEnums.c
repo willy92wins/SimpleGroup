@@ -42,10 +42,51 @@ const int LFPG_SYNC_TIER_CHANGED   = 3;
 const int LFPG_SYNC_COUNT_CHANGED  = 4;
 
 // Version de almacenamiento para OnStoreSave/OnStoreLoad
-const int LFPG_STORAGE_VERSION = 1;
+// v1: m_GroupID + m_RemainingSeconds (solo FlagBase)
+// v2: + m_DeviceIdLow/High (Flag_T3, LFPowerGrid integration)
+// v3: formato estable - lectura SIMETRICA con escritura.
+//     Con wipe OK aceptado por el usuario, migraciones parciales fallan hard.
+const int LFPG_STORAGE_VERSION = 3;
 
 // Intervalo minimo entre RPCs del mismo jugador (ms) - anti-spam
 const int LFPG_RPC_THROTTLE_MS = 500;
 
 // Caracteres permitidos en nombre de grupo (validacion server-side)
 const string LFPG_NAME_ALLOWED_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_";
+
+// Marcador especial para banderas abandonadas en el cache de posiciones
+// El prefijo # garantiza que no colisiona con IDs reales (que usan grp_)
+const string LFPG_ABANDONED_GROUP = "#ABANDONED#";
+
+// ----- Placement block reasons (cliente) -----
+// Usados por LFPG_ClientGroupCache.NotifyPlacementBlocked para mostrar
+// la notificacion correcta al jugador cuando el Hologram bloquea placement.
+const int LFPG_BLOCK_NONE             = 0;
+const int LFPG_BLOCK_NO_GROUP         = 1;
+const int LFPG_BLOCK_OUTSIDE_ZONE     = 2;
+const int LFPG_BLOCK_OTHER_TERRITORY  = 3;
+const int LFPG_BLOCK_DEPLOY_LIMIT     = 4;
+const int LFPG_BLOCK_GARDEN_LIMIT     = 5;
+
+// Throttle min entre notificaciones del mismo motivo (evita spam por frame)
+// El Hologram llama NotifyPlacementBlocked por frame mientras el holograma esta activo;
+// con reset-on-valid, el usuario recibe una notificacion fresca cada vez que pasa de
+// valido a invalido. Este throttle es un safety net por si el estado queda sucio.
+const int LFPG_PLACEMENT_NOTIFY_THROTTLE_MS = 8000;
+
+// Helper global: mapea razon -> clave de stringtable (notificacion al jugador)
+// Usado por ClientGroupCache (toasts), Hologram, OnPlacementComplete, EEItemLocationChanged
+static string LFPG_GetBlockReasonMsg(int reason)
+{
+    if (reason == LFPG_BLOCK_NO_GROUP)
+        return "#STR_LFPG_BUILD_NO_TERRITORY";
+    if (reason == LFPG_BLOCK_OUTSIDE_ZONE)
+        return "#STR_LFPG_BUILD_OUTSIDE_ZONE";
+    if (reason == LFPG_BLOCK_OTHER_TERRITORY)
+        return "#STR_LFPG_ERR_TERRITORY_BLOCKED";
+    if (reason == LFPG_BLOCK_DEPLOY_LIMIT)
+        return "#STR_LFPG_BUILD_DEPLOY_LIMIT";
+    if (reason == LFPG_BLOCK_GARDEN_LIMIT)
+        return "#STR_LFPG_BUILD_GARDEN_LIMIT";
+    return "";
+}

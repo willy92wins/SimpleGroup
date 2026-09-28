@@ -1,7 +1,12 @@
 // ============================================================================
 // LFPG_ActionInvite.c - 4_World/actions
-// Accion single: activar modo invitacion en la bandera
-// FIX 3: Client usa Cache
+// Accion instantanea: pulsar F para activar modo invitacion
+// ActionInteractBase (F press) - NO ActionContinuousBase (Hold F)
+// Motivo: ActionContinuousBase colisiona con LowerFlag/RaiseFlag en el mismo
+// slot de input (Hold F). DayZ muestra solo la primera que pase condiciones,
+// ocultando Invite detras de LowerFlag. Con ActionInteractBase, ambas
+// aparecen simultaneamente: [F] Invite + [Hold F] Lower Flag.
+// Client usa Cache
 // ============================================================================
 
 class LFPG_ActionInvite extends ActionInteractBase
@@ -15,21 +20,20 @@ class LFPG_ActionInvite extends ActionInteractBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor(5.0);
     }
 
-
-    override bool HasTarget()
-    {
-        return true;
-    }
 
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
         if (!player || !target)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
@@ -37,7 +41,7 @@ class LFPG_ActionInvite extends ActionInteractBase
         if (flag.IsInviteModeActive())
             return false;
 
-        // FIX 3: Client-side usa SOLO el cache
+        // Client-side usa SOLO el cache
         if (!GetGame().IsDedicatedServer())
         {
             if (!LFPG_ClientGroupCache.HasGroup())
@@ -101,6 +105,24 @@ class LFPG_ActionInvite extends ActionInteractBase
         LFPG_TerritoryConfig config = mgr.GetConfig();
         if (!config)
             return;
+
+        // FIX G-15: Re-validar server-side que la flag pertenece al grupo del sender
+        // (defensivo - ActionCondition client-side podria estar desincronizado)
+        string playerUID = identity.GetPlainId();
+        string senderGroup = mgr.GetPlayerGroupID(playerUID);
+        if (senderGroup == "" || flag.GetGroupID() != senderGroup)
+        {
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_JOIN_FAILED");
+            return;
+        }
+
+        // No activar invite si el grupo esta lleno
+        LFPG_GroupData group = mgr.GetGroupByPlayer(playerUID);
+        if (group && group.GetMemberCount() >= config.m_MaxGroupSize)
+        {
+            mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_GROUP_FULL");
+            return;
+        }
 
         int durationMs = config.m_InviteDurationSeconds * 1000;
         flag.ActivateInviteMode(durationMs);

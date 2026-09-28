@@ -1,21 +1,38 @@
 // ============================================================================
 // LFPG_ActionUpgradeT2.c - 4_World/actions
 // Upgrade T1 -> T2: SledgeHammer + WoodenLog + Rope en slots
-// FIX 3: Client usa Cache
+// Patron: LFPG_ActionUpgradeSolarPanel (LFPowerGrid v0.7.47)
 // ============================================================================
 
-class LFPG_ActionUpgradeT2 extends ActionInteractBase
+class LFPG_ActionUpgradeT2CB extends ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        m_ActionData.m_ActionComponent = new CAContinuousTime(3.0);
+    }
+};
+
+class LFPG_ActionUpgradeT2 extends ActionContinuousBase
 {
     void LFPG_ActionUpgradeT2()
     {
-        string text = "#STR_LFPG_ACTION_UPGRADE_T2";
-        m_Text = text;
+        m_CallbackClass = LFPG_ActionUpgradeT2CB;
+        // CMD_ACTIONFB_INTERACT: universal, compatible con cualquier modelo custom.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_Text = "#STR_LFPG_ACTION_UPGRADE_T2";
     }
 
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINonRuined;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor;
+    }
+
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
     }
 
     override bool HasTarget()
@@ -23,28 +40,31 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         return true;
     }
 
+    override bool HasProgress()
+    {
+        return true;
+    }
+
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
-        if (!player || !target)
+        if (!player || !target || !item)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        // FIX I-8: via ToolMatcher
+        if (!LFPG_IsSledgeHammer(item))
+            return false;
+
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
         if (flag.GetTier() != 1)
             return false;
 
-        // Necesita SledgeHammer en manos
-        EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
-        if (!itemInHands)
-            return false;
-
-        string kindSledge = "SledgeHammer";
-        if (!itemInHands.IsKindOf(kindSledge))
-            return false;
-
-        // Verificar materiales en slots custom
         string slotLog = "LFPG_FlagLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
         if (!logAtt)
@@ -55,46 +75,25 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (!ropeAtt)
             return false;
 
-        // FIX 3: Client-side usa SOLO el cache
-        if (!GetGame().IsDedicatedServer())
-        {
-            if (!LFPG_ClientGroupCache.HasGroup())
-                return false;
-
-            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
-                return false;
-
-            return true;
-        }
-
-        // Server-side
-        if (!flag.HasGroup())
-            return false;
-
-        PlayerIdentity identity = player.GetIdentity();
-        if (!identity)
-            return false;
-
-        string playerUID = identity.GetPlainId();
-        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (mgr)
-        {
-            string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "")
-                return false;
-            if (groupID != flag.GetGroupID())
-                return false;
-        }
-
         return true;
     }
 
-    override void OnStartServer(ActionData action_data)
+    override void OnFinishProgressServer(ActionData action_data)
     {
-        super.OnStartServer(action_data);
+        super.OnFinishProgressServer(action_data);
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
+        if (!action_data || !action_data.m_Target)
+            return;
+
+        Object targetObj = action_data.m_Target.GetObject();
+        if (!targetObj)
+            return;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
+            return;
+
+        if (flag.GetTier() != 1)
             return;
 
         PlayerBase player = action_data.m_Player;
@@ -116,7 +115,6 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         if (groupID != flag.GetGroupID())
             return;
 
-        // Doble check materiales server-side
         string slotLog = "LFPG_FlagLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
         if (!logAtt)
@@ -131,9 +129,9 @@ class LFPG_ActionUpgradeT2 extends ActionInteractBase
         bool success = mgr.UpgradeFlag(groupID, newClass, flag);
         if (!success)
         {
-            string errMsg = "[SimpleGroup] Upgrade T1->T2 failed for group: ";
+            string errMsg = "Upgrade T1->T2 failed for group: ";
             errMsg = errMsg + groupID;
-            Print(errMsg);
+            LFPG_Log.Error(errMsg);
         }
     }
 };

@@ -1,0 +1,7 @@
+# Binary assets and build outputs are not part of the public repository.
+data/
+*.pbo
+*.bisign
+*.bikey
+_backups/
+.claude/

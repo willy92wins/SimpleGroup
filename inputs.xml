@@ -2,12 +2,12 @@
 <modded_inputs>
     <inputs>
         <actions>
-            <input name="UALFPGGroupPanel" loc="$STR_LFPG_INPUT_GROUP_PANEL"/>
+            <input name="UALFPGGroupPanel" loc="Group Panel"/>
         </actions>
     </inputs>
     <preset>
         <input name="UALFPGGroupPanel">
-            <btn name="kU"/>
+            <btn name="kP"/>
         </input>
     </preset>
 </modded_inputs>

@@ -17,9 +17,11 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
     void LFPG_ActionRaiseFlag()
     {
         m_CallbackClass = LFPG_ActionRaiseFlagCB;
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_RAISE_FLAG;
+        // CMD_ACTIONFB_INTERACT: funciona con cualquier modelo y con manos vacias (CCINone).
+        // CMD_ACTIONFB_CRAFTING requiere item en manos para el animation graph.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
         m_FullBody = true;
-        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
 
         string text = "#STR_LFPG_ACTION_RAISE_FLAG";
         m_Text = text;
@@ -28,11 +30,20 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor;
     }
 
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
+    }
 
     override bool HasTarget()
+    {
+        return true;
+    }
+
+    override bool HasProgress()
     {
         return true;
     }
@@ -42,48 +53,54 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
         if (!player || !target)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
-        // FIX 3: Client-side usa SOLO el cache
-        if (!GetGame().IsDedicatedServer())
+        // Ceder a acciones de upgrade SOLO cuando la upgrade realmente pasaria.
+        // Si el jugador tiene la herramienta pero faltan materiales en los slots,
+        // NO ceder — mostrar RaiseFlag en su lugar.
+        EntityAI handsEntity = player.GetHumanInventory().GetEntityInHands();
+        if (handsEntity)
         {
-            if (!LFPG_ClientGroupCache.HasGroup())
-                return false;
-
-            if (!LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition()))
-                return false;
-
-            // Bandera no completamente subida (SyncVar, funciona en client)
-            if (flag.m_RaiseProgressNet >= 1.0)
-                return false;
-
-            return true;
+            // FIX I-8: via ToolMatcher para aceptar variantes mod
+            if (LFPG_IsSledgeHammer(handsEntity) && flag.GetTier() == 1)
+            {
+                string slotLog = "LFPG_FlagLog";
+                string slotRope = "LFPG_FlagRope";
+                if (flag.FindAttachmentBySlotName(slotLog) && flag.FindAttachmentBySlotName(slotRope))
+                    return false;
+            }
+            if (LFPG_IsPickaxe(handsEntity) && flag.GetTier() == 2)
+            {
+                string slotFW = "LFPG_FlagFirewood";
+                string slotNails = "LFPG_FlagNails";
+                string slotStones = "LFPG_FlagStones";
+                EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
+                EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
+                EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
+                if (fwAtt && nailsAtt && stonesAtt)
+                {
+                    ItemBase fwItem = ItemBase.Cast(fwAtt);
+                    ItemBase nailsItem = ItemBase.Cast(nailsAtt);
+                    ItemBase stonesItem = ItemBase.Cast(stonesAtt);
+                    if (fwItem && fwItem.GetQuantity() >= 6 && nailsItem && nailsItem.GetQuantity() >= 60 && stonesItem && stonesItem.GetQuantity() >= 10)
+                        return false;
+                }
+            }
         }
 
-        // Server-side: checks completos
-        if (!flag.HasGroup())
+        // Bandera no completamente subida (SyncVar, disponible ambos lados)
+        if (flag.m_RaiseProgressNet >= 1.0)
             return false;
 
-        float progress = flag.ComputeCurrentRaiseProgress();
-        if (progress >= 1.0)
+        // Acciones de bandera deshabilitadas para este tier
+        if (!flag.m_FlagActionsEnabledNet)
             return false;
-
-        PlayerIdentity identity = player.GetIdentity();
-        if (!identity)
-            return false;
-
-        string playerUID = identity.GetPlainId();
-        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (mgr)
-        {
-            string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "")
-                return false;
-            if (groupID != flag.GetGroupID())
-                return false;
-        }
 
         return true;
     }

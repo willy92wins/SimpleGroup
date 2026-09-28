@@ -1,13 +1,29 @@
 // ============================================================================
 // LFPG_ActionRegisterTerritory.c - 4_World/actions
-// Accion: registrar grupo en bandera sin dueno (fallback para admin spawn)
+// Accion continua (1.5s): registrar grupo en bandera sin dueno
 // Condicion: bandera sin grupo + jugador sin grupo
+//
+// FIX M-15: Convertida a ActionContinuousBase para dar feedback visual al jugador
+//           (barra de progreso) en vez de dispararse instantaneamente con F.
 // ============================================================================
 
-class LFPG_ActionRegisterTerritory extends ActionInteractBase
+class LFPG_ActionRegisterTerritoryCB extends ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        m_ActionData.m_ActionComponent = new CAContinuousTime(1.5);
+    }
+};
+
+class LFPG_ActionRegisterTerritory extends ActionContinuousBase
 {
     void LFPG_ActionRegisterTerritory()
     {
+        m_CallbackClass = LFPG_ActionRegisterTerritoryCB;
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+
         string text = "#STR_LFPG_ACTION_REGISTER";
         m_Text = text;
     }
@@ -15,11 +31,20 @@ class LFPG_ActionRegisterTerritory extends ActionInteractBase
     override void CreateConditionComponents()
     {
         m_ConditionItem = new CCINone;
-        m_ConditionTarget = new CCTObject(UAMaxDistances.DEFAULT);
+        m_ConditionTarget = new CCTCursor;
     }
 
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
+    }
 
     override bool HasTarget()
+    {
+        return true;
+    }
+
+    override bool HasProgress()
     {
         return true;
     }
@@ -29,7 +54,11 @@ class LFPG_ActionRegisterTerritory extends ActionInteractBase
         if (!player || !target)
             return false;
 
-        LFPG_FlagBase flag = LFPG_FlagBase.Cast(target.GetObject());
+        Object targetObj = target.GetObject();
+        if (!targetObj)
+            return false;
+
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(targetObj);
         if (!flag)
             return false;
 
@@ -39,6 +68,7 @@ class LFPG_ActionRegisterTerritory extends ActionInteractBase
                 return false;
             if (flag.IsInviteModeActive())
                 return false;
+            // Si la bandera ya tiene miembros (SyncVar), ya tiene dueño
             if (flag.GetMemberCount() > 0)
                 return false;
             return true;
@@ -63,10 +93,8 @@ class LFPG_ActionRegisterTerritory extends ActionInteractBase
         return true;
     }
 
-    override void OnStartServer(ActionData action_data)
+    override void OnFinishProgressServer(ActionData action_data)
     {
-        super.OnStartServer(action_data);
-
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;
@@ -89,34 +117,22 @@ class LFPG_ActionRegisterTerritory extends ActionInteractBase
         if (flag.HasGroup())
             return;
 
-        // FIX: Limpiar grupo zombi antes de verificar HasGroup
+        // Limpiar grupo zombi antes de verificar HasGroup
         mgr.CleanupStaleGroupForPlayer(playerUID);
 
         if (mgr.HasGroup(playerUID))
             return;
 
-        string tempName = "#TEMP#";
-        int uidLen = playerUID.Length();
-        if (uidLen > 4)
-        {
-            int startIdx = uidLen - 4;
-            string suffix = playerUID.Substring(startIdx, 4);
-            tempName = tempName + suffix;
-        }
-        else
-        {
-            tempName = tempName + playerUID;
-        }
-
+        string tempName = LFPG_GroupData.GenerateTempName(playerUID);
         string groupID = mgr.CreateGroup(playerUID, playerName, tempName, flag);
         if (groupID == "")
             return;
 
         mgr.SendOpenNameDialog(identity, flag, groupID);
-        mgr.SendGroupSyncFull(identity, groupID, flag);
+        mgr.SendGroupSyncFull(identity, groupID, flag, flag);
 
-        string logMsg = "[SimpleGroup] Player registered territory: ";
+        string logMsg = "Player registered territory: ";
         logMsg = logMsg + playerUID;
-        Print(logMsg);
+        LFPG_Log.Info(logMsg);
     }
 };

@@ -22,7 +22,7 @@ FrameWidgetClass LFPG_GroupPanel {
 
   ImageWidgetClass HeaderBg {
    position 0 0
-   size 260 44
+   size 260 56
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -44,6 +44,7 @@ FrameWidgetClass LFPG_GroupPanel {
    vexactsize 1
    font "gui/fonts/Metron"
    color 0.9 0.9 0.9 1.0
+   ignorepointer 1
    {
     ScriptParamsClass {
      Binding_Name "GroupName"
@@ -64,6 +65,7 @@ FrameWidgetClass LFPG_GroupPanel {
    font "gui/fonts/Metron"
    "text halign" right
    color 0.6 0.75 1.0 1.0
+   ignorepointer 1
    {
     ScriptParamsClass {
      Binding_Name "TierLabel"
@@ -83,6 +85,7 @@ FrameWidgetClass LFPG_GroupPanel {
    vexactsize 1
    font "gui/fonts/MetronBook"
    color 0.6 0.6 0.6 1.0
+   ignorepointer 1
    {
     ScriptParamsClass {
      Binding_Name "DeployInfo"
@@ -92,8 +95,139 @@ FrameWidgetClass LFPG_GroupPanel {
    }
   }
 
+  TextWidgetClass DeployLabel {
+   position 10 40
+   size 80 14
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   text "#STR_LFPG_UI_DEPLOYABLES"
+   color 0.5 0.6 0.5 1.0
+   ignorepointer 1
+   {
+   }
+  }
+
+  TextWidgetClass DeployCountText {
+   scriptclass "ViewBinding"
+   position 90 40
+   size 40 14
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.5 0.6 0.5 1.0
+   ignorepointer 1
+   {
+    ScriptParamsClass {
+     Binding_Name "DeployCount"
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass GardenLabel {
+   position 138 40
+   size 62 14
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   text "#STR_LFPG_UI_GARDENS"
+   color 0.5 0.6 0.5 1.0
+   ignorepointer 1
+   {
+   }
+  }
+
+  TextWidgetClass GardenCountText {
+   scriptclass "ViewBinding"
+   position 200 40
+   size 40 14
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.5 0.6 0.5 1.0
+   ignorepointer 1
+   {
+    ScriptParamsClass {
+     Binding_Name "GardenCount"
+     {
+     }
+    }
+   }
+  }
+
+  FrameWidgetClass DeployHoverZone {
+   position 8 38
+   size 125 18
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   {
+   }
+  }
+
+  FrameWidgetClass GardenHoverZone {
+   position 136 38
+   size 115 18
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   {
+   }
+  }
+
+  FrameWidgetClass ItemTooltip {
+   position 8 58
+   size 244 100
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   visible 0
+   {
+    ImageWidgetClass TooltipBg {
+     position 0 0
+     size 244 100
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     color 0.08 0.08 0.10 0.95
+     stretch 1
+     ignorepointer 1
+     {
+     }
+    }
+
+    TextWidgetClass TooltipText {
+     position 6 4
+     size 232 92
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     color 0.75 0.75 0.75 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+
   ImageWidgetClass DividerLine {
-   position 10 44
+   position 10 56
    size 240 1
    hexactpos 1
    vexactpos 1
@@ -107,8 +241,8 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   ScrollWidgetClass MemberScroll {
-   position 0 48
-   size 260 234
+   position 0 60
+   size 260 222
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -116,15 +250,17 @@ FrameWidgetClass LFPG_GroupPanel {
    clipchildren 1
    "Scrollbar V" 1
    {
-    WrapSpacerWidgetClass MemberList {
+    GridSpacerWidgetClass MemberList {
      scriptclass "ViewBinding"
      position 0 0
-     size 260 234
+     size 260 222
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
      "Size To Content V" 1
+     columns 1
+     rows 0
      {
       ScriptParamsClass {
        Binding_Name "MemberRows"
@@ -138,7 +274,7 @@ FrameWidgetClass LFPG_GroupPanel {
 
   ButtonWidgetClass BtnLeave {
    scriptclass "ViewBinding"
-   position 10 288
+   position 10 285
    size 240 26
    hexactpos 1
    vexactpos 1

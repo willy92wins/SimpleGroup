@@ -1,6 +1,6 @@
 // ============================================================================
 // LFPG_ModdedMissionGameplay.c - 5_Mission
-// Client-side: inicializar cache, crear panel, keybind P para toggle
+// Client-side: inicializar cache, crear panel, keybind P (tecla P) para toggle
 // ============================================================================
 
 modded class MissionGameplay
@@ -12,15 +12,19 @@ modded class MissionGameplay
         // Inicializar cache del cliente
         LFPG_ClientGroupCache.Init();
 
+        // FIX I-15: Normalizar colores de UI (DayZ aplica LV negativo por default)
+        Widget.SetLV(0);
+        Widget.SetTextLV(0);
+
         // FIX C2: Panel ya no se pre-crea. Se instancia al pulsar P.
-        Print("[SimpleGroup] MissionGameplay initialized (client).");
+        LFPG_Log.Info("MissionGameplay initialized (client).");
     }
 
     override void OnUpdate(float timeslice)
     {
         super.OnUpdate(timeslice);
 
-        // Check keybind U (patron VPP: GetGame().GetInput().LocalPress)
+        // Check keybind P (patron VPP: GetGame().GetInput().LocalPress)
         Input input = GetGame().GetInput();
         if (input)
         {
@@ -47,6 +51,8 @@ modded class MissionGameplay
     {
         LFPG_GroupPanel.DestroyInstance();
         LFPG_ClientGroupCache.Clear();
+        // FIX G-10: Limpiar tracker estatico (evita leak entre sesiones de cliente)
+        LFPG_DeployTracker.ClearAll();
         super.OnMissionFinish();
     }
 };
