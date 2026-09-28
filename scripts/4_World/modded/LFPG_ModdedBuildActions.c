@@ -13,6 +13,11 @@
 // ActionDismantleGardenPlot and ActionFoldObject. Those actions target an existing
 // object and never call the build/dismantle gate.
 //
+// ActionPackTent aims at the tent "pack" proxy. Vanilla packs the parent
+// (actionpacktent.c:134), so the gate uses GetParent() when it is set.
+// ActionCreateGreenhouseGardenPlot skips the gate when the plot type it creates
+// is on the unrestricted list. No other action here honours that list.
+//
 // ActionDestroyPart stays deliberately free: bringing a base down is intended raid
 // play (ADR-2026-08-15-B).
 // ============================================================================
@@ -78,7 +83,12 @@ class LFPG_BuildGate
         if (!target)
             return true;
 
-        Object targetObj = target.GetObject();
+        return AllowsPartClientObject(target.GetObject());
+    }
+
+    // Same client rule as AllowsPartClient, for an object that is not target.GetObject().
+    static bool AllowsPartClientObject(Object targetObj)
+    {
         if (!targetObj)
             return true;
 
@@ -89,6 +99,83 @@ class LFPG_BuildGate
             return true;
 
         return !LFPG_ClientGroupCache.IsNearOtherTerritory(targetPos);
+    }
+
+    // ActionPackTent's target object is the pack proxy. The tent that gets packed
+    // is the parent (actionpacktent.c:134, rebuilt via GetBoneObject in actionbase.c:554).
+    static Object PackTentObject(ActionTarget target)
+    {
+        if (!target)
+            return null;
+
+        Object parentObj = target.GetParent();
+        if (parentObj)
+            return parentObj;
+
+        return target.GetObject();
+    }
+
+    // The plot does not exist yet. Match the classname vanilla will spawn
+    // (actioncreategreenhousegardenplot.c:102 and :106) against list B the same
+    // way LFPG_TerritoryConfig.IsUnrestricted walks m_UnrestrictedTypes.
+    static bool GreenhouseCreateUnrestricted(ActionTarget target)
+    {
+        string plotType = "GardenPlotGreenhouse";
+        if (target)
+        {
+            Land_Misc_Polytunnel tunnel = Land_Misc_Polytunnel.Cast(target.GetObject());
+            if (tunnel)
+                plotType = "GardenPlotPolytunnel";
+        }
+
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+            return PlotTypeInConfig(mgr.GetConfig(), plotType);
+
+        return PlotTypeInClientCache(plotType);
+    }
+
+    static bool PlotTypeInConfig(LFPG_TerritoryConfig cfg, string plotType)
+    {
+        if (!cfg)
+            return false;
+        if (!cfg.m_UnrestrictedTypes)
+            return false;
+
+        int countSrv = cfg.m_UnrestrictedTypes.Count();
+        int iSrv;
+        for (iSrv = 0; iSrv < countSrv; iSrv = iSrv + 1)
+        {
+            string listedSrv = cfg.m_UnrestrictedTypes[iSrv];
+            if (listedSrv == plotType)
+                return true;
+
+            // IsKindOf lowercases its parent argument (game.c:1438). Pass a copy.
+            string listedCopy = listedSrv + "";
+            if (GetGame().IsKindOf(plotType, listedCopy))
+                return true;
+        }
+        return false;
+    }
+
+    static bool PlotTypeInClientCache(string plotType)
+    {
+        if (!LFPG_ClientGroupCache.s_UnrestrictedTypes)
+            return false;
+
+        int countCli = LFPG_ClientGroupCache.s_UnrestrictedTypes.Count();
+        int iCli;
+        for (iCli = 0; iCli < countCli; iCli = iCli + 1)
+        {
+            string listedCli = LFPG_ClientGroupCache.s_UnrestrictedTypes[iCli];
+            if (listedCli == plotType)
+                return true;
+
+            string listedCliCopy = listedCli + "";
+            if (GetGame().IsKindOf(plotType, listedCliCopy))
+                return true;
+        }
+        return false;
     }
 };
 
@@ -188,6 +275,9 @@ modded class ActionCreateGreenhouseGardenPlot
         if (!super.ActionCondition(player, target, item))
             return false;
 
+        if (LFPG_BuildGate.GreenhouseCreateUnrestricted(target))
+            return true;
+
         if (GetGame().IsDedicatedServer())
             return true;
 
@@ -198,6 +288,12 @@ modded class ActionCreateGreenhouseGardenPlot
     {
         if (!super.ActionConditionContinue(action_data))
             return false;
+
+        ActionTarget plotTarget = null;
+        if (action_data)
+            plotTarget = action_data.m_Target;
+        if (LFPG_BuildGate.GreenhouseCreateUnrestricted(plotTarget))
+            return true;
 
         return LFPG_BuildGate.AllowsPart(action_data);
     }
@@ -235,7 +331,7 @@ modded class ActionPackTent
         if (GetGame().IsDedicatedServer())
             return true;
 
-        return LFPG_BuildGate.AllowsPartClient(target);
+        return LFPG_BuildGate.AllowsPartClientObject(LFPG_BuildGate.PackTentObject(target));
     }
 
     override bool ActionConditionContinue(ActionData action_data)
@@ -243,7 +339,12 @@ modded class ActionPackTent
         if (!super.ActionConditionContinue(action_data))
             return false;
 
-        return LFPG_BuildGate.AllowsPart(action_data);
+        if (!action_data)
+            return true;
+
+        ActionTarget packTarget = action_data.m_Target;
+        PlayerBase packPlayer = PlayerBase.Cast(action_data.m_Player);
+        return LFPG_BuildGate.AllowsPartFor(packPlayer, LFPG_BuildGate.PackTentObject(packTarget));
     }
 };
 
