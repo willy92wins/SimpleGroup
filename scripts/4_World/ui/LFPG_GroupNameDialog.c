@@ -230,9 +230,7 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
             return;
         }
 
-        // FIX AUDIT: Forzar visibilidad y carga de backgrounds procedurales
         dialog.GetLayoutRoot().Show(true);
-        dialog.InitBackgrounds();
 
         LFPG_GroupNameDialogController ctrl = LFPG_GroupNameDialogController.Cast(dialog.GetController());
         if (ctrl)
@@ -244,35 +242,6 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
     void CloseDialog()
     {
         RequestCloseOnce();
-    }
-
-    // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
-    // ImageWidget necesita LoadImageFile() + SetColor() para renderizar colores procedurales
-    void InitBackgrounds()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-
-        // DialogBg: layout color 0.1 0.1 0.12 0.96 → ARGB(245, 26, 26, 31)
-        string nameBg = "DialogBg";
-        ImageWidget dialogBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
-        if (dialogBg)
-        {
-            dialogBg.LoadImageFile(0, colorTex);
-            dialogBg.SetColor(ARGB(245, 26, 26, 31));
-        }
-
-        // DialogHeaderBg: layout color 0.16 0.18 0.22 1.0 → ARGB(255, 41, 46, 56)
-        string nameHeader = "DialogHeaderBg";
-        ImageWidget headerBg = ImageWidget.Cast(root.FindAnyWidget(nameHeader));
-        if (headerBg)
-        {
-            headerBg.LoadImageFile(0, colorTex);
-            headerBg.SetColor(ARGB(255, 41, 46, 56));
-        }
     }
 
     // Llamado por el ClientGroupCache cuando llega NAME_RESULT

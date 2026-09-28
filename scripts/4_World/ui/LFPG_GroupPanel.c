@@ -1,29 +1,31 @@
 // ============================================================================
 // LFPG_GroupPanel.c - 4_World/ui
-// Panel de grupo (tecla U) - ScriptViewMenu con cursor y input
+// Group panel. ScriptViewMenu with cursor and input. The open key is rebindable.
 //
-// FIX C2: Cambiado de ScriptView a ScriptViewMenu
-//   - Dabs ScriptViewMenu gestiona cursor, input lock y UIManager
-//   - Lifecycle: crear al abrir, destruir al cerrar (patron estandar Dabs)
-//
-// FIX C1: Usa LFPG_ClientGroupCache.FindLocalGroupFlag() centralizado
-//   - Usa IsFlagAtPosition en vez de GetGroupID (no sincronizado en client)
-//
-// Dabs MVC:
-//  - ViewController bindea propiedades a widgets
-//  - ObservableCollection bindea member rows al WrapSpacer
-//  - UseUpdateLoop = false (se actualiza solo por RPC)
+// The layout anchors the panel on the screen and paints its own backgrounds.
+// Dabs MVC binds GroupName, TerritoryStatus, FlagLabel, FlagPercent,
+// MembersValue, FurnitureValue and GardenValue. MemberRows fills the member list.
 // ============================================================================
 
 class LFPG_GroupPanelController extends ViewController
 {
     // Bindings (Binding_Name en layout debe coincidir EXACTAMENTE)
     string GroupName;
-    string TierLabel;
     string TerritoryStatus;
-    string DeployInfo;
-    string DeployCount;
-    string GardenCount;
+    string FlagLabel;
+    string FlagPercent;
+    string MembersValue;
+    string FurnitureValue;
+    string GardenValue;
+
+    static const int COLOR_TEXT = ARGB(255, 236, 236, 236);
+    static const int COLOR_TEXT2 = ARGB(255, 154, 154, 154);
+    static const int COLOR_AMBER = ARGB(255, 214, 160, 48);
+    static const int COLOR_RED = ARGB(255, 210, 70, 70);
+    static const int COLOR_GREEN = ARGB(255, 106, 159, 74);
+    static const int COLOR_NEUTRAL_FILL = ARGB(255, 140, 140, 140);
+    static const int COLOR_LEAVE = ARGB(255, 90, 31, 27);
+    static const int COLOR_LEAVE_ARMED = ARGB(255, 138, 42, 36);
 
     // Second click of Leave must arrive before this mission time (ms).
     protected int m_LeaveConfirmUntil;
@@ -40,11 +42,12 @@ class LFPG_GroupPanelController extends ViewController
     void LFPG_GroupPanelController()
     {
         GroupName = "";
-        TierLabel = "";
         TerritoryStatus = "";
-        DeployInfo = "";
-        DeployCount = "";
-        GardenCount = "";
+        FlagLabel = "";
+        FlagPercent = "";
+        MembersValue = "";
+        FurnitureValue = "";
+        GardenValue = "";
         m_LeaveConfirmUntil = 0;
         m_LeaveArmedDissolve = false;
         m_SeenFlagProgress = -1.0;
@@ -67,49 +70,43 @@ class LFPG_GroupPanelController extends ViewController
         if (!LFPG_ClientGroupCache.HasGroup())
             return;
 
-        GroupName = LFPG_ClientGroupCache.s_GroupName;
+        string rawName = LFPG_ClientGroupCache.s_GroupName;
+        if (rawName.IndexOf("#TEMP#") == 0)
+        {
+            GroupName = Widget.TranslateString("#STR_LFPG_UI_UNNAMED");
+        }
+        else
+        {
+            GroupName = rawName;
+        }
         string propName = "GroupName";
         NotifyPropertyChanged(propName);
 
-        // Tier label
-        string tierStr = "T";
-        tierStr = tierStr + LFPG_ClientGroupCache.s_Tier.ToString();
-        TierLabel = tierStr;
-        string propTier = "TierLabel";
-        NotifyPropertyChanged(propTier);
-
         ApplyTerritoryStatus();
 
-        string membersLabel = Widget.TranslateString("#STR_LFPG_UI_MEMBERS");
-        string memberStr = membersLabel;
-        memberStr = memberStr + " ";
-        memberStr = memberStr + LFPG_ClientGroupCache.s_MemberCount.ToString();
+        string memberStr = LFPG_ClientGroupCache.s_MemberCount.ToString();
         memberStr = memberStr + "/";
         memberStr = memberStr + LFPG_ClientGroupCache.s_MaxGroupSize.ToString();
-        DeployInfo = memberStr;
-        string propDeploy = "DeployInfo";
-        NotifyPropertyChanged(propDeploy);
+        MembersValue = memberStr;
+        string propMembers = "MembersValue";
+        NotifyPropertyChanged(propMembers);
+        ApplyLimit("MembersValueText", "MembersBarFill", LFPG_ClientGroupCache.s_MemberCount, LFPG_ClientGroupCache.s_MaxGroupSize, false);
 
-        string furnitureLabel = Widget.TranslateString("#STR_LFPG_UI_FURNITURE");
-        string deployStr = furnitureLabel;
-        deployStr = deployStr + " ";
-        deployStr = deployStr + LFPG_ClientGroupCache.s_DeployedCount.ToString();
+        string deployStr = LFPG_ClientGroupCache.s_DeployedCount.ToString();
         deployStr = deployStr + "/";
         deployStr = deployStr + LFPG_ClientGroupCache.s_DeployMax.ToString();
-        DeployCount = deployStr;
-        string propDeployCount = "DeployCount";
-        NotifyPropertyChanged(propDeployCount);
-        ApplyFurnitureColor(LFPG_ClientGroupCache.s_DeployedCount, LFPG_ClientGroupCache.s_DeployMax);
+        FurnitureValue = deployStr;
+        string propFurniture = "FurnitureValue";
+        NotifyPropertyChanged(propFurniture);
+        ApplyLimit("FurnitureValueText", "FurnitureBarFill", LFPG_ClientGroupCache.s_DeployedCount, LFPG_ClientGroupCache.s_DeployMax, true);
 
-        string plotsLabel = Widget.TranslateString("#STR_LFPG_UI_PLOTS");
-        string gardenStr = plotsLabel;
-        gardenStr = gardenStr + " ";
-        gardenStr = gardenStr + LFPG_ClientGroupCache.s_GardenPlotCount.ToString();
+        string gardenStr = LFPG_ClientGroupCache.s_GardenPlotCount.ToString();
         gardenStr = gardenStr + "/";
         gardenStr = gardenStr + LFPG_ClientGroupCache.s_GardenPlotMax.ToString();
-        GardenCount = gardenStr;
-        string propGardenCount = "GardenCount";
-        NotifyPropertyChanged(propGardenCount);
+        GardenValue = gardenStr;
+        string propGarden = "GardenValue";
+        NotifyPropertyChanged(propGarden);
+        ApplyLimit("GardenValueText", "GardenBarFill", LFPG_ClientGroupCache.s_GardenPlotCount, LFPG_ClientGroupCache.s_GardenPlotMax, true);
 
         // Refrescar member rows
         RefreshMemberRows();
@@ -173,55 +170,160 @@ class LFPG_GroupPanelController extends ViewController
         }
     }
 
-    // Tier, radius and flag raise. Progress 0 means the territory is inactive.
+    // Tier and radius stay visible. Flag label and bar follow raise progress.
     protected void ApplyTerritoryStatus()
     {
+        float radiusFloat = Math.Sqrt(LFPG_ClientGroupCache.s_BuildRadiusSq);
+        int radiusM = radiusFloat;
+        string tierStr = LFPG_ClientGroupCache.s_Tier.ToString();
+        string radiusStr = radiusM.ToString();
+        string territoryFmt = Widget.TranslateString("#STR_LFPG_UI_TERRITORY_FMT");
+        TerritoryStatus = string.Format(territoryFmt, tierStr, radiusStr);
+
         bool flagDown = false;
         if (LFPG_ClientGroupCache.s_FlagRaiseProgress <= 0.0)
         {
             flagDown = true;
         }
 
+        float progress = LFPG_ClientGroupCache.s_FlagRaiseProgress;
+        if (progress < 0.0)
+        {
+            progress = 0.0;
+        }
+        if (progress > 1.0)
+        {
+            progress = 1.0;
+        }
+
         if (flagDown)
         {
-            TerritoryStatus = Widget.TranslateString("#STR_LFPG_UI_FLAG_DOWN");
+            FlagLabel = Widget.TranslateString("#STR_LFPG_UI_FLAG_DOWN");
+            FlagPercent = "";
         }
         else
         {
-            float radiusFloat = Math.Sqrt(LFPG_ClientGroupCache.s_BuildRadiusSq);
-            int radiusM = radiusFloat;
-            float pctFloat = LFPG_ClientGroupCache.s_FlagRaiseProgress * 100.0;
+            FlagLabel = Widget.TranslateString("#STR_LFPG_UI_FLAG_RAISED");
+            float pctFloat = progress * 100.0;
             int pct = pctFloat;
-            string territory = "T";
-            territory = territory + LFPG_ClientGroupCache.s_Tier.ToString();
-            territory = territory + "  ";
-            territory = territory + radiusM.ToString();
-            territory = territory + "m  ";
-            territory = territory + pct.ToString();
-            territory = territory + "%";
-            TerritoryStatus = territory;
+            FlagPercent = pct.ToString();
+            FlagPercent = FlagPercent + "%";
         }
 
         string propTerritory = "TerritoryStatus";
         NotifyPropertyChanged(propTerritory);
+        string propFlagLabel = "FlagLabel";
+        NotifyPropertyChanged(propFlagLabel);
+        string propFlagPercent = "FlagPercent";
+        NotifyPropertyChanged(propFlagPercent);
         m_SeenFlagProgress = LFPG_ClientGroupCache.s_FlagRaiseProgress;
         m_SeenTier = LFPG_ClientGroupCache.s_Tier;
 
         if (!m_LayoutRoot)
             return;
 
-        string territoryWidgetName = "TerritoryText";
-        TextWidget territoryWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(territoryWidgetName));
-        if (!territoryWidget)
-            return;
+        string flagLabelName = "FlagLabelText";
+        TextWidget flagLabelWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(flagLabelName));
+        string flagFillName = "FlagBarFill";
+        Widget flagFill = m_LayoutRoot.FindAnyWidget(flagFillName);
 
         if (flagDown)
         {
-            territoryWidget.SetColor(ARGB(255, 210, 70, 70));
+            if (flagLabelWidget)
+            {
+                flagLabelWidget.SetColor(COLOR_RED);
+            }
+            if (flagFill)
+            {
+                flagFill.Show(false);
+            }
         }
         else
         {
-            territoryWidget.SetColor(ARGB(255, 153, 153, 153));
+            if (flagLabelWidget)
+            {
+                flagLabelWidget.SetColor(COLOR_TEXT2);
+            }
+            int barColor = COLOR_RED;
+            if (progress >= 0.25)
+            {
+                barColor = COLOR_GREEN;
+            }
+            else if (progress >= 0.10)
+            {
+                barColor = COLOR_AMBER;
+            }
+            if (flagFill)
+            {
+                float barW = 288.0 * progress;
+                flagFill.SetSize(barW, 6.0);
+                flagFill.SetColor(barColor);
+                flagFill.Show(true);
+            }
+        }
+    }
+
+    // Members never warn. Furniture and gardens warn from 75 percent and at the cap.
+    protected void ApplyLimit(string valueWidget, string fillWidget, int count, int max, bool warn)
+    {
+        float fillW = 90.0;
+        if (max > 0)
+        {
+            fillW = 90.0 * count;
+            fillW = fillW / max;
+        }
+        if (fillW < 0.0)
+        {
+            fillW = 0.0;
+        }
+        if (fillW > 90.0)
+        {
+            fillW = 90.0;
+        }
+
+        int valueColor = COLOR_TEXT;
+        int fillColor = COLOR_NEUTRAL_FILL;
+        if (warn)
+        {
+            bool atCap = false;
+            if (max <= 0)
+            {
+                atCap = true;
+            }
+            if (count >= max)
+            {
+                atCap = true;
+            }
+            if (atCap)
+            {
+                valueColor = COLOR_RED;
+                fillColor = COLOR_RED;
+            }
+            else
+            {
+                int usedScaled = count * 100;
+                int amberAt = max * 75;
+                if (usedScaled >= amberAt)
+                {
+                    valueColor = COLOR_AMBER;
+                    fillColor = COLOR_AMBER;
+                }
+            }
+        }
+
+        if (!m_LayoutRoot)
+            return;
+
+        TextWidget valueText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(valueWidget));
+        if (valueText)
+        {
+            valueText.SetColor(valueColor);
+        }
+        Widget fill = m_LayoutRoot.FindAnyWidget(fillWidget);
+        if (fill)
+        {
+            fill.SetSize(fillW, 3.0);
+            fill.SetColor(fillColor);
         }
     }
 
@@ -234,7 +336,7 @@ class LFPG_GroupPanelController extends ViewController
             {
                 m_LeaveConfirmUntil = 0;
                 m_LeaveArmedDissolve = false;
-                SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP");
+                SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP", false);
             }
         }
 
@@ -267,50 +369,32 @@ class LFPG_GroupPanelController extends ViewController
         }
     }
 
-    // Below 75% stays the layout green. From 75% amber. At the cap, red.
-    protected void ApplyFurnitureColor(int deployedCount, int deployMax)
-    {
-        if (!m_LayoutRoot)
-            return;
-
-        string furnitureWidgetName = "DeployCountText";
-        TextWidget furnitureWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(furnitureWidgetName));
-        if (!furnitureWidget)
-            return;
-
-        int color = ARGB(255, 128, 153, 128);
-        if (deployMax <= 0)
-        {
-            color = ARGB(255, 210, 70, 70);
-        }
-        else if (deployedCount >= deployMax)
-        {
-            color = ARGB(255, 210, 70, 70);
-        }
-        else
-        {
-            int usedScaled = deployedCount * 100;
-            int amberAt = deployMax * 75;
-            if (usedScaled >= amberAt)
-            {
-                color = ARGB(255, 214, 160, 48);
-            }
-        }
-        furnitureWidget.SetColor(color);
-    }
-
-    protected void SetLeaveCaption(string stringId)
+    protected void SetLeaveCaption(string stringId, bool armed)
     {
         if (!m_LayoutRoot)
             return;
 
         string leaveTextName = "BtnLeaveText";
         TextWidget leaveText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveTextName));
-        if (!leaveText)
-            return;
+        if (leaveText)
+        {
+            string shown = Widget.TranslateString(stringId);
+            leaveText.SetText(shown);
+        }
 
-        string shown = Widget.TranslateString(stringId);
-        leaveText.SetText(shown);
+        string leaveBtnName = "BtnLeave";
+        ButtonWidget leaveBtn = ButtonWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveBtnName));
+        if (leaveBtn)
+        {
+            if (armed)
+            {
+                leaveBtn.SetColor(COLOR_LEAVE_ARMED);
+            }
+            else
+            {
+                leaveBtn.SetColor(COLOR_LEAVE);
+            }
+        }
     }
 
     // Relay_Command: header close. One request per instance.
@@ -355,7 +439,7 @@ class LFPG_GroupPanelController extends ViewController
             {
                 confirmId = "#STR_LFPG_UI_CONFIRM_DISSOLVE";
             }
-            SetLeaveCaption(confirmId);
+            SetLeaveCaption(confirmId, true);
             return true;
         }
 
@@ -366,14 +450,14 @@ class LFPG_GroupPanelController extends ViewController
             {
                 m_LeaveConfirmUntil = nowLeave + 3000;
                 m_LeaveArmedDissolve = true;
-                SetLeaveCaption("#STR_LFPG_UI_CONFIRM_DISSOLVE");
+                SetLeaveCaption("#STR_LFPG_UI_CONFIRM_DISSOLVE", true);
                 return true;
             }
         }
 
         m_LeaveConfirmUntil = 0;
         m_LeaveArmedDissolve = false;
-        SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP");
+        SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP", false);
 
         ScriptRPC rpc = new ScriptRPC();
         rpc.Send(player, LFPG_RPC_C2S_REQUEST_LEAVE, true, null);
@@ -480,7 +564,7 @@ class LFPG_GroupPanel extends ScriptViewMenu
         if (!root)
             return false;
 
-        string deployZoneName = "DeployHoverZone";
+        string deployZoneName = "FurnitureHoverZone";
         string gardenZoneName = "GardenHoverZone";
         Widget deployZone = root.FindAnyWidget(deployZoneName);
         Widget gardenZone = root.FindAnyWidget(gardenZoneName);
@@ -526,16 +610,16 @@ class LFPG_GroupPanel extends ScriptViewMenu
         tooltipText.SetText(tooltipShown);
 
         // One row per grouped line, plus padding.
-        float lineHeight = 14.0;
-        float padding = 8.0;
+        float lineHeight = 20.0;
+        float padding = 12.0;
         float tooltipHeight = (lineCount * lineHeight) + padding;
-        tooltip.SetSize(244.0, tooltipHeight);
+        float textHeight = lineCount * lineHeight;
+        tooltip.SetSize(288.0, tooltipHeight);
         if (tooltipBg)
         {
-            tooltipBg.SetSize(244.0, tooltipHeight);
+            tooltipBg.SetSize(288.0, tooltipHeight);
         }
-        float textHeight = tooltipHeight - padding;
-        tooltipText.SetSize(232.0, textHeight);
+        tooltipText.SetSize(268.0, textHeight);
 
         tooltip.Show(true);
         return true;
@@ -548,7 +632,7 @@ class LFPG_GroupPanel extends ScriptViewMenu
             return false;
 
         // No ocultar si el mouse se mueve a la otra hover zone (evita parpadeo)
-        string deployZoneLeave = "DeployHoverZone";
+        string deployZoneLeave = "FurnitureHoverZone";
         string gardenZoneLeave = "GardenHoverZone";
         Widget deployZoneW = root.FindAnyWidget(deployZoneLeave);
         Widget gardenZoneW = root.FindAnyWidget(gardenZoneLeave);
@@ -608,15 +692,9 @@ class LFPG_GroupPanel extends ScriptViewMenu
             return;
         }
 
-        // Posicionar con Widget.GetScreenSize (escalado correcto a cualquier res)
-        panel.PositionOnScreen();
-
         // FIX AUDIT: Forzar visibilidad explicita del layout root
         // UIManager.ShowScriptedMenu puede alterar visibilidad durante el registro
         panel.GetLayoutRoot().Show(true);
-
-        // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
-        panel.InitBackgrounds();
     }
 
     static void DestroyInstance()
@@ -683,89 +761,6 @@ class LFPG_GroupPanel extends ScriptViewMenu
             m_TooltipBody = m_TooltipBody + line;
         }
         m_TooltipLines = uniqueTotal;
-    }
-
-    // Posicionar panel en esquina superior derecha
-    // Patron Dabs: usa Widget.GetScreenSize para obtener tamanos RENDERIZADOS
-    // que incluyen UI scaling (260 layout px = 520 rendered px a 4K 2x scale)
-    // Funciona a cualquier resolucion y nivel de UI scale
-    void PositionOnScreen()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        Widget parent = root.GetParent();
-        if (!parent)
-            return;
-
-        // Tamano del parent (pantalla) en pixels de pantalla
-        float pW = 0;
-        float pH = 0;
-        parent.GetScreenSize(pW, pH);
-
-        // Tamano RENDERIZADO del panel (incluye UI scaling)
-        float wW = 0;
-        float wH = 0;
-        root.GetScreenSize(wW, wH);
-
-        // Margen proporcional al tamano renderizado del widget (aprox 4% del ancho)
-        float margin = 10.0;
-        if (wW > 0)
-        {
-            margin = wW * 0.038;
-        }
-
-        float posX = pW - wW - margin;
-        float posY = margin;
-        root.SetPos(posX, posY);
-    }
-
-    // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
-    // ImageWidget puede no renderizar solo con 'color' en layout sin image source
-    void InitBackgrounds()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-
-        // PanelBg: layout color 0.12 0.12 0.14 0.92 → ARGB(235, 31, 31, 36)
-        string nameBg = "PanelBg";
-        ImageWidget panelBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
-        if (panelBg)
-        {
-            panelBg.LoadImageFile(0, colorTex);
-            panelBg.SetColor(ARGB(235, 31, 31, 36));
-        }
-
-        // HeaderBg: layout color 0.16 0.18 0.22 1.0 → ARGB(255, 41, 46, 56) (56px height)
-        string nameHeader = "HeaderBg";
-        ImageWidget headerBg = ImageWidget.Cast(root.FindAnyWidget(nameHeader));
-        if (headerBg)
-        {
-            headerBg.LoadImageFile(0, colorTex);
-            headerBg.SetColor(ARGB(255, 41, 46, 56));
-        }
-
-        // DividerLine: layout color 0.3 0.3 0.35 0.6 → ARGB(153, 77, 77, 89)
-        string nameDivider = "DividerLine";
-        ImageWidget dividerLine = ImageWidget.Cast(root.FindAnyWidget(nameDivider));
-        if (dividerLine)
-        {
-            dividerLine.LoadImageFile(0, colorTex);
-            dividerLine.SetColor(ARGB(153, 77, 77, 89));
-        }
-
-        // TooltipBg: layout color 0.08 0.08 0.10 0.95 → ARGB(242, 20, 20, 26)
-        string nameTooltipBg = "TooltipBg";
-        ImageWidget tooltipBg = ImageWidget.Cast(root.FindAnyWidget(nameTooltipBg));
-        if (tooltipBg)
-        {
-            tooltipBg.LoadImageFile(0, colorTex);
-            tooltipBg.SetColor(ARGB(242, 20, 20, 26));
-        }
     }
 
     // Llamado cuando llega nuevo sync del server

@@ -1,20 +1,24 @@
 // ============================================================================
 // LFPG_MemberRowView.c - 4_World/ui
-// ScriptView para cada fila de miembro en el panel de grupo
-// Usa Dabs MVC: ScriptView + ViewController con ViewBindings
+// One member row in the group panel. Dabs ScriptView plus ViewController.
 //
-// Bindings del layout:
-//  - LeaderStar: TextWidget (* si es lider, vacio si no)
-//  - MemberName: TextWidget (nombre del jugador)
-//  - BtnTransfer: visible solo para lider, no en su propia fila
-//  - BtnKick: visible solo para lider, no en su propia fila
+// Layout bindings:
+//  - LeaderTag: localized "Leader" on the leader row, empty otherwise
+//  - MemberName: player name, with the localized "(you)" on the local row
+//  - BtnTransfer: visible to the leader, hidden on the leader's own row
+//  - BtnKick: visible to the leader, hidden on the leader's own row
 // ============================================================================
 
 class LFPG_MemberRowController extends ViewController
 {
     // Bound properties (nombres deben coincidir con Binding_Name del layout)
-    string LeaderStar;
+    string LeaderTag;
     string MemberName;
+
+    static const int COLOR_TRANSFER = ARGB(255, 43, 48, 54);
+    static const int COLOR_TRANSFER_ARMED = ARGB(255, 107, 84, 24);
+    static const int COLOR_KICK = ARGB(255, 74, 31, 29);
+    static const int COLOR_KICK_ARMED = ARGB(255, 138, 42, 36);
 
     // Datos internos (no bindeados)
     string m_MemberUID;
@@ -32,7 +36,7 @@ class LFPG_MemberRowController extends ViewController
 
     void LFPG_MemberRowController()
     {
-        LeaderStar = "";
+        LeaderTag = "";
         MemberName = "";
         m_MemberUID = "";
         m_IsLeader = false;
@@ -54,19 +58,24 @@ class LFPG_MemberRowController extends ViewController
         m_IsLeader = isLeader;
         m_IsSelf = isLocalPlayer;
 
-        // Estrella de lider
         if (isLeader)
         {
-            LeaderStar = "*";
+            LeaderTag = Widget.TranslateString("#STR_LFPG_UI_LEADER");
         }
         else
         {
-            LeaderStar = "";
+            LeaderTag = "";
         }
 
         MemberName = name;
+        if (isLocalPlayer)
+        {
+            string youTag = Widget.TranslateString("#STR_LFPG_UI_YOU");
+            MemberName = MemberName + " ";
+            MemberName = MemberName + youTag;
+        }
 
-        string propStar = "LeaderStar";
+        string propStar = "LeaderTag";
         NotifyPropertyChanged(propStar);
 
         string propName = "MemberName";
@@ -88,6 +97,23 @@ class LFPG_MemberRowController extends ViewController
             BtnKick.Show(showButtons);
         }
 
+        if (m_LayoutRoot)
+        {
+            string nameTextName = "MemberNameText";
+            TextWidget nameText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(nameTextName));
+            if (nameText)
+            {
+                if (showButtons)
+                {
+                    nameText.SetSize(102.0, 34.0);
+                }
+                else
+                {
+                    nameText.SetSize(172.0, 34.0);
+                }
+            }
+        }
+
         // Indicador online/offline
         m_IsOnline = isOnline;
 
@@ -98,7 +124,17 @@ class LFPG_MemberRowController extends ViewController
             m_TransferConfirmUntil = 0;
             SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
             SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+            PaintMemberButton(BtnKick, COLOR_KICK);
+            PaintMemberButton(BtnTransfer, COLOR_TRANSFER);
         }
+    }
+
+    protected void PaintMemberButton(ButtonWidget button, int color)
+    {
+        if (!button)
+            return;
+
+        button.SetColor(color);
     }
 
     protected void SetCaption(string widgetName, string stringId)
@@ -135,11 +171,13 @@ class LFPG_MemberRowController extends ViewController
         {
             m_TransferConfirmUntil = nowTransfer + 3000;
             SetCaption("BtnTransferLabel", "#STR_LFPG_UI_CONFIRM_TRANSFER");
+            PaintMemberButton(BtnTransfer, COLOR_TRANSFER_ARMED);
             return true;
         }
 
         m_TransferConfirmUntil = 0;
         SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+        PaintMemberButton(BtnTransfer, COLOR_TRANSFER);
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_TRANSFER, m_MemberUID);
         return true;
     }
@@ -153,6 +191,7 @@ class LFPG_MemberRowController extends ViewController
             {
                 m_KickConfirmUntil = 0;
                 SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+                PaintMemberButton(BtnKick, COLOR_KICK);
             }
         }
         if (m_TransferConfirmUntil > 0)
@@ -161,6 +200,7 @@ class LFPG_MemberRowController extends ViewController
             {
                 m_TransferConfirmUntil = 0;
                 SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+                PaintMemberButton(BtnTransfer, COLOR_TRANSFER);
             }
         }
     }
@@ -186,11 +226,13 @@ class LFPG_MemberRowController extends ViewController
         {
             m_KickConfirmUntil = nowKick + 3000;
             SetCaption("BtnKickLabel", "#STR_LFPG_UI_CONFIRM_KICK");
+            PaintMemberButton(BtnKick, COLOR_KICK_ARMED);
             return true;
         }
 
         m_KickConfirmUntil = 0;
         SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+        PaintMemberButton(BtnKick, COLOR_KICK);
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_KICK, m_MemberUID);
         return true;
     }
@@ -213,6 +255,10 @@ class LFPG_MemberRowController extends ViewController
 // ============================================================================
 class LFPG_MemberRowView extends ScriptView
 {
+    static const int COLOR_ONLINE_DOT = ARGB(255, 80, 200, 80);
+    static const int COLOR_OFFLINE_DOT = ARGB(255, 95, 95, 95);
+    static const int COLOR_NAME_ONLINE = ARGB(255, 224, 224, 224);
+    static const int COLOR_NAME_OFFLINE = ARGB(255, 125, 125, 125);
     override string GetLayoutFile()
     {
         return "SimpleGroup/gui/layouts/group_member_row.layout";
@@ -251,9 +297,7 @@ class LFPG_MemberRowView extends ScriptView
             ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
         }
 
-        // FIX AUDIT: Forzar carga de imagen procedural en RowBg y OnlineIndicator
-        InitRowBackground();
-        InitOnlineIndicator(isOnline);
+        ApplyOnlineLook(isOnline);
     }
 
     // FIX I-20: Update in-place (mismo row reciclado, evita recrear widgets)
@@ -264,49 +308,41 @@ class LFPG_MemberRowView extends ScriptView
         {
             ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
         }
-        // Indicator puede cambiar online/offline
-        InitOnlineIndicator(isOnline);
+        ApplyOnlineLook(isOnline);
     }
 
-    // Indicador online: verde = online, gris = offline
-    protected void InitOnlineIndicator(bool isOnline)
+    // Online dot and name colour. The layout paints the row background.
+    protected void ApplyOnlineLook(bool isOnline)
     {
         Widget root = GetLayoutRoot();
         if (!root)
             return;
 
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
         string nameIndicator = "OnlineIndicator";
         ImageWidget indicator = ImageWidget.Cast(root.FindAnyWidget(nameIndicator));
-        if (indicator)
+        string nameTextName = "MemberNameText";
+        TextWidget nameText = TextWidget.Cast(root.FindAnyWidget(nameTextName));
+        if (isOnline)
         {
-            indicator.LoadImageFile(0, colorTex);
-            if (isOnline)
+            if (indicator)
             {
-                indicator.SetColor(ARGB(255, 80, 200, 80));
+                indicator.SetColor(COLOR_ONLINE_DOT);
             }
-            else
+            if (nameText)
             {
-                indicator.SetColor(ARGB(255, 100, 100, 100));
+                nameText.SetColor(COLOR_NAME_ONLINE);
             }
         }
-    }
-
-    // FIX AUDIT: ImageWidget necesita LoadImageFile() + SetColor() para colores procedurales
-    protected void InitRowBackground()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-        string nameBg = "RowBg";
-        ImageWidget rowBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
-        if (rowBg)
+        else
         {
-            // Layout color 0.15 0.15 0.18 0.5 → ARGB(128, 38, 38, 46)
-            rowBg.LoadImageFile(0, colorTex);
-            rowBg.SetColor(ARGB(128, 38, 38, 46));
+            if (indicator)
+            {
+                indicator.SetColor(COLOR_OFFLINE_DOT);
+            }
+            if (nameText)
+            {
+                nameText.SetColor(COLOR_NAME_OFFLINE);
+            }
         }
     }
 };

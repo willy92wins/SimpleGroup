@@ -1,274 +1,399 @@
 FrameWidgetClass LFPG_GroupPanel {
- size 260 348
+ position 16 16
+ size 320 500
  hexactpos 1
  vexactpos 1
  hexactsize 1
  vexactsize 1
- position 0 0
+ halign right_ref
+ valign top_ref
  {
   ImageWidgetClass PanelBg {
    position 0 0
-   size 260 348
+   size 320 500
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.12 0.12 0.14 0.92
+   color 0.082 0.086 0.09 1
    stretch 1
    ignorepointer 1
-   {
-   }
   }
 
   ImageWidgetClass HeaderBg {
-   position 0 0
-   size 260 84
+   position 0 3
+   size 320 69
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.16 0.18 0.22 1.0
+   color 0.106 0.114 0.122 1
    stretch 1
    ignorepointer 1
-   {
-   }
+  }
+
+  ImageWidgetClass AccentBar {
+   position 0 0
+   size 320 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.608 0.165 0.141 1
+   stretch 1
+   ignorepointer 1
   }
 
   TextWidgetClass GroupNameText {
    scriptclass "ViewBinding"
-   position 10 4
-   size 168 18
+   position 16 12
+   size 244 28
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/Metron"
-   color 0.9 0.9 0.9 1.0
+   color 0.925 0.925 0.925 1
+   font "gui/fonts/Metron22"
+   "text valign" center
    ignorepointer 1
    {
     ScriptParamsClass {
      Binding_Name "GroupName"
-     {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass TierText {
-   scriptclass "ViewBinding"
-   position 180 4
-   size 50 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/Metron"
-   "text halign" right
-   color 0.6 0.75 1.0 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "TierLabel"
-     {
-     }
     }
    }
   }
 
   ButtonWidgetClass BtnClose {
    scriptclass "ViewBinding"
-   position 234 3
-   size 22 18
+   position 276 12
+   size 28 28
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.28 0.30 0.34 1.0
+   style Colorable
+   color 0.149 0.161 0.173 1
    {
-    ScriptParamsClass {
-     Relay_Command "OnCloseExecute"
-     {
-     }
-    }
-
     TextWidgetClass BtnCloseText {
      position 0 0
-     size 22 18
+     size 28 28
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     color 0.741 0.741 0.741 1
+     font "gui/fonts/Metron16"
      text "X"
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
      ignorepointer 1
-     {
-     }
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnCloseExecute"
     }
    }
   }
 
   TextWidgetClass TerritoryText {
    scriptclass "ViewBinding"
-   position 10 24
-   size 240 16
+   position 16 42
+   size 260 20
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.6 0.6 0.6 1.0
+   color 0.604 0.604 0.604 1
+   font "gui/fonts/Metron14"
+   "text valign" center
    ignorepointer 1
    {
     ScriptParamsClass {
      Binding_Name "TerritoryStatus"
-     {
-     }
     }
    }
   }
 
-  TextWidgetClass DeployText {
+  TextWidgetClass FlagLabelText {
    scriptclass "ViewBinding"
-   position 10 42
-   size 240 14
+   position 16 82
+   size 288 20
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.6 0.6 0.6 1.0
+   color 0.604 0.604 0.604 1
+   font "gui/fonts/Metron14"
+   "text valign" center
    ignorepointer 1
    {
     ScriptParamsClass {
-     Binding_Name "DeployInfo"
-     {
-     }
+     Binding_Name "FlagLabel"
     }
    }
   }
 
-  TextWidgetClass DeployCountText {
+  TextWidgetClass FlagPercentText {
    scriptclass "ViewBinding"
-   position 10 58
-   size 120 14
+   position 224 80
+   size 80 22
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.5 0.6 0.5 1.0
+   color 0.902 0.902 0.902 1
+   font "gui/fonts/Metron16"
+   "text halign" right
+   "text valign" center
    ignorepointer 1
    {
     ScriptParamsClass {
-     Binding_Name "DeployCount"
-     {
-     }
+     Binding_Name "FlagPercent"
     }
    }
   }
 
-  TextWidgetClass GardenCountText {
-   scriptclass "ViewBinding"
-   position 130 58
-   size 120 14
+  ImageWidgetClass FlagBarTrack {
+   position 16 106
+   size 288 6
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.5 0.6 0.5 1.0
+   color 0.165 0.176 0.188 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  ImageWidgetClass FlagBarFill {
+   position 16 106
+   size 288 6
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.416 0.624 0.29 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  ImageWidgetClass DividerTop {
+   position 16 126
+   size 288 1
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.149 0.157 0.169 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  TextWidgetClass MembersLabel {
+   position 16 136
+   size 90 16
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.541 0.541 0.541 1
+   font "gui/fonts/MetronBook12"
+   text "#STR_LFPG_UI_MEMBERS"
+   "text valign" center
+   ignorepointer 1
+  }
+
+  TextWidgetClass MembersValueText {
+   scriptclass "ViewBinding"
+   position 16 152
+   size 90 28
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.925 0.925 0.925 1
+   font "gui/fonts/Metron22"
+   "text valign" center
    ignorepointer 1
    {
     ScriptParamsClass {
-     Binding_Name "GardenCount"
-     {
-     }
+     Binding_Name "MembersValue"
     }
    }
   }
 
-  FrameWidgetClass DeployHoverZone {
-   position 8 56
-   size 120 18
+  ImageWidgetClass MembersBarTrack {
+   position 16 184
+   size 90 3
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
+   color 0.165 0.176 0.188 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  ImageWidgetClass MembersBarFill {
+   position 16 184
+   size 90 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.549 0.549 0.549 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  TextWidgetClass FurnitureLabel {
+   position 115 136
+   size 90 16
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.541 0.541 0.541 1
+   font "gui/fonts/MetronBook12"
+   text "#STR_LFPG_UI_FURNITURE"
+   "text valign" center
+   ignorepointer 1
+  }
+
+  TextWidgetClass FurnitureValueText {
+   scriptclass "ViewBinding"
+   position 115 152
+   size 90 28
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.925 0.925 0.925 1
+   font "gui/fonts/Metron22"
+   "text valign" center
+   ignorepointer 1
    {
+    ScriptParamsClass {
+     Binding_Name "FurnitureValue"
+    }
    }
+  }
+
+  ImageWidgetClass FurnitureBarTrack {
+   position 115 184
+   size 90 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.165 0.176 0.188 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  ImageWidgetClass FurnitureBarFill {
+   position 115 184
+   size 90 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.549 0.549 0.549 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  TextWidgetClass GardenLabel {
+   position 214 136
+   size 90 16
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.541 0.541 0.541 1
+   font "gui/fonts/MetronBook12"
+   text "#STR_LFPG_UI_GARDENS"
+   "text valign" center
+   ignorepointer 1
+  }
+
+  TextWidgetClass GardenValueText {
+   scriptclass "ViewBinding"
+   position 214 152
+   size 90 28
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.925 0.925 0.925 1
+   font "gui/fonts/Metron22"
+   "text valign" center
+   ignorepointer 1
+   {
+    ScriptParamsClass {
+     Binding_Name "GardenValue"
+    }
+   }
+  }
+
+  ImageWidgetClass GardenBarTrack {
+   position 214 184
+   size 90 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.165 0.176 0.188 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  ImageWidgetClass GardenBarFill {
+   position 214 184
+   size 90 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.549 0.549 0.549 1
+   stretch 1
+   ignorepointer 1
+  }
+
+  FrameWidgetClass FurnitureHoverZone {
+   position 111 132
+   size 98 60
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
   }
 
   FrameWidgetClass GardenHoverZone {
-   position 128 56
-   size 122 18
+   position 210 132
+   size 98 60
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   {
-   }
   }
 
-  FrameWidgetClass ItemTooltip {
-   position 8 78
-   size 244 100
+  ImageWidgetClass DividerMid {
+   position 16 200
+   size 288 1
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   visible 0
-   {
-    ImageWidgetClass TooltipBg {
-     position 0 0
-     size 244 100
-     hexactpos 1
-     vexactpos 1
-     hexactsize 1
-     vexactsize 1
-     color 0.08 0.08 0.10 0.95
-     stretch 1
-     ignorepointer 1
-     {
-     }
-    }
-
-    MultilineTextWidgetClass TooltipText {
-     wrap 1
-     position 6 4
-     size 232 92
-     hexactpos 1
-     vexactpos 1
-     hexactsize 1
-     vexactsize 1
-     font "gui/fonts/MetronBook"
-     color 0.75 0.75 0.75 1.0
-     ignorepointer 1
-     {
-     }
-    }
-   }
-  }
-
-  ImageWidgetClass DividerLine {
-   position 10 78
-   size 240 1
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.3 0.3 0.35 0.6
+   color 0.149 0.157 0.169 1
    stretch 1
    ignorepointer 1
-   {
-   }
   }
 
   ScrollWidgetClass MemberScroll {
-   position 0 82
-   size 260 222
+   position 16 210
+   size 296 228
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -279,7 +404,7 @@ FrameWidgetClass LFPG_GroupPanel {
     GridSpacerWidgetClass MemberList {
      scriptclass "ViewBinding"
      position 0 0
-     size 260 222
+     size 288 228
      hexactpos 1
      vexactpos 1
      hexactsize 1
@@ -290,8 +415,6 @@ FrameWidgetClass LFPG_GroupPanel {
      {
       ScriptParamsClass {
        Binding_Name "MemberRows"
-       {
-       }
       }
      }
     }
@@ -300,35 +423,82 @@ FrameWidgetClass LFPG_GroupPanel {
 
   ButtonWidgetClass BtnLeave {
    scriptclass "ViewBinding"
-   position 10 308
-   size 240 26
+   position 16 448
+   size 288 36
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.6 0.2 0.2 0.9
+   style Colorable
+   color 0.353 0.122 0.106 1
    {
-    ScriptParamsClass {
-     Relay_Command "OnLeaveExecute"
-     {
-     }
-    }
-
     TextWidgetClass BtnLeaveText {
      position 0 0
-     size 240 26
+     size 288 36
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     color 0.941 0.839 0.827 1
+     font "gui/fonts/Metron14"
      text "#STR_LFPG_UI_LEAVE_GROUP"
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
      ignorepointer 1
-     {
-     }
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnLeaveExecute"
+    }
+   }
+  }
+
+  FrameWidgetClass ItemTooltip {
+   position 16 192
+   size 288 100
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   visible 0
+   ignorepointer 1
+   {
+    ImageWidgetClass TooltipBg {
+     position 0 0
+     size 288 100
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     color 0.055 0.059 0.063 1
+     stretch 1
+     ignorepointer 1
+    }
+
+    ImageWidgetClass TooltipEdge {
+     position 0 0
+     size 288 1
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     color 0.227 0.239 0.251 1
+     stretch 1
+     ignorepointer 1
+    }
+
+    MultilineTextWidgetClass TooltipText {
+     position 10 6
+     size 268 88
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     color 0.784 0.784 0.784 1
+     font "gui/fonts/MetronBook16"
+     wrap 1
+     ignorepointer 1
     }
    }
   }
