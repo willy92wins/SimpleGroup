@@ -90,6 +90,9 @@ class LFPG_GroupManager
     // FIX M2: Dirty flag para saves diferidos (counters)
     protected bool m_IsDirty;
 
+    // Retired C2S routes are ignored. Logged once so a modified client cannot flood the RPT.
+    protected bool m_LoggedRetiredRpc;
+
     // FIX F: Recalibracion periodica de counters
     // Primer tick: siempre recalibrar (post-startup)
     // Ticks siguientes: cada m_RecalibrationIntervalSeconds (configurable, default 30s)
@@ -117,6 +120,7 @@ class LFPG_GroupManager
         m_DissolveDisabled = false;
         m_DissolveDisabledLogged = false;
         m_IsDirty = false;
+        m_LoggedRetiredRpc = false;
         m_NeedsCounterRecalibration = true;
         m_RecalibrationTickCounter = 0;
     }
@@ -1381,11 +1385,14 @@ class LFPG_GroupManager
         if (!group.IsLeader(currentLeaderUID))
             return false;
 
+        if (newLeaderUID == currentLeaderUID)
+            return false;
+
         if (!group.IsMember(newLeaderUID))
             return false;
 
         group.m_LeaderUID = newLeaderUID;
-        SaveGroups();
+        MarkDirty();
 
         SendGroupSyncUpdateToMembers(group, LFPG_SYNC_LEADER_CHANGED);
         return true;
@@ -1652,6 +1659,21 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
+    // CREATE_GROUP, REQUEST_JOIN, START_INVITE and DESTROY_FLAG are unused.
+    // Enum values stay so older clients do not shift the id space.
+    protected bool IsRetiredClientRpc(int rpc_type)
+    {
+        if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_REQUEST_JOIN)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_START_INVITE)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_DESTROY_FLAG)
+            return true;
+        return false;
+    }
+
     // RPC HANDLER - Server-side dispatcher
     // ========================================================================
     void HandleRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx, LFPG_FlagBase flag)
@@ -1666,19 +1688,19 @@ class LFPG_GroupManager
         if (IsRPCThrottled(senderUID))
             return;
 
-        if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
+        if (IsRetiredClientRpc(rpc_type))
         {
-            // RESERVED — no triggered from client (group created via Action/OnPlacementComplete)
-            HandleCreateGroup(sender, ctx, flag);
+            if (!m_LoggedRetiredRpc)
+            {
+                m_LoggedRetiredRpc = true;
+                LFPG_Log.Debug("Ignored a retired client RPC");
+            }
+            return;
         }
-        else if (rpc_type == LFPG_RPC_C2S_SET_GROUP_NAME)
+
+        if (rpc_type == LFPG_RPC_C2S_SET_GROUP_NAME)
         {
             HandleSetGroupName(sender, ctx, flag);
-        }
-        else if (rpc_type == LFPG_RPC_C2S_REQUEST_JOIN)
-        {
-            // RESERVED — no triggered from client (join via ActionJoinGroup.OnStartServer)
-            HandleRequestJoin(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_LEAVE)
         {
@@ -1691,16 +1713,6 @@ class LFPG_GroupManager
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_TRANSFER)
         {
             HandleRequestTransfer(sender, ctx, flag);
-        }
-        else if (rpc_type == LFPG_RPC_C2S_START_INVITE)
-        {
-            // RESERVED — no triggered from client (invite via ActionInvite.OnStartServer)
-            HandleStartInvite(sender, ctx, flag);
-        }
-        else if (rpc_type == LFPG_RPC_C2S_DESTROY_FLAG)
-        {
-            // RESERVED — no triggered from client (destroy via ActionDestroyFlag.OnStartServer)
-            HandleDestroyFlag(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_GROUP_DATA)
         {
@@ -1741,6 +1753,10 @@ class LFPG_GroupManager
         if (!group.IsLeader(senderUID))
             return;
 
+        // A real name is final. The dialog is only offered while the name is still #TEMP#.
+        if (!IsTempGroupName(group.m_GroupName))
+            return;
+
         // Validar nombre
         int result = ValidateGroupName(newName);
         if (result != LFPG_NAME_OK)
@@ -1759,7 +1775,7 @@ class LFPG_GroupManager
         group.m_GroupName = newName;
         m_GroupNames.Set(newName, true);
 
-        SaveGroups();
+        MarkDirty();
 
         SendNameResult(sender, flag, LFPG_NAME_OK);
         // Notificar a todos con sync completo (nombre cambio)
