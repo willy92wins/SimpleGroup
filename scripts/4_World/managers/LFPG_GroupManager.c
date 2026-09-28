@@ -71,9 +71,9 @@ class LFPG_GroupManager
     protected ref array<Object> m_RecalObjectBuffer;
     protected ref array<CargoBase> m_RecalCargoBuffer;
 
-    // Banderas que cargaron ANTES que los grupos: el engine restaura las entidades
-    // dentro de super.OnInit(), y LoadGroups() corre despues. Una bandera que no
-    // encuentra su grupo NO es huerfana: es que aun no se ha cargado el JSON.
+    // Flags restored by the engine after MissionServer.OnInit. LoadGroups runs
+    // inside Init, before any flag exists, so a missing group at AfterStoreLoad
+    // is not proof the flag is an orphan. The first validation tick resolves them.
     protected ref array<LFPG_FlagBase> m_PendingFlags;
 
     // Ticks consecutivos que un grupo lleva sin bandera viva: groupID -> strikes.
@@ -89,6 +89,15 @@ class LFPG_GroupManager
 
     // FIX M2: Dirty flag para saves diferidos (counters)
     protected bool m_IsDirty;
+
+    // One-shot boot audit. Init finishes before the engine restores entities,
+    // so orphan checks and the abandon pass wait for the first validation tick.
+    protected bool m_BootAuditDone;
+
+    // groups.json or its backup exists but could not be used. Saves must not
+    // replace those files. A fresh install (neither file present) leaves this false.
+    protected bool m_GroupsLoadFailed;
+    protected bool m_GroupsLoadFailedLogged;
 
     // FIX F: Recalibracion periodica de counters
     // Primer tick: siempre recalibrar (post-startup)
@@ -117,6 +126,9 @@ class LFPG_GroupManager
         m_DissolveDisabled = false;
         m_DissolveDisabledLogged = false;
         m_IsDirty = false;
+        m_BootAuditDone = false;
+        m_GroupsLoadFailed = false;
+        m_GroupsLoadFailedLogged = false;
         m_NeedsCounterRecalibration = true;
         m_RecalibrationTickCounter = 0;
     }
@@ -128,6 +140,8 @@ class LFPG_GroupManager
             m_ValidationTimer.Stop();
             m_ValidationTimer = null;
         }
+        if (GetGame())
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.RunBootAudit);
     }
 
     // ========================================================================
@@ -173,36 +187,17 @@ class LFPG_GroupManager
         // Cargar config
         m_Config = LFPG_TerritoryConfig.Load();
 
-        // Cargar grupos desde JSON
+        // Cargar grupos desde JSON. Flags are not in the world yet. The gameplay
+        // call queue runs from the game loop, after mission main() restores entities.
         LoadGroups();
 
-        // Los grupos acaban de entrar en memoria: las banderas que se restauraron
-        // antes (durante super.OnInit) por fin pueden registrarse.
+        // Nothing to resolve yet. Kept so a flag that registered pending during
+        // Init (tests, or a future engine order) is not left waiting a full tick.
         ResolvePendingFlags();
 
-        // Re-vinculacion por posicion + red de seguridad anti-wipe.
-        AuditOrphansAtBoot();
-
-        // Lo que siga pendiente es huerfano de verdad: todos los grupos estan ya en
-        // memoria y no va a llegar ninguno mas. Vaciar el id AQUI si es correcto (a
-        // diferencia del bug original, que decidia antes de cargar el JSON): la
-        // bandera queda abandonada, sigue en el mundo y sigue negando su radio.
-        int pendLeftCount = m_PendingFlags.Count();
-        int pi;
-        for (pi = 0; pi < pendLeftCount; pi = pi + 1)
-        {
-            LFPG_FlagBase pFlag = m_PendingFlags[pi];
-            if (pFlag)
-            {
-                pFlag.SetGroupID("");
-                RegisterAbandonedFlag(pFlag);
-            }
-        }
-        m_PendingFlags.Clear();
-
-        string pendLeft = "Init: flags declared abandoned after boot resolve: ";
-        pendLeft = pendLeft + pendLeftCount.ToString();
-        LFPG_Log.Info(pendLeft);
+        // One second, once. The validation tick repeats the audit only if this
+        // call has not run yet. Not a repeating CallLater (the 4.5 h timer bug).
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.RunBootAudit, 1000, false);
 
         // Timer periodico de validacion (FIX M-2: interval configurable)
         // Usa Timer class (NO CallLater) - inmune al bug de 4.5h
@@ -242,6 +237,13 @@ class LFPG_GroupManager
         string pendMsg = "Flag pending, group not loaded yet: ";
         pendMsg = pendMsg + flag.GetGroupID();
         LFPG_Log.Info(pendMsg);
+
+        // Load failed: block the zone now. The audit is still a second away.
+        if (m_GroupsLoadFailed)
+        {
+            float pendProgress = flag.ComputeCurrentRaiseProgress();
+            UpdateFlagPositionCache(flag.GetGroupID(), flag.GetPosition(), pendProgress, flag.GetTier());
+        }
     }
 
     // Idempotente: se puede llamar tantas veces como haga falta.
@@ -269,19 +271,29 @@ class LFPG_GroupManager
         }
     }
 
-    // Auditoria de arranque. Se llama UNA vez en Init, tras resolver pendientes.
+    // Boot audit. Runs once, on the first validation tick, after ResolvePendingFlags.
+    // Init itself is too early: the engine restores entities after MissionServer.OnInit.
     //
-    // Dos cometidos:
-    //  1. Re-vincular banderas que perdieron su groupID en un arranque anterior.
-    //     m_FlagPosition es la unica ancla que sobrevive a eso, y la bandera esta
-    //     en el mundo (no en m_PendingFlags: entro por la rama de abandonada).
-    //  2. Si aun asi demasiados grupos quedan sin bandera, el estado se cargo mal:
-    //     se desactiva la disolucion automatica antes de que borre nada.
+    // Two jobs:
+    //  1. Re-bind flags that lost their group id on an earlier boot.
+    //     m_FlagPosition is the anchor that survives that, and the flag is in the
+    //     world (not in m_PendingFlags: it took the abandoned branch).
+    //  2. If too many groups still have no flag, the loaded state is wrong:
+    //     automatic dissolve is disabled before it deletes anything.
+    //     An unreadable groups file arms the same net even when zero groups loaded.
     void AuditOrphansAtBoot()
     {
         int total = m_Groups.Count();
         if (total == 0)
+        {
+            if (m_GroupsLoadFailed)
+            {
+                m_DissolveDisabled = true;
+                string emptyNet = "BOOT SAFETY NET: groups file could not be loaded (0 groups). Automatic dissolve DISABLED this session.";
+                LFPG_Log.Error(emptyNet);
+            }
             return;
+        }
 
         int i;
         int j;
@@ -359,6 +371,60 @@ class LFPG_GroupManager
         return m_IsShuttingDown;
     }
 
+    // False until the one-shot boot audit has finished. Claim stays closed until then.
+    bool IsBootAuditDone()
+    {
+        return m_BootAuditDone;
+    }
+
+    // Resolve, re-bind, then abandon whatever is still pending. Runs from the
+    // gameplay queue about a second after Init, or from the validation tick if
+    // that tick arrives first. Exactly once.
+    void RunBootAudit()
+    {
+        if (m_BootAuditDone)
+            return;
+        if (m_IsShuttingDown)
+            return;
+
+        ResolvePendingFlags();
+        AuditOrphansAtBoot();
+
+        int pendLeftCount = m_PendingFlags.Count();
+        int abandonedDeclared = 0;
+        int pi;
+        for (pi = 0; pi < pendLeftCount; pi = pi + 1)
+        {
+            LFPG_FlagBase pFlag = m_PendingFlags[pi];
+            if (!pFlag)
+                continue;
+
+            if (m_GroupsLoadFailed)
+            {
+                string keptID = pFlag.GetGroupID();
+                float keptProgress = pFlag.ComputeCurrentRaiseProgress();
+                UpdateFlagPositionCache(keptID, pFlag.GetPosition(), keptProgress, pFlag.GetTier());
+                string keepMsg = "Boot audit: load failed, flag kept group id ";
+                keepMsg = keepMsg + keptID;
+                keepMsg = keepMsg + " at ";
+                keepMsg = keepMsg + pFlag.GetPosition().ToString();
+                LFPG_Log.Error(keepMsg);
+            }
+            else
+            {
+                pFlag.SetGroupID("");
+                RegisterAbandonedFlag(pFlag);
+                abandonedDeclared = abandonedDeclared + 1;
+            }
+        }
+        m_PendingFlags.Clear();
+
+        string pendLeft = "Boot audit: flags declared abandoned: ";
+        pendLeft = pendLeft + abandonedDeclared.ToString();
+        LFPG_Log.Info(pendLeft);
+        m_BootAuditDone = true;
+    }
+
     void SetShuttingDown()
     {
         m_IsShuttingDown = true;
@@ -375,6 +441,9 @@ class LFPG_GroupManager
         // entidades al cerrar disparia N EEDelete y vaciaria groups.json.
         if (m_IsShuttingDown)
             return;
+
+        // The queued audit normally runs first. This covers a tick that arrives sooner.
+        RunBootAudit();
 
         // Por si alguna bandera se restauro tarde.
         ResolvePendingFlags();
@@ -489,7 +558,19 @@ class LFPG_GroupManager
         while (j < posCount)
         {
             LFPG_FlagPositionCache posCache = m_FlagPositions[j];
-            if (!posCache || (!m_Groups.Contains(posCache.m_GroupID) && posCache.m_GroupID != LFPG_ABANDONED_GROUP))
+            // An unreadable groups file leaves flags under their own group id so the
+            // zone still blocks. Those ids are absent from m_Groups; do not drop them.
+            bool removeEntry = false;
+            if (!posCache)
+            {
+                removeEntry = true;
+            }
+            else if (!m_GroupsLoadFailed)
+            {
+                if (!m_Groups.Contains(posCache.m_GroupID) && posCache.m_GroupID != LFPG_ABANDONED_GROUP)
+                    removeEntry = true;
+            }
+            if (removeEntry)
             {
                 string posWarn = "Stale position cache entry removed for group: ";
                 if (posCache)
@@ -568,6 +649,21 @@ class LFPG_GroupManager
             {
                 flag.SetMemberCount(group.GetMemberCount());
                 group.m_FlagPosition = flag.GetPosition();
+                // World tier wins. An upgrade saved to JSON and then lost in a crash
+                // before the CE write would otherwise keep the new tier with the old flag.
+                if (group.m_Tier != flag.GetTier())
+                {
+                    int previousTier = group.m_Tier;
+                    group.m_Tier = flag.GetTier();
+                    MarkDirty();
+                    string tierMsg = "RegisterFlag: group ";
+                    tierMsg = tierMsg + groupID;
+                    tierMsg = tierMsg + " tier ";
+                    tierMsg = tierMsg + previousTier.ToString();
+                    tierMsg = tierMsg + " corrected to flag tier ";
+                    tierMsg = tierMsg + group.m_Tier.ToString();
+                    LFPG_Log.Info(tierMsg);
+                }
             }
         }
 
@@ -592,6 +688,35 @@ class LFPG_GroupManager
     {
         int i;
         int count = m_FlagPositions.Count();
+
+        // Abandoned flags share no group id, so a group-id match would overwrite
+        // the first abandoned entry. Match those by the same 2 m test as a claim.
+        if (groupID == LFPG_ABANDONED_GROUP)
+        {
+            for (i = 0; i < count; i = i + 1)
+            {
+                LFPG_FlagPositionCache abandonedCache = m_FlagPositions[i];
+                if (!abandonedCache)
+                    continue;
+                if (abandonedCache.m_GroupID != LFPG_ABANDONED_GROUP)
+                    continue;
+
+                float adx = pos[0] - abandonedCache.m_Position[0];
+                float adz = pos[2] - abandonedCache.m_Position[2];
+                float adistSq = (adx * adx) + (adz * adz);
+                if (adistSq < 4.0)
+                {
+                    abandonedCache.Set(pos, groupID, progress, tier);
+                    return;
+                }
+            }
+
+            LFPG_FlagPositionCache abandonedNew = new LFPG_FlagPositionCache();
+            abandonedNew.Set(pos, groupID, progress, tier);
+            m_FlagPositions.Insert(abandonedNew);
+            return;
+        }
+
         for (i = 0; i < count; i = i + 1)
         {
             LFPG_FlagPositionCache cache = m_FlagPositions[i];
@@ -2460,6 +2585,26 @@ class LFPG_GroupManager
         // esto puede ser < m_Groups.Count(); el verify se compara contra ESTE valor.
         int expectedCount = fileData.m_Groups.Count();
 
+        // Fail closed: never rotate groups.json, the backup or the tmp.
+        // The in-memory state goes to a side file until an admin restores the original.
+        if (m_GroupsLoadFailed)
+        {
+            string sessionPath = "$profile:SimpleGroup/groups.json.session";
+            string sessionError = "";
+            if (!JsonFileLoader<LFPG_GroupsFileData>.SaveFile(sessionPath, fileData, sessionError))
+            {
+                string sessErr = "SaveGroups: session file write failed: ";
+                sessErr = sessErr + sessionError;
+                LFPG_Log.Error(sessErr);
+            }
+            if (!m_GroupsLoadFailedLogged)
+            {
+                m_GroupsLoadFailedLogged = true;
+                LFPG_Log.Error("groups.json could not be loaded. This session is saved to groups.json.session. Restore or fix groups.json and restart.");
+            }
+            return;
+        }
+
         string tmpPath = LFPG_TerritoryConfig.GetGroupsTmpPath();
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
@@ -2594,6 +2739,10 @@ class LFPG_GroupManager
             string freshMsg = "LoadGroups: no usable data in primary or backup. Starting fresh. Last error: ";
             freshMsg = freshMsg + loadError;
             LFPG_Log.Error(freshMsg);
+            // Neither file means a fresh install. A file that exists but cannot
+            // be used must not be overwritten by a later save.
+            if (FileExist(filePath) || FileExist(bakPath))
+                m_GroupsLoadFailed = true;
             return;
         }
 
@@ -2606,6 +2755,7 @@ class LFPG_GroupManager
             verErr = verErr + LFPG_GROUPS_FILE_VERSION.ToString();
             verErr = verErr + ". Refusing to load.";
             LFPG_Log.Error(verErr);
+            m_GroupsLoadFailed = true;
             return;
         }
 
