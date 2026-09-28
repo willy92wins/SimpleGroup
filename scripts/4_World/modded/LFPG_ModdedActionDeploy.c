@@ -134,6 +134,10 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
     if (!cfg)
         return false;
 
+    // No-drop blacklist wins over list B and list A, including a type on both lists.
+    if (LFPG_IsListedDropBlocked(item, player, pos))
+        return true;
+
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
     if (cfg.IsUnrestricted(item))
         return false;
