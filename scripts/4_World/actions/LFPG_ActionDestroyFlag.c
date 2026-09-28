@@ -56,6 +56,9 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         }
 
         // Server-side
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
         if (!flag.HasGroup())
             return false;
 
@@ -102,6 +105,9 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         string groupID = flag.GetGroupID();
         LFPG_GroupData group = mgr.GetGroupByPlayer(playerUID);
         if (!group || !group.IsLeader(playerUID))
+            return;
+
+        if (group.m_GroupID != groupID)
             return;
 
         mgr.DissolveGroup(groupID);
