@@ -379,7 +379,8 @@ class LFPG_ClientGroupCache
 
     // C1 FIX: Helper centralizado para buscar la bandera del grupo local
     // Usa IsFlagAtPosition (posicion cacheada) en vez de GetGroupID (no sincronizado)
-    // Retorna null si no se encuentra en 100m o no tiene grupo.
+    // Busca alrededor de s_FlagPosition, no del jugador: un radio fijo de 100 m
+    // pierde la bandera si el jugador reaparece mas lejos y el radio de obra es mayor.
     // FIX M-24: Cache del handle; se invalida en Clear() y si la flag ya no matchea position.
     static LFPG_FlagBase FindLocalGroupFlag()
     {
@@ -393,15 +394,13 @@ class LFPG_ClientGroupCache
         }
         s_CachedLocalFlag = null;
 
-        PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
-        if (!player)
+        if (!GetGame())
             return null;
 
-        vector playerPos = player.GetPosition();
-        float searchRadius = 100.0;
+        float searchRadius = Math.Sqrt(s_BuildRadiusSq) + 5.0;
         array<Object> objects = new array<Object>;
         array<CargoBase> proxyCargos = new array<CargoBase>;
-        GetGame().GetObjectsAtPosition(playerPos, searchRadius, objects, proxyCargos);
+        GetGame().GetObjectsAtPosition(s_FlagPosition, searchRadius, objects, proxyCargos);
 
         int i;
         int count = objects.Count();

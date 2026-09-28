@@ -27,6 +27,12 @@ class LFPG_GroupPanelController extends ViewController
 
     // Second click of Leave must arrive before this mission time (ms).
     protected int m_LeaveConfirmUntil;
+    // True when the armed Leave caption is the dissolve warning.
+    protected bool m_LeaveArmedDissolve;
+    // Last cache values painted on TerritoryText. The flag sync writes the
+    // cache without an RPC, so the open panel compares these each tick.
+    protected float m_SeenFlagProgress;
+    protected int m_SeenTier;
 
     // ObservableCollection bindeada al WrapSpacer "MemberList"
     ref ObservableCollection<LFPG_MemberRowView> MemberRows;
@@ -40,6 +46,9 @@ class LFPG_GroupPanelController extends ViewController
         DeployCount = "";
         GardenCount = "";
         m_LeaveConfirmUntil = 0;
+        m_LeaveArmedDissolve = false;
+        m_SeenFlagProgress = -1.0;
+        m_SeenTier = -1;
         MemberRows = new ObservableCollection<LFPG_MemberRowView>(this);
     }
 
@@ -195,6 +204,8 @@ class LFPG_GroupPanelController extends ViewController
 
         string propTerritory = "TerritoryStatus";
         NotifyPropertyChanged(propTerritory);
+        m_SeenFlagProgress = LFPG_ClientGroupCache.s_FlagRaiseProgress;
+        m_SeenTier = LFPG_ClientGroupCache.s_Tier;
 
         if (!m_LayoutRoot)
             return;
@@ -214,6 +225,48 @@ class LFPG_GroupPanelController extends ViewController
         }
     }
 
+    // Flag sync and an expired Leave confirm. No allocations.
+    void TickOpenPanel(int nowMs)
+    {
+        if (m_LeaveConfirmUntil > 0)
+        {
+            if (nowMs > m_LeaveConfirmUntil)
+            {
+                m_LeaveConfirmUntil = 0;
+                m_LeaveArmedDissolve = false;
+                SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP");
+            }
+        }
+
+        bool territoryStale = false;
+        if (m_SeenFlagProgress != LFPG_ClientGroupCache.s_FlagRaiseProgress)
+        {
+            territoryStale = true;
+        }
+        if (m_SeenTier != LFPG_ClientGroupCache.s_Tier)
+        {
+            territoryStale = true;
+        }
+        if (territoryStale)
+        {
+            ApplyTerritoryStatus();
+        }
+
+        if (!MemberRows)
+            return;
+
+        int rowCount = MemberRows.Count();
+        int rowIndex;
+        for (rowIndex = 0; rowIndex < rowCount; rowIndex = rowIndex + 1)
+        {
+            LFPG_MemberRowView rowView = MemberRows.Get(rowIndex);
+            if (rowView)
+            {
+                rowView.ExpireConfirm(nowMs);
+            }
+        }
+    }
+
     // Below 75% stays the layout green. From 75% amber. At the cap, red.
     protected void ApplyFurnitureColor(int deployedCount, int deployMax)
     {
@@ -226,20 +279,21 @@ class LFPG_GroupPanelController extends ViewController
             return;
 
         int color = ARGB(255, 128, 153, 128);
-        if (deployMax > 0)
+        if (deployMax <= 0)
         {
-            if (deployedCount >= deployMax)
+            color = ARGB(255, 210, 70, 70);
+        }
+        else if (deployedCount >= deployMax)
+        {
+            color = ARGB(255, 210, 70, 70);
+        }
+        else
+        {
+            int usedScaled = deployedCount * 100;
+            int amberAt = deployMax * 75;
+            if (usedScaled >= amberAt)
             {
-                color = ARGB(255, 210, 70, 70);
-            }
-            else
-            {
-                int usedScaled = deployedCount * 100;
-                int amberAt = deployMax * 75;
-                if (usedScaled >= amberAt)
-                {
-                    color = ARGB(255, 214, 160, 48);
-                }
+                color = ARGB(255, 214, 160, 48);
             }
         }
         furnitureWidget.SetColor(color);
@@ -286,11 +340,18 @@ class LFPG_GroupPanelController extends ViewController
                 leaveArmed = true;
             }
         }
+        bool lastMemberNow = false;
+        if (LFPG_ClientGroupCache.s_MemberCount <= 1)
+        {
+            lastMemberNow = true;
+        }
+
         if (!leaveArmed)
         {
             m_LeaveConfirmUntil = nowLeave + 3000;
+            m_LeaveArmedDissolve = lastMemberNow;
             string confirmId = "#STR_LFPG_UI_CONFIRM_LEAVE";
-            if (LFPG_ClientGroupCache.s_MemberCount <= 1)
+            if (lastMemberNow)
             {
                 confirmId = "#STR_LFPG_UI_CONFIRM_DISSOLVE";
             }
@@ -298,7 +359,20 @@ class LFPG_GroupPanelController extends ViewController
             return true;
         }
 
+        // Armed as a normal leave, but this player is now the last member.
+        if (lastMemberNow)
+        {
+            if (!m_LeaveArmedDissolve)
+            {
+                m_LeaveConfirmUntil = nowLeave + 3000;
+                m_LeaveArmedDissolve = true;
+                SetLeaveCaption("#STR_LFPG_UI_CONFIRM_DISSOLVE");
+                return true;
+            }
+        }
+
         m_LeaveConfirmUntil = 0;
+        m_LeaveArmedDissolve = false;
         SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP");
 
         ScriptRPC rpc = new ScriptRPC();
@@ -358,7 +432,21 @@ class LFPG_GroupPanel extends ScriptViewMenu
 
     override bool UseUpdateLoop()
     {
-        return false;
+        // Flag raise progress is written on the client without an RPC.
+        return true;
+    }
+
+    override void Update(float dt)
+    {
+        if (!GetGame())
+            return;
+
+        LFPG_GroupPanelController openCtrl = LFPG_GroupPanelController.Cast(GetController());
+        if (!openCtrl)
+            return;
+
+        int nowMs = GetGame().GetTime();
+        openCtrl.TickOpenPanel(nowMs);
     }
 
     override bool UseMouse()

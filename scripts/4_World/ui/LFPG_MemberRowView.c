@@ -144,6 +144,27 @@ class LFPG_MemberRowController extends ViewController
         return true;
     }
 
+    // Called from the open panel tick. Restores the label after the window.
+    void ExpireConfirm(int nowMs)
+    {
+        if (m_KickConfirmUntil > 0)
+        {
+            if (nowMs > m_KickConfirmUntil)
+            {
+                m_KickConfirmUntil = 0;
+                SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+            }
+        }
+        if (m_TransferConfirmUntil > 0)
+        {
+            if (nowMs > m_TransferConfirmUntil)
+            {
+                m_TransferConfirmUntil = 0;
+                SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+            }
+        }
+    }
+
     // Relay_Command: expulsar. Second click within 3s sends the RPC.
     bool OnKickExecute(ButtonCommandArgs args)
     {
@@ -210,6 +231,16 @@ class LFPG_MemberRowView extends ScriptView
     LFPG_MemberRowController GetRowController()
     {
         return LFPG_MemberRowController.Cast(GetController());
+    }
+
+    // Panel tick. The controller owns the confirm window.
+    void ExpireConfirm(int nowMs)
+    {
+        LFPG_MemberRowController rowCtrl = GetRowController();
+        if (rowCtrl)
+        {
+            rowCtrl.ExpireConfirm(nowMs);
+        }
     }
 
     void SetMemberData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
