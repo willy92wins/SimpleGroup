@@ -131,6 +131,9 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
 {
     protected static ref LFPG_GroupNameDialog s_Instance;
 
+    // Close() deletes on a later GUI tick. A second Close in that window double-frees.
+    protected bool m_CloseRequested;
+
     void LFPG_GroupNameDialog()
     {
         s_Instance = this;
@@ -189,6 +192,24 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
         return s_Instance;
     }
 
+    static void DestroyInstance()
+    {
+        if (s_Instance)
+        {
+            s_Instance.RequestCloseOnce();
+        }
+    }
+
+    // ScriptViewMenu.Close schedules delete. Ignore a second request.
+    void RequestCloseOnce()
+    {
+        if (m_CloseRequested)
+            return;
+
+        m_CloseRequested = true;
+        Close();
+    }
+
     static void Open(string groupID, LFPG_FlagBase flag)
     {
         // Crear nuevo diálogo (ScriptViewMenu se registra con UIManager)
@@ -222,7 +243,7 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
 
     void CloseDialog()
     {
-        Close();
+        RequestCloseOnce();
     }
 
     // FIX AUDIT: Forzar carga de imagen procedural en backgrounds

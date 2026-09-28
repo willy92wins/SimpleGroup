@@ -22,6 +22,10 @@ class LFPG_MemberRowController extends ViewController
     bool m_IsSelf;
     bool m_IsOnline;
 
+    // Second click must arrive before this mission time (ms). 0 means not armed.
+    protected int m_KickConfirmUntil;
+    protected int m_TransferConfirmUntil;
+
     // Buttons (loaded by LoadWidgetsAsVariables)
     ButtonWidget BtnTransfer;
     ButtonWidget BtnKick;
@@ -34,10 +38,18 @@ class LFPG_MemberRowController extends ViewController
         m_IsLeader = false;
         m_IsSelf = false;
         m_IsOnline = false;
+        m_KickConfirmUntil = 0;
+        m_TransferConfirmUntil = 0;
     }
 
     void SetData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
     {
+        bool sameMember = false;
+        if (m_MemberUID == uid)
+        {
+            sameMember = true;
+        }
+
         m_MemberUID = uid;
         m_IsLeader = isLeader;
         m_IsSelf = isLocalPlayer;
@@ -78,24 +90,86 @@ class LFPG_MemberRowController extends ViewController
 
         // Indicador online/offline
         m_IsOnline = isOnline;
+
+        // A recycled row must not keep the previous member's confirm.
+        if (!sameMember)
+        {
+            m_KickConfirmUntil = 0;
+            m_TransferConfirmUntil = 0;
+            SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+            SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+        }
     }
 
-    // Relay_Command: transferir liderazgo a este miembro
+    protected void SetCaption(string widgetName, string stringId)
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        TextWidget caption = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(widgetName));
+        if (!caption)
+            return;
+
+        string shown = Widget.TranslateString(stringId);
+        caption.SetText(shown);
+    }
+
+    // Relay_Command: transferir liderazgo. Second click within 3s sends the RPC.
     bool OnTransferExecute(ButtonCommandArgs args)
     {
         if (m_MemberUID == "")
             return false;
+        if (!GetGame())
+            return false;
 
+        int nowTransfer = GetGame().GetTime();
+        bool transferArmed = false;
+        if (m_TransferConfirmUntil > 0)
+        {
+            if (nowTransfer <= m_TransferConfirmUntil)
+            {
+                transferArmed = true;
+            }
+        }
+        if (!transferArmed)
+        {
+            m_TransferConfirmUntil = nowTransfer + 3000;
+            SetCaption("BtnTransferLabel", "#STR_LFPG_UI_CONFIRM_TRANSFER");
+            return true;
+        }
+
+        m_TransferConfirmUntil = 0;
+        SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_TRANSFER, m_MemberUID);
         return true;
     }
 
-    // Relay_Command: expulsar a este miembro
+    // Relay_Command: expulsar. Second click within 3s sends the RPC.
     bool OnKickExecute(ButtonCommandArgs args)
     {
         if (m_MemberUID == "")
             return false;
+        if (!GetGame())
+            return false;
 
+        int nowKick = GetGame().GetTime();
+        bool kickArmed = false;
+        if (m_KickConfirmUntil > 0)
+        {
+            if (nowKick <= m_KickConfirmUntil)
+            {
+                kickArmed = true;
+            }
+        }
+        if (!kickArmed)
+        {
+            m_KickConfirmUntil = nowKick + 3000;
+            SetCaption("BtnKickLabel", "#STR_LFPG_UI_CONFIRM_KICK");
+            return true;
+        }
+
+        m_KickConfirmUntil = 0;
+        SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_KICK, m_MemberUID);
         return true;
     }

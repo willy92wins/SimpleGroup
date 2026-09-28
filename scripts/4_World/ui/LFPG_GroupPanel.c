@@ -20,9 +20,13 @@ class LFPG_GroupPanelController extends ViewController
     // Bindings (Binding_Name en layout debe coincidir EXACTAMENTE)
     string GroupName;
     string TierLabel;
+    string TerritoryStatus;
     string DeployInfo;
     string DeployCount;
     string GardenCount;
+
+    // Second click of Leave must arrive before this mission time (ms).
+    protected int m_LeaveConfirmUntil;
 
     // ObservableCollection bindeada al WrapSpacer "MemberList"
     ref ObservableCollection<LFPG_MemberRowView> MemberRows;
@@ -31,9 +35,11 @@ class LFPG_GroupPanelController extends ViewController
     {
         GroupName = "";
         TierLabel = "";
+        TerritoryStatus = "";
         DeployInfo = "";
         DeployCount = "";
         GardenCount = "";
+        m_LeaveConfirmUntil = 0;
         MemberRows = new ObservableCollection<LFPG_MemberRowView>(this);
     }
 
@@ -63,26 +69,32 @@ class LFPG_GroupPanelController extends ViewController
         string propTier = "TierLabel";
         NotifyPropertyChanged(propTier);
 
-        // Member count info
-        string memberStr = "";
+        ApplyTerritoryStatus();
+
+        string membersLabel = Widget.TranslateString("#STR_LFPG_UI_MEMBERS");
+        string memberStr = membersLabel;
+        memberStr = memberStr + " ";
         memberStr = memberStr + LFPG_ClientGroupCache.s_MemberCount.ToString();
-        memberStr = memberStr + " / ";
+        memberStr = memberStr + "/";
         memberStr = memberStr + LFPG_ClientGroupCache.s_MaxGroupSize.ToString();
         DeployInfo = memberStr;
         string propDeploy = "DeployInfo";
         NotifyPropertyChanged(propDeploy);
 
-        // Deploy count (solo numeros, la etiqueta viene del layout con #STR_)
-        string deployStr = "";
+        string furnitureLabel = Widget.TranslateString("#STR_LFPG_UI_FURNITURE");
+        string deployStr = furnitureLabel;
+        deployStr = deployStr + " ";
         deployStr = deployStr + LFPG_ClientGroupCache.s_DeployedCount.ToString();
         deployStr = deployStr + "/";
         deployStr = deployStr + LFPG_ClientGroupCache.s_DeployMax.ToString();
         DeployCount = deployStr;
         string propDeployCount = "DeployCount";
         NotifyPropertyChanged(propDeployCount);
+        ApplyFurnitureColor(LFPG_ClientGroupCache.s_DeployedCount, LFPG_ClientGroupCache.s_DeployMax);
 
-        // Garden count (solo numeros, la etiqueta viene del layout con #STR_)
-        string gardenStr = "";
+        string plotsLabel = Widget.TranslateString("#STR_LFPG_UI_PLOTS");
+        string gardenStr = plotsLabel;
+        gardenStr = gardenStr + " ";
         gardenStr = gardenStr + LFPG_ClientGroupCache.s_GardenPlotCount.ToString();
         gardenStr = gardenStr + "/";
         gardenStr = gardenStr + LFPG_ClientGroupCache.s_GardenPlotMax.ToString();
@@ -152,27 +164,145 @@ class LFPG_GroupPanelController extends ViewController
         }
     }
 
-    // Relay_Command: abandonar grupo
-    // Envia via PlayerBase (funciona desde cualquier distancia, no requiere estar cerca de flag)
+    // Tier, radius and flag raise. Progress 0 means the territory is inactive.
+    protected void ApplyTerritoryStatus()
+    {
+        bool flagDown = false;
+        if (LFPG_ClientGroupCache.s_FlagRaiseProgress <= 0.0)
+        {
+            flagDown = true;
+        }
+
+        if (flagDown)
+        {
+            TerritoryStatus = Widget.TranslateString("#STR_LFPG_UI_FLAG_DOWN");
+        }
+        else
+        {
+            float radiusFloat = Math.Sqrt(LFPG_ClientGroupCache.s_BuildRadiusSq);
+            int radiusM = radiusFloat;
+            float pctFloat = LFPG_ClientGroupCache.s_FlagRaiseProgress * 100.0;
+            int pct = pctFloat;
+            string territory = "T";
+            territory = territory + LFPG_ClientGroupCache.s_Tier.ToString();
+            territory = territory + "  ";
+            territory = territory + radiusM.ToString();
+            territory = territory + "m  ";
+            territory = territory + pct.ToString();
+            territory = territory + "%";
+            TerritoryStatus = territory;
+        }
+
+        string propTerritory = "TerritoryStatus";
+        NotifyPropertyChanged(propTerritory);
+
+        if (!m_LayoutRoot)
+            return;
+
+        string territoryWidgetName = "TerritoryText";
+        TextWidget territoryWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(territoryWidgetName));
+        if (!territoryWidget)
+            return;
+
+        if (flagDown)
+        {
+            territoryWidget.SetColor(ARGB(255, 210, 70, 70));
+        }
+        else
+        {
+            territoryWidget.SetColor(ARGB(255, 153, 153, 153));
+        }
+    }
+
+    // Below 75% stays the layout green. From 75% amber. At the cap, red.
+    protected void ApplyFurnitureColor(int deployedCount, int deployMax)
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string furnitureWidgetName = "DeployCountText";
+        TextWidget furnitureWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(furnitureWidgetName));
+        if (!furnitureWidget)
+            return;
+
+        int color = ARGB(255, 128, 153, 128);
+        if (deployMax > 0)
+        {
+            if (deployedCount >= deployMax)
+            {
+                color = ARGB(255, 210, 70, 70);
+            }
+            else
+            {
+                int usedScaled = deployedCount * 100;
+                int amberAt = deployMax * 75;
+                if (usedScaled >= amberAt)
+                {
+                    color = ARGB(255, 214, 160, 48);
+                }
+            }
+        }
+        furnitureWidget.SetColor(color);
+    }
+
+    protected void SetLeaveCaption(string stringId)
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string leaveTextName = "BtnLeaveText";
+        TextWidget leaveText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveTextName));
+        if (!leaveText)
+            return;
+
+        string shown = Widget.TranslateString(stringId);
+        leaveText.SetText(shown);
+    }
+
+    // Relay_Command: header close. One request per instance.
+    bool OnCloseExecute(ButtonCommandArgs args)
+    {
+        LFPG_GroupPanel.DestroyInstance();
+        return true;
+    }
+
+    // Relay_Command: abandonar grupo. Second click within 3s sends the RPC.
+    // The cache stays until the server answers; GROUP_DISSOLVED closes the panel.
     bool OnLeaveExecute(ButtonCommandArgs args)
     {
         PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
         if (!player)
             return false;
 
-        ScriptRPC rpc = new ScriptRPC();
-        rpc.Send(player, LFPG_RPC_C2S_REQUEST_LEAVE, true, null);
+        if (!GetGame())
+            return false;
 
-        // FIX AUDIT: Limpiar cache optimisticamente para evitar estado stale
-        // Si el server rechaza el leave, el proximo sync restaurara los datos
-        LFPG_ClientGroupCache.Clear();
-
-        LFPG_GroupPanel panel = LFPG_GroupPanel.GetInstance();
-        if (panel)
+        int nowLeave = GetGame().GetTime();
+        bool leaveArmed = false;
+        if (m_LeaveConfirmUntil > 0)
         {
-            panel.Close();
+            if (nowLeave <= m_LeaveConfirmUntil)
+            {
+                leaveArmed = true;
+            }
+        }
+        if (!leaveArmed)
+        {
+            m_LeaveConfirmUntil = nowLeave + 3000;
+            string confirmId = "#STR_LFPG_UI_CONFIRM_LEAVE";
+            if (LFPG_ClientGroupCache.s_MemberCount <= 1)
+            {
+                confirmId = "#STR_LFPG_UI_CONFIRM_DISSOLVE";
+            }
+            SetLeaveCaption(confirmId);
+            return true;
         }
 
+        m_LeaveConfirmUntil = 0;
+        SetLeaveCaption("#STR_LFPG_UI_LEAVE_GROUP");
+
+        ScriptRPC rpc = new ScriptRPC();
+        rpc.Send(player, LFPG_RPC_C2S_REQUEST_LEAVE, true, null);
         return true;
     }
 };
@@ -185,6 +315,13 @@ class LFPG_GroupPanelController extends ViewController
 class LFPG_GroupPanel extends ScriptViewMenu
 {
     protected static ref LFPG_GroupPanel s_Instance;
+
+    // Close() deletes on a later GUI tick. A second Close in that window double-frees.
+    protected bool m_CloseRequested;
+
+    // Tooltip body built on hover. Not allocated per frame.
+    protected string m_TooltipBody;
+    protected int m_TooltipLines;
 
     void LFPG_GroupPanel()
     {
@@ -272,57 +409,38 @@ class LFPG_GroupPanel extends ScriptViewMenu
             return false;
 
         string textName = "TooltipText";
-        TextWidget tooltipText = TextWidget.Cast(root.FindAnyWidget(textName));
+        MultilineTextWidget tooltipText = MultilineTextWidget.Cast(root.FindAnyWidget(textName));
         if (!tooltipText)
             return false;
 
         string bgName = "TooltipBg";
         Widget tooltipBg = root.FindAnyWidget(bgName);
 
-        // Construir texto con nombres del cache
-        string content = "";
-        int itemCount = 0;
-
-        if (isDeploy && LFPG_ClientGroupCache.s_DeployedItemNames)
+        m_TooltipBody = "";
+        m_TooltipLines = 0;
+        if (isDeploy)
         {
-            itemCount = LFPG_ClientGroupCache.s_DeployedItemNames.Count();
-            int d;
-            for (d = 0; d < itemCount; d = d + 1)
-            {
-                if (d > 0)
-                {
-                    content = content + "\n";
-                }
-                content = content + LFPG_ClientGroupCache.s_DeployedItemNames[d];
-            }
+            BuildGroupedTooltip(LFPG_ClientGroupCache.s_DeployedItemNames);
         }
-        else if (isGarden && LFPG_ClientGroupCache.s_GardenItemNames)
+        else if (isGarden)
         {
-            itemCount = LFPG_ClientGroupCache.s_GardenItemNames.Count();
-            int g;
-            for (g = 0; g < itemCount; g = g + 1)
-            {
-                if (g > 0)
-                {
-                    content = content + "\n";
-                }
-                content = content + LFPG_ClientGroupCache.s_GardenItemNames[g];
-            }
+            BuildGroupedTooltip(LFPG_ClientGroupCache.s_GardenItemNames);
         }
 
-        if (itemCount == 0)
+        string tooltipShown = m_TooltipBody;
+        int lineCount = m_TooltipLines;
+        if (lineCount == 0)
         {
-            string emptyStr = "#STR_LFPG_UI_TOOLTIP_EMPTY";
-            content = emptyStr;
-            itemCount = 1;
+            tooltipShown = Widget.TranslateString("#STR_LFPG_UI_TOOLTIP_EMPTY");
+            lineCount = 1;
         }
 
-        tooltipText.SetText(content);
+        tooltipText.SetText(tooltipShown);
 
-        // Ajustar altura del tooltip (14px por linea + 8px padding)
+        // One row per grouped line, plus padding.
         float lineHeight = 14.0;
         float padding = 8.0;
-        float tooltipHeight = (itemCount * lineHeight) + padding;
+        float tooltipHeight = (lineCount * lineHeight) + padding;
         tooltip.SetSize(244.0, tooltipHeight);
         if (tooltipBg)
         {
@@ -370,7 +488,7 @@ class LFPG_GroupPanel extends ScriptViewMenu
     {
         if (s_Instance)
         {
-            s_Instance.Close();
+            s_Instance.RequestCloseOnce();
             return;
         }
 
@@ -417,8 +535,66 @@ class LFPG_GroupPanel extends ScriptViewMenu
     {
         if (s_Instance)
         {
-            s_Instance.Close();
+            s_Instance.RequestCloseOnce();
         }
+    }
+
+    // ScriptViewMenu.Close schedules delete. Ignore a second request.
+    void RequestCloseOnce()
+    {
+        if (m_CloseRequested)
+            return;
+
+        m_CloseRequested = true;
+        Close();
+    }
+
+    // Collapse duplicate item names into "Name x3", one entry per line.
+    protected void BuildGroupedTooltip(array<string> names)
+    {
+        m_TooltipBody = "";
+        m_TooltipLines = 0;
+        if (!names)
+            return;
+
+        array<string> uniqueNames = new array<string>;
+        array<int> uniqueCounts = new array<int>;
+        int nameCount = names.Count();
+        int n;
+        for (n = 0; n < nameCount; n = n + 1)
+        {
+            string oneName = names[n];
+            int found = uniqueNames.Find(oneName);
+            if (found >= 0)
+            {
+                int prevCount = uniqueCounts[found];
+                uniqueCounts[found] = prevCount + 1;
+            }
+            else
+            {
+                uniqueNames.Insert(oneName);
+                uniqueCounts.Insert(1);
+            }
+        }
+
+        int uniqueTotal = uniqueNames.Count();
+        int u;
+        for (u = 0; u < uniqueTotal; u = u + 1)
+        {
+            if (u > 0)
+            {
+                m_TooltipBody = m_TooltipBody + "\n";
+            }
+            string line = uniqueNames[u];
+            int copies = uniqueCounts[u];
+            if (copies > 1)
+            {
+                line = line + " x";
+                line = line + copies.ToString();
+            }
+            m_TooltipBody = m_TooltipBody + line;
+        }
+        m_TooltipLines = uniqueTotal;
     }
 
     // Posicionar panel en esquina superior derecha

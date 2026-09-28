@@ -640,10 +640,19 @@ class LFPG_ClientGroupCache
             s_GardenItemNames.Insert(gName);
         }
 
-        // Actualizar raise progress desde la bandera si esta disponible
+        // Full sync through PlayerBase carries no flag entity and no raise
+        // field. A flag already in the bubble still has the synced progress.
         if (flag)
         {
             s_FlagRaiseProgress = flag.m_RaiseProgressNet;
+        }
+        else
+        {
+            LFPG_FlagBase streamedFlag = FindLocalGroupFlag();
+            if (streamedFlag)
+            {
+                s_FlagRaiseProgress = streamedFlag.m_RaiseProgressNet;
+            }
         }
 
         // Notificar al panel si esta abierto
