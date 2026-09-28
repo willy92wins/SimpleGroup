@@ -2,9 +2,8 @@
 // LFPG_GroupPanel.c - 4_World/ui
 // Group panel. ScriptViewMenu with cursor and input. The open key is rebindable.
 //
-// The layout anchors the panel on the screen and paints its own backgrounds.
-// Dabs MVC binds GroupName, TerritoryStatus, FlagLabel, FlagPercent,
-// MembersValue, FurnitureValue and GardenValue. MemberRows fills the member list.
+// The layout anchors the panel and paints the window. Dabs MVC binds GroupName,
+// TerritoryStatus and MemberRows. TerritoryStatus is the tier line only.
 // ============================================================================
 
 class LFPG_GroupPanelController extends ViewController
@@ -12,45 +11,33 @@ class LFPG_GroupPanelController extends ViewController
     // Bindings (Binding_Name en layout debe coincidir EXACTAMENTE)
     string GroupName;
     string TerritoryStatus;
-    string FlagLabel;
-    string FlagPercent;
-    string MembersValue;
-    string FurnitureValue;
-    string GardenValue;
 
-    static const int COLOR_TEXT = ARGB(255, 236, 236, 236);
-    static const int COLOR_TEXT2 = ARGB(255, 154, 154, 154);
-    static const int COLOR_AMBER = ARGB(255, 214, 160, 48);
-    static const int COLOR_RED = ARGB(255, 210, 70, 70);
-    static const int COLOR_GREEN = ARGB(255, 106, 159, 74);
-    static const int COLOR_NEUTRAL_FILL = ARGB(255, 140, 140, 140);
-    static const int COLOR_LEAVE = ARGB(255, 90, 31, 27);
-    static const int COLOR_LEAVE_ARMED = ARGB(255, 138, 42, 36);
+    static const int BTN_IDLE = ARGB(0, 0, 0, 0);
+    static const int BTN_HOT = ARGB(255, 255, 0, 0);
+    static const int ICON = ARGB(255, 160, 160, 160);
+    static const int ICON_HOT = ARGB(255, 255, 255, 255);
 
     // Second click of Leave must arrive before this mission time (ms).
     protected int m_LeaveConfirmUntil;
     // True when the armed Leave caption is the dissolve warning.
     protected bool m_LeaveArmedDissolve;
-    // Last cache values painted on TerritoryText. The flag sync writes the
-    // cache without an RPC, so the open panel compares these each tick.
-    protected float m_SeenFlagProgress;
+    // Leave fill is hot while this is set or the pointer is over the button.
+    protected bool m_LeaveArmed;
+    protected bool m_LeaveHover;
+    // Last tier painted on TerritoryText. The open panel compares it each tick.
     protected int m_SeenTier;
 
-    // ObservableCollection bindeada al WrapSpacer "MemberList"
+    // ObservableCollection bound to MemberList.
     ref ObservableCollection<LFPG_MemberRowView> MemberRows;
 
     void LFPG_GroupPanelController()
     {
         GroupName = "";
         TerritoryStatus = "";
-        FlagLabel = "";
-        FlagPercent = "";
-        MembersValue = "";
-        FurnitureValue = "";
-        GardenValue = "";
         m_LeaveConfirmUntil = 0;
         m_LeaveArmedDissolve = false;
-        m_SeenFlagProgress = -1.0;
+        m_LeaveArmed = false;
+        m_LeaveHover = false;
         m_SeenTier = -1;
         MemberRows = new ObservableCollection<LFPG_MemberRowView>(this);
     }
@@ -83,30 +70,6 @@ class LFPG_GroupPanelController extends ViewController
         NotifyPropertyChanged(propName);
 
         ApplyTerritoryStatus();
-
-        string memberStr = LFPG_ClientGroupCache.s_MemberCount.ToString();
-        memberStr = memberStr + "/";
-        memberStr = memberStr + LFPG_ClientGroupCache.s_MaxGroupSize.ToString();
-        MembersValue = memberStr;
-        string propMembers = "MembersValue";
-        NotifyPropertyChanged(propMembers);
-        ApplyLimit("MembersValueText", "MembersBarFill", LFPG_ClientGroupCache.s_MemberCount, LFPG_ClientGroupCache.s_MaxGroupSize, false);
-
-        string deployStr = LFPG_ClientGroupCache.s_DeployedCount.ToString();
-        deployStr = deployStr + "/";
-        deployStr = deployStr + LFPG_ClientGroupCache.s_DeployMax.ToString();
-        FurnitureValue = deployStr;
-        string propFurniture = "FurnitureValue";
-        NotifyPropertyChanged(propFurniture);
-        ApplyLimit("FurnitureValueText", "FurnitureBarFill", LFPG_ClientGroupCache.s_DeployedCount, LFPG_ClientGroupCache.s_DeployMax, true);
-
-        string gardenStr = LFPG_ClientGroupCache.s_GardenPlotCount.ToString();
-        gardenStr = gardenStr + "/";
-        gardenStr = gardenStr + LFPG_ClientGroupCache.s_GardenPlotMax.ToString();
-        GardenValue = gardenStr;
-        string propGarden = "GardenValue";
-        NotifyPropertyChanged(propGarden);
-        ApplyLimit("GardenValueText", "GardenBarFill", LFPG_ClientGroupCache.s_GardenPlotCount, LFPG_ClientGroupCache.s_GardenPlotMax, true);
 
         // Refrescar member rows
         RefreshMemberRows();
@@ -170,164 +133,19 @@ class LFPG_GroupPanelController extends ViewController
         }
     }
 
-    // Tier and radius stay visible. Flag label and bar follow raise progress.
+    // Tier only. The radius and the flag progress are not shown here.
     protected void ApplyTerritoryStatus()
     {
-        float radiusFloat = Math.Sqrt(LFPG_ClientGroupCache.s_BuildRadiusSq);
-        int radiusM = radiusFloat;
         string tierStr = LFPG_ClientGroupCache.s_Tier.ToString();
-        string radiusStr = radiusM.ToString();
         string territoryFmt = Widget.TranslateString("#STR_LFPG_UI_TERRITORY_FMT");
-        TerritoryStatus = string.Format(territoryFmt, tierStr, radiusStr);
-
-        bool flagDown = false;
-        if (LFPG_ClientGroupCache.s_FlagRaiseProgress <= 0.0)
-        {
-            flagDown = true;
-        }
-
-        float progress = LFPG_ClientGroupCache.s_FlagRaiseProgress;
-        if (progress < 0.0)
-        {
-            progress = 0.0;
-        }
-        if (progress > 1.0)
-        {
-            progress = 1.0;
-        }
-
-        if (flagDown)
-        {
-            FlagLabel = Widget.TranslateString("#STR_LFPG_UI_FLAG_DOWN");
-            FlagPercent = "";
-        }
-        else
-        {
-            FlagLabel = Widget.TranslateString("#STR_LFPG_UI_FLAG_RAISED");
-            float pctFloat = progress * 100.0;
-            int pct = pctFloat;
-            FlagPercent = pct.ToString();
-            FlagPercent = FlagPercent + "%";
-        }
+        TerritoryStatus = string.Format(territoryFmt, tierStr);
 
         string propTerritory = "TerritoryStatus";
         NotifyPropertyChanged(propTerritory);
-        string propFlagLabel = "FlagLabel";
-        NotifyPropertyChanged(propFlagLabel);
-        string propFlagPercent = "FlagPercent";
-        NotifyPropertyChanged(propFlagPercent);
-        m_SeenFlagProgress = LFPG_ClientGroupCache.s_FlagRaiseProgress;
         m_SeenTier = LFPG_ClientGroupCache.s_Tier;
-
-        if (!m_LayoutRoot)
-            return;
-
-        string flagLabelName = "FlagLabelText";
-        TextWidget flagLabelWidget = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(flagLabelName));
-        string flagFillName = "FlagBarFill";
-        Widget flagFill = m_LayoutRoot.FindAnyWidget(flagFillName);
-
-        if (flagDown)
-        {
-            if (flagLabelWidget)
-            {
-                flagLabelWidget.SetColor(COLOR_RED);
-            }
-            if (flagFill)
-            {
-                flagFill.Show(false);
-            }
-        }
-        else
-        {
-            if (flagLabelWidget)
-            {
-                flagLabelWidget.SetColor(COLOR_TEXT2);
-            }
-            int barColor = COLOR_RED;
-            if (progress >= 0.25)
-            {
-                barColor = COLOR_GREEN;
-            }
-            else if (progress >= 0.10)
-            {
-                barColor = COLOR_AMBER;
-            }
-            if (flagFill)
-            {
-                float barW = 308.0 * progress;
-                flagFill.SetSize(barW, 6.0);
-                flagFill.SetColor(barColor);
-                flagFill.Show(true);
-            }
-        }
     }
 
-    // Members never warn. Furniture and gardens warn from 75 percent and at the cap.
-    protected void ApplyLimit(string valueWidget, string fillWidget, int count, int max, bool warn)
-    {
-        float fillW = 97.0;
-        if (max > 0)
-        {
-            fillW = 97.0 * count;
-            fillW = fillW / max;
-        }
-        if (fillW < 0.0)
-        {
-            fillW = 0.0;
-        }
-        if (fillW > 97.0)
-        {
-            fillW = 97.0;
-        }
-
-        int valueColor = COLOR_TEXT;
-        int fillColor = COLOR_NEUTRAL_FILL;
-        if (warn)
-        {
-            bool atCap = false;
-            if (max <= 0)
-            {
-                atCap = true;
-            }
-            if (count >= max)
-            {
-                atCap = true;
-            }
-            if (atCap)
-            {
-                valueColor = COLOR_RED;
-                fillColor = COLOR_RED;
-            }
-            else
-            {
-                int usedScaled = count * 100;
-                int amberAt = max * 75;
-                if (usedScaled >= amberAt)
-                {
-                    valueColor = COLOR_AMBER;
-                    fillColor = COLOR_AMBER;
-                }
-            }
-        }
-
-        if (!m_LayoutRoot)
-            return;
-
-        TextWidget valueText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(valueWidget));
-        if (valueText)
-        {
-            valueText.SetColor(valueColor);
-        }
-        Widget fill = m_LayoutRoot.FindAnyWidget(fillWidget);
-        if (fill)
-        {
-            fill.SetSize(fillW, 3.0);
-            fill.SetColor(fillColor);
-        }
-    }
-
-    // Flag sync and an expired Leave confirm. No allocations.
+    // Expired Leave confirm and a tier change. No allocations.
     void TickOpenPanel(int nowMs)
     {
         if (m_LeaveConfirmUntil > 0)
@@ -340,16 +158,7 @@ class LFPG_GroupPanelController extends ViewController
             }
         }
 
-        bool territoryStale = false;
-        if (m_SeenFlagProgress != LFPG_ClientGroupCache.s_FlagRaiseProgress)
-        {
-            territoryStale = true;
-        }
         if (m_SeenTier != LFPG_ClientGroupCache.s_Tier)
-        {
-            territoryStale = true;
-        }
-        if (territoryStale)
         {
             ApplyTerritoryStatus();
         }
@@ -371,30 +180,120 @@ class LFPG_GroupPanelController extends ViewController
 
     protected void SetLeaveCaption(string stringId, bool armed)
     {
+        if (m_LayoutRoot)
+        {
+            string leaveTextName = "BtnLeaveText";
+            TextWidget leaveText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveTextName));
+            if (leaveText)
+            {
+                string shown = Widget.TranslateString(stringId);
+                leaveText.SetText(shown);
+            }
+        }
+
+        m_LeaveArmed = armed;
+        PaintLeaveButton();
+    }
+
+    // Hot while the confirm is armed or the pointer is over the button.
+    protected void PaintLeaveButton()
+    {
         if (!m_LayoutRoot)
             return;
 
-        string leaveTextName = "BtnLeaveText";
-        TextWidget leaveText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveTextName));
-        if (leaveText)
-        {
-            string shown = Widget.TranslateString(stringId);
-            leaveText.SetText(shown);
-        }
+        string leavePanelName = "BtnLeavePanel";
+        Widget leavePanel = m_LayoutRoot.FindAnyWidget(leavePanelName);
+        if (!leavePanel)
+            return;
 
-        string leaveBtnName = "BtnLeave";
-        ButtonWidget leaveBtn = ButtonWidget.Cast(m_LayoutRoot.FindAnyWidget(leaveBtnName));
-        if (leaveBtn)
+        bool leaveHot = false;
+        if (m_LeaveArmed)
         {
-            if (armed)
+            leaveHot = true;
+        }
+        if (m_LeaveHover)
+        {
+            leaveHot = true;
+        }
+        if (leaveHot)
+        {
+            leavePanel.SetColor(BTN_HOT);
+        }
+        else
+        {
+            leavePanel.SetColor(BTN_IDLE);
+        }
+    }
+
+    // Close has no confirm. The pointer alone chooses the fill and the icon.
+    protected void PaintCloseButton(bool hot)
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string closePanelName = "BtnClosePanel";
+        Widget closePanel = m_LayoutRoot.FindAnyWidget(closePanelName);
+        if (closePanel)
+        {
+            if (hot)
             {
-                leaveBtn.SetColor(COLOR_LEAVE_ARMED);
+                closePanel.SetColor(BTN_HOT);
             }
             else
             {
-                leaveBtn.SetColor(COLOR_LEAVE);
+                closePanel.SetColor(BTN_IDLE);
             }
         }
+
+        string closeIconName = "BtnCloseIcon";
+        Widget closeIcon = m_LayoutRoot.FindAnyWidget(closeIconName);
+        if (closeIcon)
+        {
+            if (hot)
+            {
+                closeIcon.SetColor(ICON_HOT);
+            }
+            else
+            {
+                closeIcon.SetColor(ICON);
+            }
+        }
+    }
+
+    override bool OnMouseEnter(Widget w, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string enteredName = w.GetName();
+        if (enteredName == "BtnLeave")
+        {
+            m_LeaveHover = true;
+            PaintLeaveButton();
+        }
+        else if (enteredName == "BtnClose")
+        {
+            PaintCloseButton(true);
+        }
+        return false;
+    }
+
+    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string leftName = w.GetName();
+        if (leftName == "BtnLeave")
+        {
+            m_LeaveHover = false;
+            PaintLeaveButton();
+        }
+        else if (leftName == "BtnClose")
+        {
+            PaintCloseButton(false);
+        }
+        return false;
     }
 
     // Relay_Command: header close. One request per instance.
@@ -477,10 +376,6 @@ class LFPG_GroupPanel extends ScriptViewMenu
     // Close() deletes on a later GUI tick. A second Close in that window double-frees.
     protected bool m_CloseRequested;
 
-    // Tooltip body built on hover. Not allocated per frame.
-    protected string m_TooltipBody;
-    protected int m_TooltipLines;
-
     void LFPG_GroupPanel()
     {
         s_Instance = this;
@@ -516,7 +411,7 @@ class LFPG_GroupPanel extends ScriptViewMenu
 
     override bool UseUpdateLoop()
     {
-        // Flag raise progress is written on the client without an RPC.
+        // Leave confirm expiry and a tier change. No per-frame allocation.
         return true;
     }
 
@@ -552,100 +447,6 @@ class LFPG_GroupPanel extends ScriptViewMenu
     {
         // FIX I-17, I-18: bloquear acciones de combate/inventory mientras el panel esta abierto
         return {"menu", "inventory", "firearm", "melee"};
-    }
-
-    // ========================================================================
-    // TOOLTIP HOVER (item names)
-    // Overrides contiguos con los de arriba — regla Enforce #24
-    // ========================================================================
-    override bool OnMouseEnter(Widget w, int x, int y)
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return false;
-
-        string deployZoneName = "FurnitureHoverZone";
-        string gardenZoneName = "GardenHoverZone";
-        Widget deployZone = root.FindAnyWidget(deployZoneName);
-        Widget gardenZone = root.FindAnyWidget(gardenZoneName);
-
-        bool isDeploy = (w == deployZone);
-        bool isGarden = (w == gardenZone);
-
-        if (!isDeploy && !isGarden)
-            return false;
-
-        string tooltipName = "ItemTooltip";
-        Widget tooltip = root.FindAnyWidget(tooltipName);
-        if (!tooltip)
-            return false;
-
-        string textName = "TooltipText";
-        MultilineTextWidget tooltipText = MultilineTextWidget.Cast(root.FindAnyWidget(textName));
-        if (!tooltipText)
-            return false;
-
-        string bgName = "TooltipBg";
-        Widget tooltipBg = root.FindAnyWidget(bgName);
-
-        m_TooltipBody = "";
-        m_TooltipLines = 0;
-        if (isDeploy)
-        {
-            BuildGroupedTooltip(LFPG_ClientGroupCache.s_DeployedItemNames);
-        }
-        else if (isGarden)
-        {
-            BuildGroupedTooltip(LFPG_ClientGroupCache.s_GardenItemNames);
-        }
-
-        string tooltipShown = m_TooltipBody;
-        int lineCount = m_TooltipLines;
-        if (lineCount == 0)
-        {
-            tooltipShown = Widget.TranslateString("#STR_LFPG_UI_TOOLTIP_EMPTY");
-            lineCount = 1;
-        }
-
-        tooltipText.SetText(tooltipShown);
-
-        // One row per grouped line, plus padding.
-        float lineHeight = 20.0;
-        float padding = 12.0;
-        float tooltipHeight = (lineCount * lineHeight) + padding;
-        float textHeight = lineCount * lineHeight;
-        tooltip.SetSize(308.0, tooltipHeight);
-        if (tooltipBg)
-        {
-            tooltipBg.SetSize(308.0, tooltipHeight);
-        }
-        tooltipText.SetSize(288.0, textHeight);
-
-        tooltip.Show(true);
-        return true;
-    }
-
-    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return false;
-
-        // No ocultar si el mouse se mueve a la otra hover zone (evita parpadeo)
-        string deployZoneLeave = "FurnitureHoverZone";
-        string gardenZoneLeave = "GardenHoverZone";
-        Widget deployZoneW = root.FindAnyWidget(deployZoneLeave);
-        Widget gardenZoneW = root.FindAnyWidget(gardenZoneLeave);
-        if (enterW == deployZoneW || enterW == gardenZoneW)
-            return false;
-
-        string tooltipNameLeave = "ItemTooltip";
-        Widget tooltip = root.FindAnyWidget(tooltipNameLeave);
-        if (tooltip)
-        {
-            tooltip.Show(false);
-        }
-        return false;
     }
 
     // ========================================================================
@@ -713,54 +514,6 @@ class LFPG_GroupPanel extends ScriptViewMenu
 
         m_CloseRequested = true;
         Close();
-    }
-
-    // Collapse duplicate item names into "Name x3", one entry per line.
-    protected void BuildGroupedTooltip(array<string> names)
-    {
-        m_TooltipBody = "";
-        m_TooltipLines = 0;
-        if (!names)
-            return;
-
-        array<string> uniqueNames = new array<string>;
-        array<int> uniqueCounts = new array<int>;
-        int nameCount = names.Count();
-        int n;
-        for (n = 0; n < nameCount; n = n + 1)
-        {
-            string oneName = names[n];
-            int found = uniqueNames.Find(oneName);
-            if (found >= 0)
-            {
-                int prevCount = uniqueCounts[found];
-                uniqueCounts[found] = prevCount + 1;
-            }
-            else
-            {
-                uniqueNames.Insert(oneName);
-                uniqueCounts.Insert(1);
-            }
-        }
-
-        int uniqueTotal = uniqueNames.Count();
-        int u;
-        for (u = 0; u < uniqueTotal; u = u + 1)
-        {
-            if (u > 0)
-            {
-                m_TooltipBody = m_TooltipBody + "\n";
-            }
-            string line = uniqueNames[u];
-            int copies = uniqueCounts[u];
-            if (copies > 1)
-            {
-                line = line + " x";
-                line = line + copies.ToString();
-            }
-            m_TooltipBody = m_TooltipBody + line;
-        }
-        m_TooltipLines = uniqueTotal;
     }
 
     // Llamado cuando llega nuevo sync del server

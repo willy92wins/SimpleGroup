@@ -14,15 +14,23 @@ class LFPG_GroupNameDialogController extends ViewController
     string EditGroupName;
     string ErrorMessage;
 
+    static const int BTN_IDLE = ARGB(0, 0, 0, 0);
+    static const int BTN_HOT = ARGB(255, 255, 0, 0);
+
     // Datos internos
     string m_GroupID;
     LFPG_FlagBase m_TargetFlag;
+
+    protected bool m_CancelHover;
+    protected bool m_ConfirmHover;
 
     void LFPG_GroupNameDialogController()
     {
         EditGroupName = "";
         ErrorMessage = "";
         m_GroupID = "";
+        m_CancelHover = false;
+        m_ConfirmHover = false;
     }
 
     // FIX I-19: Destructor limpia m_TargetFlag para evitar ref colgando
@@ -84,6 +92,79 @@ class LFPG_GroupNameDialogController extends ViewController
             dialog.CloseDialog();
         }
         return true;
+    }
+
+    // Cancel and Confirm have no confirm-arm. The pointer alone fills the panel.
+    protected void PaintDialogButtons()
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string cancelPanelName = "BtnCancelPanel";
+        Widget cancelPanel = m_LayoutRoot.FindAnyWidget(cancelPanelName);
+        if (cancelPanel)
+        {
+            if (m_CancelHover)
+            {
+                cancelPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                cancelPanel.SetColor(BTN_IDLE);
+            }
+        }
+
+        string confirmPanelName = "BtnConfirmPanel";
+        Widget confirmPanel = m_LayoutRoot.FindAnyWidget(confirmPanelName);
+        if (confirmPanel)
+        {
+            if (m_ConfirmHover)
+            {
+                confirmPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                confirmPanel.SetColor(BTN_IDLE);
+            }
+        }
+    }
+
+    override bool OnMouseEnter(Widget w, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string enteredName = w.GetName();
+        if (enteredName == "BtnCancel")
+        {
+            m_CancelHover = true;
+            PaintDialogButtons();
+        }
+        else if (enteredName == "BtnConfirm")
+        {
+            m_ConfirmHover = true;
+            PaintDialogButtons();
+        }
+        return false;
+    }
+
+    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string leftName = w.GetName();
+        if (leftName == "BtnCancel")
+        {
+            m_CancelHover = false;
+            PaintDialogButtons();
+        }
+        else if (leftName == "BtnConfirm")
+        {
+            m_ConfirmHover = false;
+            PaintDialogButtons();
+        }
+        return false;
     }
 
     // Llamado cuando el server responde con NAME_RESULT
