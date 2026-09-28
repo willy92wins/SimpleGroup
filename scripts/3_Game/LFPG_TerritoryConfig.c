@@ -17,7 +17,8 @@
 // FIX M-21: version actual del config. Si el config loaded tiene version < esta,
 // se mergen defaults de los campos nuevos sin sobrescribir los existentes.
 // v2 -> v3: anadidos m_NoBaseRequiredTypes y m_UnrestrictedTypes
-const int LFPG_CONFIG_VERSION = 3;
+// v3 -> v4: m_FurnitureCountedTypes and m_NoDropInForeignTerritoryTypes
+const int LFPG_CONFIG_VERSION = 4;
 
 class LFPG_TerritoryConfig
 {
@@ -78,6 +79,12 @@ class LFPG_TerritoryConfig
     // Ambas listas chequean con IsKindOf para cubrir herencia.
     ref array<string> m_NoBaseRequiredTypes;
     ref array<string> m_UnrestrictedTypes;
+
+    // Types that count as furniture in addition to base-building parts and deployables.
+    ref array<string> m_FurnitureCountedTypes;
+
+    // Classnames that cannot be dropped or placed inside a foreign territory.
+    ref array<string> m_NoDropInForeignTerritoryTypes;
 
     // --- Recalibracion ---
     // FIX G-3: Interval largo por default (integrity check). Recalibrate es on-demand.
@@ -174,6 +181,14 @@ class LFPG_TerritoryConfig
         // Lista B — items sin restriccion alguna. Vacia por defecto; el admin
         // rellena segun necesidad del servidor.
         m_UnrestrictedTypes = new array<string>;
+
+        m_FurnitureCountedTypes = new array<string>;
+        string fc1 = "WoodenCrate"; m_FurnitureCountedTypes.Insert(fc1);
+        string fc2 = "SeaChest"; m_FurnitureCountedTypes.Insert(fc2);
+        string fc3 = "Barrel_ColorBase"; m_FurnitureCountedTypes.Insert(fc3);
+
+        m_NoDropInForeignTerritoryTypes = new array<string>;
+        string nd1 = "WoodenCrate"; m_NoDropInForeignTerritoryTypes.Insert(nd1);
 
         m_BatteryDrainPerSecond = 0.01;
         m_PowerGridConsumption = 10.0;
@@ -292,6 +307,14 @@ class LFPG_TerritoryConfig
         {
             m_UnrestrictedTypes = new array<string>;
         }
+        if (!m_FurnitureCountedTypes)
+        {
+            m_FurnitureCountedTypes = new array<string>;
+        }
+        if (!m_NoDropInForeignTerritoryTypes)
+        {
+            m_NoDropInForeignTerritoryTypes = new array<string>;
+        }
 
         // Recalcular con valores posiblemente corregidos
         m_BuildRadiusSq = m_BuildRadiusMeters * m_BuildRadiusMeters;
@@ -331,6 +354,19 @@ class LFPG_TerritoryConfig
         if (!m_UnrestrictedTypes)
         {
             m_UnrestrictedTypes = new array<string>;
+        }
+
+        // v4: create each new list with its defaults only when the loaded value is null.
+        // An admin list is kept as stored, including an empty list.
+        if (!m_FurnitureCountedTypes)
+        {
+            LFPG_TerritoryConfig tmpFurn = new LFPG_TerritoryConfig();
+            m_FurnitureCountedTypes = tmpFurn.m_FurnitureCountedTypes;
+        }
+        if (!m_NoDropInForeignTerritoryTypes)
+        {
+            LFPG_TerritoryConfig tmpNoDrop = new LFPG_TerritoryConfig();
+            m_NoDropInForeignTerritoryTypes = tmpNoDrop.m_NoDropInForeignTerritoryTypes;
         }
 
         m_ConfigVersion = LFPG_CONFIG_VERSION;
@@ -424,6 +460,40 @@ class LFPG_TerritoryConfig
         {
             string uType = m_UnrestrictedTypes[iU];
             if (ent.IsKindOf(uType))
+                return true;
+        }
+        return false;
+    }
+
+    // Extra furniture types (crates, chests, barrels) counted in addition to parts and deployables.
+    bool IsCountedFurnitureType(EntityAI ent)
+    {
+        if (!m_FurnitureCountedTypes || !ent)
+            return false;
+
+        int countFC = m_FurnitureCountedTypes.Count();
+        int iFC;
+        for (iFC = 0; iFC < countFC; iFC = iFC + 1)
+        {
+            string fcType = m_FurnitureCountedTypes[iFC];
+            if (ent.IsKindOf(fcType))
+                return true;
+        }
+        return false;
+    }
+
+    // Blacklist: cannot be dropped or placed in a foreign territory.
+    bool IsNoDropInForeignTerritory(EntityAI ent)
+    {
+        if (!m_NoDropInForeignTerritoryTypes || !ent)
+            return false;
+
+        int countND = m_NoDropInForeignTerritoryTypes.Count();
+        int iND;
+        for (iND = 0; iND < countND; iND = iND + 1)
+        {
+            string ndType = m_NoDropInForeignTerritoryTypes[iND];
+            if (ent.IsKindOf(ndType))
                 return true;
         }
         return false;

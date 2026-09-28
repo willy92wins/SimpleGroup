@@ -789,40 +789,64 @@ class LFPG_GroupManager
         return bestGroupID;
     }
 
+    // Nearest other group whose flag lies inside the build radius (XZ) and whose
+    // live raise progress is above zero. Cached progress is used only when that
+    // group has no registered flag entity. Empty string means no foreign owner.
+    // A groupless actor passes "" and any such group is foreign.
+    string GetForeignOwnerAt(vector pos, string actorGroupID)
+    {
+        if (!m_Config)
+            return "";
+
+        string nearestID = "";
+        float nearestDistSq = m_Config.m_BuildRadiusSq;
+
+        int fo;
+        int foCount = m_FlagPositions.Count();
+        for (fo = 0; fo < foCount; fo = fo + 1)
+        {
+            LFPG_FlagPositionCache foEntry = m_FlagPositions[fo];
+            if (!foEntry)
+                continue;
+            if (foEntry.m_GroupID == LFPG_ABANDONED_GROUP)
+                continue;
+            if (actorGroupID != "" && foEntry.m_GroupID == actorGroupID)
+                continue;
+
+            float fodx = pos[0] - foEntry.m_Position[0];
+            float fodz = pos[2] - foEntry.m_Position[2];
+            float foDistSq = (fodx * fodx) + (fodz * fodz);
+            if (foDistSq >= nearestDistSq)
+                continue;
+
+            float liveProgress = foEntry.m_RaiseProgress;
+            if (m_GroupFlags && m_GroupFlags.Contains(foEntry.m_GroupID))
+            {
+                LFPG_FlagBase foFlag = m_GroupFlags.Get(foEntry.m_GroupID);
+                if (foFlag)
+                    liveProgress = foFlag.ComputeCurrentRaiseProgress();
+            }
+            if (liveProgress <= 0.0)
+                continue;
+
+            nearestDistSq = foDistSq;
+            nearestID = foEntry.m_GroupID;
+        }
+        return nearestID;
+    }
+
     // ========================================================================
-    // FIX G-2: Check si una posicion cae dentro del territorio de OTRO grupo
-    // Usa m_TerritoryRadiusSq (radio grande ~500m) para bloquear incluso
-    // cerca del borde de territorios ajenos.
-    // Excluye LFPG_ABANDONED_GROUP y excluye el groupID propio del jugador.
+    // FIX G-2: True when a different group owns pos inside the build radius.
+    // Uses the build radius (m_BuildRadiusSq), not the territory radius, and
+    // the live raise progress from GetForeignOwnerAt.
+    // Excludes LFPG_ABANDONED_GROUP and the actor's own group.
     // ========================================================================
     bool IsPositionInOtherTerritory(vector pos, string ownGroupID)
     {
-        if (!m_Config)
+        string foreignID = GetForeignOwnerAt(pos, ownGroupID);
+        if (foreignID == "")
             return false;
-
-        int k;
-        int cacheCount = m_FlagPositions.Count();
-        for (k = 0; k < cacheCount; k = k + 1)
-        {
-            LFPG_FlagPositionCache entry = m_FlagPositions[k];
-            if (!entry)
-                continue;
-            if (entry.m_GroupID == LFPG_ABANDONED_GROUP)
-                continue;
-            if (entry.m_GroupID == ownGroupID)
-                continue;
-
-            float odx = pos[0] - entry.m_Position[0];
-            float odz = pos[2] - entry.m_Position[2];
-            float odSq = (odx * odx) + (odz * odz);
-            if (odSq < m_Config.m_BuildRadiusSq)
-            {
-                // Solo bloquea si la bandera del otro grupo esta al menos parcialmente levantada
-                if (entry.m_RaiseProgress > 0.0)
-                    return true;
-            }
-        }
-        return false;
+        return true;
     }
 
     // ========================================================================
@@ -997,22 +1021,12 @@ class LFPG_GroupManager
                 continue;
             }
 
-            if (BaseBuildingBase.Cast(obj))
+            if (LFPG_CountsAsFurniture(ent))
             {
                 deployCount = deployCount + 1;
                 LFPG_DeployTracker.Track(ent, groupID);
-                string bbbName = ent.GetDisplayName();
-                group.m_DeployedItemNames.Insert(bbbName);
-                continue;
-            }
-
-            ItemBase ib = ItemBase.Cast(obj);
-            if (ib && ib.IsDeployable())
-            {
-                deployCount = deployCount + 1;
-                LFPG_DeployTracker.Track(ent, groupID);
-                string ibName = ent.GetDisplayName();
-                group.m_DeployedItemNames.Insert(ibName);
+                string furnName = ent.GetDisplayName();
+                group.m_DeployedItemNames.Insert(furnName);
             }
         }
 
