@@ -1,5 +1,5 @@
 // ============================================================================
-// LFPG_CraftFlagKitT1.c - 4_World (RecipeBase auto-discovered by engine)
+// LFPG_CraftFlagKitT1.c - 4_World (registered in LFPG_ModdedRecipes.c)
 // Crafteo: LongWoodenStick + Rag -> LFPG_FlagKit_T1
 // Patron exacto de CraftTerritoryFlagKit vanilla
 // ============================================================================

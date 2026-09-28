@@ -139,7 +139,8 @@ class CfgVehicles
         scope = 1;
         autocenter = 0;
         model = "\SimpleGroup\data\T1\T1_Flagpole.p3d";
-        storageCategory = 1;
+        storageCategory = 10;
+        alignHologramToTerain = 0;
         hiddenSelections[] = {"T1_Rag"};
         hiddenSelectionsTextures[] = {"DZ\gear\consumables\data\rag_co.paa"};
         hiddenSelectionsMaterials[] = {"SimpleGroup\data\Textures\rags_bandages.rvmat"};
