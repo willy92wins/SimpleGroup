@@ -157,30 +157,42 @@ class LFPG_GroupManager
             string tmpFinal = LFPG_TerritoryConfig.GetGroupsPath();
             bool tmpRecovered = false;
 
-            if (!FileExist(tmpFinal))
+            // AUDIT #10 L1-F06 / L3-F03: un tmp que verifica se promueve aunque
+            // tenga 0 grupos (antes se descartaba y LoadGroups resucitaba el
+            // .bak). Con un final que NO verifica (truncado por un crash en la
+            // promocion) el tmp tambien gana; el final se aparta, no se borra.
+            int tmpCount = 0;
+            if (ReadGroupsFile(staleTmp, tmpCount))
             {
-                LFPG_GroupsFileData tmpData = new LFPG_GroupsFileData();
-                string tmpErr = "";
-                if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(staleTmp, tmpData, tmpErr))
+                if (FileExist(tmpFinal))
                 {
-                    if (tmpData.m_Groups && tmpData.m_Groups.Count() > 0)
+                    int finalCount = 0;
+                    if (!ReadGroupsFile(tmpFinal, finalCount))
                     {
-                        if (CopyFile(staleTmp, tmpFinal))
-                        {
-                            tmpRecovered = true;
-                            string recMsg = "Init: groups.json missing; recovered from tmp with ";
-                            recMsg = recMsg + tmpData.m_Groups.Count().ToString();
-                            recMsg = recMsg + " groups.";
-                            LFPG_Log.Info(recMsg);
-                        }
+                        if (MoveAside(tmpFinal, ".corrupt"))
+                            LFPG_Log.Error("Init: groups.json does not verify; moved to groups.json.corrupt.");
+                    }
+                }
+
+                if (!FileExist(tmpFinal))
+                {
+                    if (CopyFile(staleTmp, tmpFinal))
+                    {
+                        tmpRecovered = true;
+                        string recMsg = "Init: recovered groups.json from tmp with ";
+                        recMsg = recMsg + tmpCount.ToString();
+                        recMsg = recMsg + " groups.";
+                        LFPG_Log.Info(recMsg);
+                        DeleteFile(staleTmp);
                     }
                 }
             }
 
             if (!tmpRecovered)
             {
-                DeleteFile(staleTmp);
-                LFPG_Log.Info("Init: removed unusable tmp file.");
+                // Tampoco se tira: se aparta para que el admin pueda revisarlo.
+                if (MoveAside(staleTmp, ".discarded"))
+                    LFPG_Log.Info("Init: unused tmp moved to groups.json.tmp.discarded.");
             }
         }
 
@@ -2564,6 +2576,46 @@ class LFPG_GroupManager
     // ========================================================================
     // PERSISTENCE - JSON atomico
     // ========================================================================
+    // AUDIT #10 L1-F06 / L3-F03: lectura verificada de un fichero de grupos.
+    // true solo si deserializa y su version es soportada; groupCount = grupos.
+    // Un fichero valido con 0 grupos es legitimo (se disolvio el ultimo).
+    protected bool ReadGroupsFile(string path, out int groupCount)
+    {
+        groupCount = 0;
+        if (!FileExist(path))
+            return false;
+        LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
+        string probeErr = "";
+        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, probeErr))
+            return false;
+        if (!probe || !probe.m_Groups)
+            return false;
+        if (probe.m_Version > LFPG_GROUPS_FILE_VERSION)
+            return false;
+        groupCount = probe.m_Groups.Count();
+        return true;
+    }
+
+    // Aparta un fichero sin destruirlo: copia a path+suffix y solo borra el
+    // original si la copia salio bien (CopyFile no sobrescribe: se borra antes
+    // el apartado anterior). false = el original sigue en su sitio.
+    protected bool MoveAside(string path, string suffix)
+    {
+        string aside = path + suffix;
+        if (FileExist(aside))
+            DeleteFile(aside);
+        if (!CopyFile(path, aside))
+        {
+            string mvErr = "MoveAside: cannot copy ";
+            mvErr = mvErr + path;
+            mvErr = mvErr + " to ";
+            mvErr = mvErr + aside;
+            LFPG_Log.Error(mvErr);
+            return false;
+        }
+        return DeleteFile(path);
+    }
+
     void SaveGroups()
     {
         LFPG_GroupsFileData fileData = new LFPG_GroupsFileData();
