@@ -86,6 +86,8 @@ class LFPG_ActionRegisterTerritory extends ActionContinuousBase
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (mgr)
         {
+            if (!mgr.IsBootAuditDone())
+                return false;
             if (mgr.HasGroup(playerUID))
                 return false;
         }
@@ -112,6 +114,9 @@ class LFPG_ActionRegisterTerritory extends ActionContinuousBase
 
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (!mgr)
+            return;
+
+        if (!mgr.IsBootAuditDone())
             return;
 
         if (flag.HasGroup())
