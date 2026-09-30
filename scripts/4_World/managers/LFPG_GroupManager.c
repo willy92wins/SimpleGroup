@@ -2053,11 +2053,13 @@ class LFPG_GroupManager
 
         // Resolver player como fallback de rpcTarget cuando flag no esta disponible
         // (fuera de network bubble o aun no cargada tras restart)
+        // AUDIT #10 L1-F01: PlayerBase primero (llega a cualquier distancia);
+        // la flag solo como fallback si el PlayerBase no se resuelve.
         PlayerBase senderPlayer = GetPlayerByUID(senderUID);
-        Object sendVia = flag;
-        if (!sendVia && senderPlayer)
+        Object sendVia = senderPlayer;
+        if (!sendVia)
         {
-            sendVia = senderPlayer;
+            sendVia = flag;
         }
 
         if (!sendVia)
@@ -2364,10 +2366,10 @@ class LFPG_GroupManager
                     continue;
                 if (identity.GetPlainId() == member.m_PlayerUID)
                 {
-                    // Enviar via flag si existe, sino via PlayerBase (man)
-                    Object syncTarget = flag;
-                    if (!syncTarget)
-                        syncTarget = man;
+                    // AUDIT #10 L1-F01: siempre via PlayerBase (man). La flag
+                    // solo llega a clientes dentro de su network bubble; un
+                    // miembro lejos perdia altas/bajas/lider/tier.
+                    Object syncTarget = man;
                     SendGroupSyncFull(identity, group.m_GroupID, flag, syncTarget);
                     break;
                 }
@@ -2409,9 +2411,8 @@ class LFPG_GroupManager
                     continue;
                 if (identity.GetPlainId() == member.m_PlayerUID)
                 {
-                    Object syncTarget = flag;
-                    if (!syncTarget)
-                        syncTarget = man;
+                    // AUDIT #10 L1-F01: siempre via PlayerBase (ver arriba)
+                    Object syncTarget = man;
                     SendLightweightSync(identity, group.m_GroupID, flag, syncTarget);
                     break;
                 }
