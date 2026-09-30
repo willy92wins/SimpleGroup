@@ -221,6 +221,12 @@ class LFPG_TerritoryConfig
             m_GroupNameMinLength = 1;
         if (m_GroupNameMaxLength > 48)
             m_GroupNameMaxLength = 48;
+        // AUDIT #10 F20: min <= max, ambas en [1, 48]. Sin esto un max < min o
+        // un max <= 0 dejaba sin ningun nombre valido posible.
+        if (m_GroupNameMinLength > 48)
+            m_GroupNameMinLength = 48;
+        if (m_GroupNameMaxLength < m_GroupNameMinLength)
+            m_GroupNameMaxLength = m_GroupNameMinLength;
         if (m_InviteDurationSeconds < 5)
             m_InviteDurationSeconds = 5;
 
