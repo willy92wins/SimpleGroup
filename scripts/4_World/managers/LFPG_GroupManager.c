@@ -1119,6 +1119,13 @@ class LFPG_GroupManager
             if (!ent)
                 continue;
 
+            // AUDIT #10 L2-F08 / P1-F12: mismas reglas que el camino vivo. Las
+            // listas A (NoBaseRequired) y B (Unrestricted) no cuentan en ningun
+            // handler de placement ni de drop (ModdedItemBase OnPlacementComplete
+            // y drop, ModdedBaseBuildingBase, ModdedGardenPlot).
+            if (m_Config && (m_Config.IsNoBaseRequired(ent) || m_Config.IsUnrestricted(ent)))
+                continue;
+
             if (GardenPlot.Cast(obj))
             {
                 string gardenName = ent.GetDisplayName();
