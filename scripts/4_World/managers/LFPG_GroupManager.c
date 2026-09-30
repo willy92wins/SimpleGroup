@@ -2688,20 +2688,36 @@ class LFPG_GroupManager
         }
 
         // 3. Backup del actual. Cualquier fallo aborta antes de tocar el final.
+        //    AUDIT #10 L6-F04: el final se verifica ANTES de copiarlo sobre el
+        //    .bak. Un final corrupto no rota el .bak (puede ser la unica copia
+        //    buena): se aparta a groups.json.corrupt y el .bak queda intacto.
         if (FileExist(finalPath))
         {
-            if (FileExist(bakPath))
+            int finalGroups = 0;
+            if (ReadGroupsFile(finalPath, finalGroups))
             {
-                if (!DeleteFile(bakPath))
+                if (FileExist(bakPath))
                 {
-                    LFPG_Log.Error("SaveGroups: cannot delete stale backup. Rotation aborted.");
+                    if (!DeleteFile(bakPath))
+                    {
+                        LFPG_Log.Error("SaveGroups: cannot delete stale backup. Rotation aborted.");
+                        return;
+                    }
+                }
+                if (!CopyFile(finalPath, bakPath))
+                {
+                    LFPG_Log.Error("SaveGroups: cannot copy final to backup. Rotation aborted.");
                     return;
                 }
             }
-            if (!CopyFile(finalPath, bakPath))
+            else
             {
-                LFPG_Log.Error("SaveGroups: cannot copy final to backup. Rotation aborted.");
-                return;
+                if (!MoveAside(finalPath, ".corrupt"))
+                {
+                    LFPG_Log.Error("SaveGroups: final does not verify and cannot be moved aside. Rotation aborted.");
+                    return;
+                }
+                LFPG_Log.Error("SaveGroups: final did not verify; backup kept, final moved to groups.json.corrupt.");
             }
         }
 
