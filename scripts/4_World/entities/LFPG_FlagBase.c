@@ -43,6 +43,9 @@ class LFPG_FlagBase extends ItemBase
     protected float m_RemainingAtRaise;
     protected bool m_IsRegisteredWithManager;
     protected int m_LoadedStorageVersion;
+    // AUDIT #10 L1-F05: estado calculado sin config, pendiente de rehacer.
+    protected bool m_ConfigReinitQueued;
+    protected bool m_FullRaisePendingConfig;
 
     // ========================================================================
     // CONSTRUCTOR - Registro de SyncVars (DEBE ser aqui, NO en EEInit)
@@ -331,6 +334,13 @@ class LFPG_FlagBase extends ItemBase
         {
             tierDuration = config.GetTierDuration(GetTier());
         }
+        else
+        {
+            // Boot (T3 con energia en AfterStoreLoad): el default truncaria T3.
+            // Se rehace con la duracion real en OnServerConfigLoaded.
+            m_FullRaisePendingConfig = true;
+            QueueConfigReinit();
+        }
 
         m_RaisedAtTime = GetGame().GetTime();
         m_RemainingAtRaise = tierDuration;
@@ -524,9 +534,41 @@ class LFPG_FlagBase extends ItemBase
         }
         else
         {
+            // Provisional: se rehace con la config del tier en
+            // OnServerConfigLoaded (antes nada lo re-inicializaba).
             m_FlagActionsEnabledNet = true;
+            QueueConfigReinit();
         }
         SetSynchDirty();
+        #endif
+    }
+
+    protected void QueueConfigReinit()
+    {
+        #ifdef SERVER
+        if (m_ConfigReinitQueued)
+            return;
+        LFPG_GroupManager mgrCfgQ = LFPG_GroupManager.Get();
+        if (!mgrCfgQ)
+            return;
+        mgrCfgQ.QueueFlagConfigReinit(this);
+        m_ConfigReinitQueued = true;
+        #endif
+    }
+
+    // Llamado por LFPG_GroupManager.Init() justo despues de cargar la config.
+    void OnServerConfigLoaded()
+    {
+        #ifdef SERVER
+        m_ConfigReinitQueued = false;
+        if (m_FullRaisePendingConfig)
+        {
+            m_FullRaisePendingConfig = false;
+            SetFullyRaised();
+        }
+        InitFlagActionsEnabled();
+        // El progress net se calculo con la duracion por defecto (172800 s).
+        RefreshVisualProgress();
         #endif
     }
 
