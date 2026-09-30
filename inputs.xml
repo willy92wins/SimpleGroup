@@ -2,8 +2,11 @@
 <modded_inputs>
     <inputs>
         <actions>
-            <input name="UALFPGGroupPanel" loc="Group Panel"/>
+            <input name="UALFPGGroupPanel" loc="STR_LFPG_INPUT_GROUP_PANEL"/>
         </actions>
+        <sorting name="simplegroup" loc="STR_LFPG_MOD_NAME">
+            <input name="UALFPGGroupPanel"/>
+        </sorting>
     </inputs>
     <preset>
         <input name="UALFPGGroupPanel">

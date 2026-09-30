@@ -1,5 +1,5 @@
 FrameWidgetClass LFPG_GroupPanel {
- size 260 320
+ size 260 348
  hexactpos 1
  vexactpos 1
  hexactsize 1
@@ -8,7 +8,7 @@ FrameWidgetClass LFPG_GroupPanel {
  {
   ImageWidgetClass PanelBg {
    position 0 0
-   size 260 320
+   size 260 348
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -22,7 +22,7 @@ FrameWidgetClass LFPG_GroupPanel {
 
   ImageWidgetClass HeaderBg {
    position 0 0
-   size 260 56
+   size 260 84
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -36,8 +36,8 @@ FrameWidgetClass LFPG_GroupPanel {
 
   TextWidgetClass GroupNameText {
    scriptclass "ViewBinding"
-   position 10 6
-   size 200 22
+   position 10 4
+   size 168 18
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -56,8 +56,8 @@ FrameWidgetClass LFPG_GroupPanel {
 
   TextWidgetClass TierText {
    scriptclass "ViewBinding"
-   position 212 6
-   size 40 22
+   position 180 4
+   size 50 18
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -75,10 +75,65 @@ FrameWidgetClass LFPG_GroupPanel {
    }
   }
 
+  ButtonWidgetClass BtnClose {
+   scriptclass "ViewBinding"
+   position 234 3
+   size 22 18
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   color 0.28 0.30 0.34 1.0
+   {
+    ScriptParamsClass {
+     Relay_Command "OnCloseExecute"
+     {
+     }
+    }
+
+    TextWidgetClass BtnCloseText {
+     position 0 0
+     size 22 18
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     font "gui/fonts/MetronBook"
+     text "X"
+     "text halign" center
+     "text valign" center
+     color 0.9 0.9 0.9 1.0
+     ignorepointer 1
+     {
+     }
+    }
+   }
+  }
+
+  TextWidgetClass TerritoryText {
+   scriptclass "ViewBinding"
+   position 10 24
+   size 240 16
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/MetronBook"
+   color 0.6 0.6 0.6 1.0
+   ignorepointer 1
+   {
+    ScriptParamsClass {
+     Binding_Name "TerritoryStatus"
+     {
+     }
+    }
+   }
+  }
+
   TextWidgetClass DeployText {
    scriptclass "ViewBinding"
-   position 10 26
-   size 240 16
+   position 10 42
+   size 240 14
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -95,25 +150,10 @@ FrameWidgetClass LFPG_GroupPanel {
    }
   }
 
-  TextWidgetClass DeployLabel {
-   position 10 40
-   size 80 14
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   text "#STR_LFPG_UI_DEPLOYABLES"
-   color 0.5 0.6 0.5 1.0
-   ignorepointer 1
-   {
-   }
-  }
-
   TextWidgetClass DeployCountText {
    scriptclass "ViewBinding"
-   position 90 40
-   size 40 14
+   position 10 58
+   size 120 14
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -130,25 +170,10 @@ FrameWidgetClass LFPG_GroupPanel {
    }
   }
 
-  TextWidgetClass GardenLabel {
-   position 138 40
-   size 62 14
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   text "#STR_LFPG_UI_GARDENS"
-   color 0.5 0.6 0.5 1.0
-   ignorepointer 1
-   {
-   }
-  }
-
   TextWidgetClass GardenCountText {
    scriptclass "ViewBinding"
-   position 200 40
-   size 40 14
+   position 130 58
+   size 120 14
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -166,8 +191,8 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   FrameWidgetClass DeployHoverZone {
-   position 8 38
-   size 125 18
+   position 8 56
+   size 120 18
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -177,8 +202,8 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   FrameWidgetClass GardenHoverZone {
-   position 136 38
-   size 115 18
+   position 128 56
+   size 122 18
    hexactpos 1
    vexactpos 1
    hexactsize 1
@@ -188,7 +213,7 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   FrameWidgetClass ItemTooltip {
-   position 8 58
+   position 8 78
    size 244 100
    hexactpos 1
    vexactpos 1
@@ -210,7 +235,8 @@ FrameWidgetClass LFPG_GroupPanel {
      }
     }
 
-    TextWidgetClass TooltipText {
+    MultilineTextWidgetClass TooltipText {
+     wrap 1
      position 6 4
      size 232 92
      hexactpos 1
@@ -227,7 +253,7 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   ImageWidgetClass DividerLine {
-   position 10 56
+   position 10 78
    size 240 1
    hexactpos 1
    vexactpos 1
@@ -241,7 +267,7 @@ FrameWidgetClass LFPG_GroupPanel {
   }
 
   ScrollWidgetClass MemberScroll {
-   position 0 60
+   position 0 82
    size 260 222
    hexactpos 1
    vexactpos 1
@@ -274,7 +300,7 @@ FrameWidgetClass LFPG_GroupPanel {
 
   ButtonWidgetClass BtnLeave {
    scriptclass "ViewBinding"
-   position 10 285
+   position 10 308
    size 240 26
    hexactpos 1
    vexactpos 1
