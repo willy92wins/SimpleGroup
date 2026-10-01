@@ -48,3 +48,4 @@
 "STR_LFPG_BUILD_GARDEN_LIMIT","Garden plot limit reached for your territory","Garden plot limit reached for your territory","","","","","","","Limite de huertos alcanzado en tu territorio","","","","","",
 "STR_LFPG_ERR_DROP_RESTRICTED","You cannot drop this item in another group's territory.","You cannot drop this item in another group's territory.","","","","","","","No puedes soltar este objeto en el territorio de otro grupo.","","","","","",
 "STR_LFPG_UI_TOOLTIP_EMPTY","No items placed","No items placed","","","","","","","Sin objetos colocados","","","","","",
+"STR_LFPG_ERR_RPC_THROTTLED","Too many requests, try again in a moment","Too many requests, try again in a moment","","","","","","","Demasiadas peticiones, vuelve a intentarlo en un momento","","","","","",

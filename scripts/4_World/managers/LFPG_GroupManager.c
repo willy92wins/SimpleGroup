@@ -1751,22 +1751,74 @@ class LFPG_GroupManager
     // RPC RATE LIMITING - Anti-spam
     // FIX M-2: Throttle configurable via m_Config.m_RpcThrottleMs
     // ========================================================================
-    protected bool IsRPCThrottled(string playerUID)
+    // AUDIT #10 L1-F07/L3-F08: cubo por (UID, tipo de RPC). Antes un unico
+    // cubo por UID: un REQUEST_GROUP_DATA automatico (panel/hologram) se comia
+    // el Kick/Leave/Transfer/SetName del usuario dentro de la misma ventana.
+    protected bool IsRPCThrottled(string playerUID, int rpcType)
     {
         int now = GetGame().GetTime();
         int throttleMs = 500;
         if (m_Config && m_Config.m_RpcThrottleMs > 0)
             throttleMs = m_Config.m_RpcThrottleMs;
 
-        if (m_RPCThrottle.Contains(playerUID))
+        string key = playerUID;
+        key = key + ":";
+        key = key + rpcType.ToString();
+
+        if (m_RPCThrottle.Contains(key))
         {
-            int lastTime = m_RPCThrottle.Get(playerUID);
+            int lastTime = m_RPCThrottle.Get(key);
             int diff = now - lastTime;
             if (diff < throttleMs)
                 return true;
         }
-        m_RPCThrottle.Set(playerUID, now);
+        m_RPCThrottle.Set(key, now);
+        PruneRPCThrottle(now, throttleMs);
         return false;
+    }
+
+    // Poda acotada: con clave por tipo el mapa crece mas rapido; se limpian
+    // entradas caducadas solo al superar el umbral (coste amortizado).
+    protected void PruneRPCThrottle(int now, int throttleMs)
+    {
+        if (m_RPCThrottle.Count() <= 512)
+            return;
+
+        array<string> stale = new array<string>;
+        int count = m_RPCThrottle.Count();
+        int i;
+        for (i = 0; i < count; i = i + 1)
+        {
+            int t = m_RPCThrottle.GetElement(i);
+            if (now - t >= throttleMs)
+                stale.Insert(m_RPCThrottle.GetKey(i));
+        }
+        int s;
+        for (s = 0; s < stale.Count(); s = s + 1)
+        {
+            m_RPCThrottle.Remove(stale[s]);
+        }
+    }
+
+    // Respuesta de rechazo solo para RPCs iniciados por el usuario; los
+    // automaticos (REQUEST_GROUP_DATA) siguen descartandose en silencio.
+    protected void NotifyRPCThrottled(PlayerIdentity sender, int rpcType)
+    {
+        bool userRpc = false;
+        if (rpcType == LFPG_RPC_C2S_REQUEST_LEAVE)
+            userRpc = true;
+        else if (rpcType == LFPG_RPC_C2S_REQUEST_KICK)
+            userRpc = true;
+        else if (rpcType == LFPG_RPC_C2S_REQUEST_TRANSFER)
+            userRpc = true;
+        else if (rpcType == LFPG_RPC_C2S_SET_GROUP_NAME)
+            userRpc = true;
+
+        if (!userRpc)
+            return;
+
+        PlayerBase pb = PlayerBase.Cast(sender.GetPlayer());
+        SendErrorToPlayer(sender, pb, "#STR_LFPG_ERR_RPC_THROTTLED");
     }
 
     // ========================================================================
@@ -1807,9 +1859,12 @@ class LFPG_GroupManager
         string senderUID = sender.GetPlainId();
         string senderName = sender.GetName();
 
-        // Rate limiting
-        if (IsRPCThrottled(senderUID))
+        // Rate limiting (por tipo de RPC; rechazo visible para RPCs de usuario)
+        if (IsRPCThrottled(senderUID, rpc_type))
+        {
+            NotifyRPCThrottled(sender, rpc_type);
             return;
+        }
 
         if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
         {
@@ -2053,11 +2108,13 @@ class LFPG_GroupManager
 
         // Resolver player como fallback de rpcTarget cuando flag no esta disponible
         // (fuera de network bubble o aun no cargada tras restart)
+        // AUDIT #10 L1-F01: PlayerBase primero (llega a cualquier distancia);
+        // la flag solo como fallback si el PlayerBase no se resuelve.
         PlayerBase senderPlayer = GetPlayerByUID(senderUID);
-        Object sendVia = flag;
-        if (!sendVia && senderPlayer)
+        Object sendVia = senderPlayer;
+        if (!sendVia)
         {
-            sendVia = senderPlayer;
+            sendVia = flag;
         }
 
         if (!sendVia)
@@ -2364,10 +2421,10 @@ class LFPG_GroupManager
                     continue;
                 if (identity.GetPlainId() == member.m_PlayerUID)
                 {
-                    // Enviar via flag si existe, sino via PlayerBase (man)
-                    Object syncTarget = flag;
-                    if (!syncTarget)
-                        syncTarget = man;
+                    // AUDIT #10 L1-F01: siempre via PlayerBase (man). La flag
+                    // solo llega a clientes dentro de su network bubble; un
+                    // miembro lejos perdia altas/bajas/lider/tier.
+                    Object syncTarget = man;
                     SendGroupSyncFull(identity, group.m_GroupID, flag, syncTarget);
                     break;
                 }
@@ -2409,9 +2466,8 @@ class LFPG_GroupManager
                     continue;
                 if (identity.GetPlainId() == member.m_PlayerUID)
                 {
-                    Object syncTarget = flag;
-                    if (!syncTarget)
-                        syncTarget = man;
+                    // AUDIT #10 L1-F01: siempre via PlayerBase (ver arriba)
+                    Object syncTarget = man;
                     SendLightweightSync(identity, group.m_GroupID, flag, syncTarget);
                     break;
                 }
