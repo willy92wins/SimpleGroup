@@ -42,16 +42,19 @@ class LFPG_GroupNameDialogController extends ViewController
     {
         string name = EditGroupName;
 
-        // Validación client-side (preview, no autoritativa)
+        // Validación client-side (preview, no autoritativa).
+        // AUDIT #10 F20: las cotas reales son las de la config del server
+        // (1-48, min <= max) y el server ya responde TOO_SHORT/TOO_LONG. El
+        // 3/24 fijo rechazaba nombres validos; aqui solo se filtra lo imposible.
         int nameLen = name.Length();
-        if (nameLen < 3)
+        if (nameLen < 1)
         {
             ErrorMessage = "#STR_LFPG_ERR_NAME_SHORT";
             string propErr = "ErrorMessage";
             NotifyPropertyChanged(propErr);
             return true;
         }
-        if (nameLen > 24)
+        if (nameLen > 48)
         {
             ErrorMessage = "#STR_LFPG_ERR_NAME_LONG";
             string propErr2 = "ErrorMessage";

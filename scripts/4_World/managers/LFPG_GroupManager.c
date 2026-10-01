@@ -76,6 +76,11 @@ class LFPG_GroupManager
     // is not proof the flag is an orphan. The first validation tick resolves them.
     protected ref array<LFPG_FlagBase> m_PendingFlags;
 
+    // AUDIT #10 L1-F05: banderas que calcularon estado con m_Config == null (las
+    // entidades se restauran dentro de super.OnInit, antes de Init()). Se
+    // re-inicializan en cuanto la config esta cargada.
+    protected ref array<LFPG_FlagBase> m_ConfigPendingFlags;
+
     // Ticks consecutivos que un grupo lleva sin bandera viva: groupID -> strikes.
     protected ref map<string, int> m_OrphanStrikes;
 
@@ -121,6 +126,7 @@ class LFPG_GroupManager
         m_RecalObjectBuffer = new array<Object>;
         m_RecalCargoBuffer = new array<CargoBase>;
         m_PendingFlags = new array<LFPG_FlagBase>;
+        m_ConfigPendingFlags = new array<LFPG_FlagBase>;
         m_OrphanStrikes = new map<string, int>;
         m_IsShuttingDown = false;
         m_DissolveDisabled = false;
@@ -199,8 +205,23 @@ class LFPG_GroupManager
         // Cargar config
         m_Config = LFPG_TerritoryConfig.Load();
 
-        // Cargar grupos desde JSON. Flags are not in the world yet. The gameplay
-        // call queue runs from the game loop, after mission main() restores entities.
+        // Rehacer con la config real lo calculado antes de cargarla (acciones
+        // por tier y SetFullyRaised de T3); despues cargar los grupos.
+        int cfgPendCount = m_ConfigPendingFlags.Count();
+        int cpi;
+        for (cpi = 0; cpi < cfgPendCount; cpi = cpi + 1)
+        {
+            LFPG_FlagBase cfgFlag = m_ConfigPendingFlags[cpi];
+            if (cfgFlag)
+                cfgFlag.OnServerConfigLoaded();
+        }
+        m_ConfigPendingFlags.Clear();
+        string cfgPendMsg = "Init: flags re-initialized after config load: ";
+        cfgPendMsg = cfgPendMsg + cfgPendCount.ToString();
+        LFPG_Log.Info(cfgPendMsg);
+
+        // Flags are not in the world yet. The gameplay call queue runs after
+        // mission main() restores entities; preserve the main boot gate.
         LoadGroups();
 
         // Nothing to resolve yet. Kept so a flag that registered pending during
@@ -232,6 +253,16 @@ class LFPG_GroupManager
     // ========================================================================
     // PENDING FLAGS - banderas que cargaron antes que los grupos
     // ========================================================================
+    // Llamado por LFPG_FlagBase cuando calcula estado sin config (boot).
+    void QueueFlagConfigReinit(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return;
+        if (m_ConfigPendingFlags.Find(flag) >= 0)
+            return;
+        m_ConfigPendingFlags.Insert(flag);
+    }
+
     void RegisterPendingFlag(LFPG_FlagBase flag)
     {
         if (!flag)
@@ -1129,6 +1160,13 @@ class LFPG_GroupManager
 
             EntityAI ent = EntityAI.Cast(obj);
             if (!ent)
+                continue;
+
+            // AUDIT #10 L2-F08 / P1-F12: mismas reglas que el camino vivo. Las
+            // listas A (NoBaseRequired) y B (Unrestricted) no cuentan en ningun
+            // handler de placement ni de drop (ModdedItemBase OnPlacementComplete
+            // y drop, ModdedBaseBuildingBase, ModdedGardenPlot).
+            if (m_Config && (m_Config.IsNoBaseRequired(ent) || m_Config.IsUnrestricted(ent)))
                 continue;
 
             if (GardenPlot.Cast(obj))
