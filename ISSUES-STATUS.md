@@ -36,7 +36,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
 | F25 | Guard corregido y probado en motor | `UpgradeFlag` rechaza la segunda llamada en el mismo tick con la referencia anterior y conserva T2 registrada. No se afirma concurrencia de dos clientes. |
 | F26 | Corregido | Trim y clave sin distinción de mayúsculas para nombres nuevos. |
-| F27 | Coste no medido; propuesta de medición | Medir guardado, recuento y consultas con población/objetos representativos antes de proponer optimización. |
+| F27 | Guardado medido y optimizado; aceptación de carga parcial | 120 identidades: cinco guardados pasan de 3842–4604 ms a 125–191 ms en DayZDiag. Recuento con objetos reales en aceptación; no equivale a 120 clientes conectados. |
 | F28 | Inventario cerrado; contratos conservados por compatibilidad | Ver [F28-COMPATIBILITY.md](F28-COMPATIBILITY.md). Handlers inseguros retirados; campos persistidos, símbolos públicos y firmas se conservan conscientemente. |
 | F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
 | F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
@@ -65,7 +65,7 @@ Opus 5.5 aprobó el código; r2 sobre el RPC truncado fue MERGE_OK_WITH_LIMIT:
 se rechaza sin mutación y el motor registra una excepción de lectura. La
 limitación y los fallos de fixture previos están en PRODUCT-VALIDATION.md.
 
-## #14: v2 autorizada e implementada; aceptación nativa en curso
+## #14: v2 implementada y validada
 
 El dueño levantó expresamente el aplazamiento el2026-10-03: implementar v2 ahora.
 Se implementa envelope con contador y checksum del payload UTF-8 exacto, lectura
@@ -74,9 +74,13 @@ datos posteriores a la migración. Contrato y rollback en [GROUPS-FORMAT.md](GRO
 
 Gauntlet Opus5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
 r2 detectó bloqueo del reintento tras copia parcial. Ambos corregidos; r3
-MERGE_OK_STATIC, pendiente de las fixtures en DayZ. Exportador Python:9testsPASS.
-No cerrar #14 hasta validar nativamente migración, integridad, recuperación,
-fallos de I/O y lectura del export por el binario anterior.
+MERGE_OK_STATIC. Los límites nativos de strings se aislaron y corrigieron con
+conciliación de Codex posterior a r3, autorizada por el dueño. Opus revisó también
+el nuevo delta de rendimiento sin hallazgos. Exportador Python: diez tests PASS.
+DayZDiag: 124 comprobaciones y cero fallos, incluidas migración, integridad,
+recuperación, copia parcial y denegación real de lectura. El binario anterior
+cargó los 120 grupos exportados y conservó los cambios posteriores a v2.
+Evidencia y límites en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 
 Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados,100–120players.
 Se incluye plantilla CE en [server/README.md](server/README.md). La medición de
