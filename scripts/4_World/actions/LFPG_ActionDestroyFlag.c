@@ -4,10 +4,22 @@
 // FIX 3: Client usa Cache
 // ============================================================================
 
-class LFPG_ActionDestroyFlag extends ActionInteractBase
+class LFPG_ActionDestroyFlagCB extends ActionContinuousBaseCB
+{
+    override void CreateActionComponent()
+    {
+        m_ActionData.m_ActionComponent = new CAContinuousTime(5.0);
+    }
+};
+
+class LFPG_ActionDestroyFlag extends ActionContinuousBase
 {
     void LFPG_ActionDestroyFlag()
     {
+        m_CallbackClass = LFPG_ActionDestroyFlagCB;
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        m_FullBody = true;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
         string text = "#STR_LFPG_ACTION_DESTROY_FLAG";
         m_Text = text;
     }
@@ -19,6 +31,21 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
     }
 
     override bool UseMainItem()
+    {
+        return true;
+    }
+
+    override typename GetInputType()
+    {
+        return ContinuousInteractActionInput;
+    }
+
+    override bool HasTarget()
+    {
+        return true;
+    }
+
+    override bool HasProgress()
     {
         return true;
     }
@@ -45,6 +72,8 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         // Necesita Hatchet/Axe en manos (ambos lados) — FIX M-14 via ToolMatcher
         EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
         if (!itemInHands)
+            return false;
+        if (itemInHands != item || item.IsRuined())
             return false;
 
         if (!LFPG_IsHatchet(itemInHands))
@@ -91,7 +120,7 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         return true;
     }
 
-    override void OnStartServer(ActionData action_data)
+    override void OnFinishProgressServer(ActionData action_data)
     {
         if (!action_data || !action_data.m_Target || !action_data.m_MainItem)
             return;
@@ -100,7 +129,7 @@ class LFPG_ActionDestroyFlag extends ActionInteractBase
         if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
             return;
 
-        super.OnStartServer(action_data);
+        super.OnFinishProgressServer(action_data);
 
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)

@@ -78,7 +78,8 @@ class LFPG_GroupNameDialogController extends ViewController
         }
 
         // Enviar al server para validación autoritativa
-        if (!m_TargetFlag)
+        PlayerBase localPlayer = PlayerBase.Cast(GetGame().GetPlayer());
+        if (!m_TargetFlag && (!localPlayer || m_GroupID == ""))
             return false;
 
         ScriptRPC rpc = new ScriptRPC();
@@ -86,7 +87,15 @@ class LFPG_GroupNameDialogController extends ViewController
         // permits retry even if the server answers with a generic error.
         m_NextConfirmAt = now + 500;
         rpc.Write(name);
-        rpc.Send(m_TargetFlag, LFPG_RPC_C2S_SET_GROUP_NAME, true, null);
+        if (m_TargetFlag)
+        {
+            rpc.Send(m_TargetFlag, LFPG_RPC_C2S_SET_GROUP_NAME, true, null);
+        }
+        else
+        {
+            rpc.Write(m_GroupID);
+            rpc.Send(localPlayer, LFPG_RPC_C2S_SET_PANEL_NAME, true, null);
+        }
 
         // Limpiar error mientras esperamos respuesta
         ErrorMessage = "";
@@ -349,5 +358,14 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
         {
             ctrl.OnNameResult(result);
         }
+    }
+
+    static void HandlePanelNameResult(string groupID, int result)
+    {
+        if (!s_Instance)
+            return;
+        LFPG_GroupNameDialogController ctrl = LFPG_GroupNameDialogController.Cast(s_Instance.GetController());
+        if (ctrl && !ctrl.m_TargetFlag && ctrl.m_GroupID == groupID)
+            ctrl.OnNameResult(result);
     }
 };

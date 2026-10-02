@@ -219,6 +219,53 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
    vexactsize 1
   }
 
+  ButtonWidgetClass BtnNameGroup {
+   scriptclass "ViewBinding"
+   visible 0
+   position 0 0
+   size 368 40
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style Empty
+   {
+    PanelWidgetClass BtnNameGroupPanel {
+     ignorepointer 1
+     color 0 0 0 0
+     position 0 0
+     size 368 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnNameGroupText {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 368 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     text "#STR_LFPG_UI_NAME_GROUP"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 18
+     "text halign" center
+     "text valign" center
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnNameGroupExecute"
+    }
+   }
+  }
+
   ButtonWidgetClass BtnLeave {
    scriptclass "ViewBinding"
    position 0 0

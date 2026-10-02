@@ -50,3 +50,20 @@ un valor negativo, por ejemplo `-1`, desactiva ese refresco. Se puede añadir
 o editar esta clave en config.json sin cambiar manualmente `m_ConfigVersion`.
 Los valores explícitos se respetan también en archivos v4 o anteriores.
 El arranque aplica defaults en memoria y conserva el archivo del administrador.
+
+## Destrucción de bandera (#10, F14)
+
+El dueño exige mantener la acción durante 5 segundos. Iniciar o cancelar no
+destruye. Al completar se vuelven a comprobar herramienta válida en manos,
+liderazgo, grupo y distancia. Destruir la bandera registrada disuelve el grupo.
+
+## Recuperar el nombre inicial (#10, F16)
+
+Si el líder cancela el nombre inicial, puede reabrirlo con «Nombrar grupo» en
+el panel mientras el nombre siga siendo temporal. No necesita estar junto a
+la bandera. Un nombre definitivo no se puede cambiar desde esta opción.
+
+## Sucesión (#10, F31)
+
+El dueño conserva la sucesión al salir o ser expulsado. No habrá sucesión
+automática por inactividad; F31 queda resuelto como decisión de producto.

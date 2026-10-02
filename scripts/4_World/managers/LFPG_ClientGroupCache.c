@@ -455,6 +455,18 @@ class LFPG_ClientGroupCache
         {
             HandleNameResult(ctx);
         }
+        else if (rpc_type == LFPG_RPC_S2C_PANEL_NAME_RESULT)
+        {
+            int panelResult = -1;
+            string panelGroupID = "";
+            if (!ctx.Read(panelResult))
+                return;
+            if (!ctx.Read(panelGroupID))
+                return;
+            if (panelGroupID == "" || panelGroupID != s_GroupID)
+                return;
+            LFPG_GroupNameDialog.HandlePanelNameResult(panelGroupID, panelResult);
+        }
         else if (rpc_type == LFPG_RPC_S2C_ERROR_MSG)
         {
             HandleErrorMsg(ctx);
