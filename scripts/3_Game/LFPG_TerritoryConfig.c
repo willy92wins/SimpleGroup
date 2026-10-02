@@ -568,7 +568,16 @@ class LFPG_TerritoryConfig
         if (FileExist(filePath))
         {
             config = new LFPG_TerritoryConfig();
-            JsonFileLoader<LFPG_TerritoryConfig>.JsonLoadFile(filePath, config);
+            string loadError = "";
+            if (!JsonFileLoader<LFPG_TerritoryConfig>.LoadFile(filePath, config, loadError))
+            {
+                // Deserialization may have changed a prefix of the object.
+                // Discard that partial state and preserve the admin's file.
+                LFPG_Log.Error("Config load failed; using defaults for this session. Original file retained: " + loadError);
+                config = new LFPG_TerritoryConfig();
+                config.ComputeDerivedValues();
+                return config;
+            }
 
             // FIX M-21: Mergear defaults si el config es de version previa
             if (config.m_ConfigVersion < LFPG_CONFIG_VERSION)
@@ -580,8 +589,8 @@ class LFPG_TerritoryConfig
                 migMsg = migMsg + "), merging new defaults.";
                 LFPG_Log.Info(migMsg);
                 config.MergeNewDefaults();
-                // Persistir el merge
-                JsonFileLoader<LFPG_TerritoryConfig>.JsonSaveFile(filePath, config);
+                // Apply new defaults in memory. Never truncate an existing
+                // admin config during startup just to persist a version bump.
             }
 
             string loadMsg = "Config loaded from: ";
@@ -591,10 +600,15 @@ class LFPG_TerritoryConfig
         else
         {
             config = new LFPG_TerritoryConfig();
-            JsonFileLoader<LFPG_TerritoryConfig>.JsonSaveFile(filePath, config);
-            string createMsg = "Default config created at: ";
-            createMsg = createMsg + filePath;
-            LFPG_Log.Info(createMsg);
+            string saveError = "";
+            if (!JsonFileLoader<LFPG_TerritoryConfig>.SaveFile(filePath, config, saveError))
+                LFPG_Log.Error("Cannot create default config: " + saveError);
+            else
+            {
+                string createMsg = "Default config created at: ";
+                createMsg = createMsg + filePath;
+                LFPG_Log.Info(createMsg);
+            }
         }
 
         config.ComputeDerivedValues();

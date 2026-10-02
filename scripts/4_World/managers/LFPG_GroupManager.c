@@ -70,6 +70,7 @@ class LFPG_GroupManager
     // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
     protected ref array<string> m_OrphanBuffer;
     protected ref array<Man> m_PlayerSearchBuffer;
+    protected ref array<Man> m_SyncRecipientBuffer;
     protected ref array<Object> m_RecalObjectBuffer;
     protected ref array<CargoBase> m_RecalCargoBuffer;
 
@@ -131,6 +132,7 @@ class LFPG_GroupManager
         m_RPCThrottle = new map<string, int>;
         m_OrphanBuffer = new array<string>;
         m_PlayerSearchBuffer = new array<Man>;
+        m_SyncRecipientBuffer = new array<Man>;
         m_RecalObjectBuffer = new array<Object>;
         m_RecalCargoBuffer = new array<CargoBase>;
         m_PendingFlags = new array<LFPG_FlagBase>;
@@ -353,7 +355,7 @@ class LFPG_GroupManager
     }
 
     // Boot audit. Runs once, on the first validation tick, after ResolvePendingFlags.
-    // Init itself is too early: the engine restores entities after MissionServer.OnInit.
+    // Pending flags cover restoration both before and after Init.
     //
     // Two jobs:
     //  1. Re-bind flags that lost their group id on an earlier boot.
@@ -2812,12 +2814,13 @@ class LFPG_GroupManager
 
         LFPG_FlagBase flag = GetGroupFlag(group.m_GroupID);
 
-        // Una sola llamada a GetPlayers (antes se llamaba N veces, una por miembro)
-        m_PlayerSearchBuffer.Clear();
-        GetGame().GetPlayers(m_PlayerSearchBuffer);
+        // SendGroupSyncFull uses m_PlayerSearchBuffer for online status. Keep
+        // recipients separate so its nested call cannot invalidate this loop.
+        m_SyncRecipientBuffer.Clear();
+        GetGame().GetPlayers(m_SyncRecipientBuffer);
 
         int memberCount = group.m_Members.Count();
-        int playerCount = m_PlayerSearchBuffer.Count();
+        int playerCount = m_SyncRecipientBuffer.Count();
         int i;
         int j;
 
@@ -2829,7 +2832,7 @@ class LFPG_GroupManager
 
             for (j = 0; j < playerCount; j = j + 1)
             {
-                Man man = m_PlayerSearchBuffer[j];
+                Man man = m_SyncRecipientBuffer[j];
                 if (!man)
                     continue;
                 PlayerIdentity identity = man.GetIdentity();

@@ -272,11 +272,7 @@ class LFPG_FlagBase extends ItemBase
             if (m_RemainingAtRaise > 0.0)
             {
                 int nowP = GetGame().GetTime();
-                int rawDiffP = nowP - m_RaisedAtTime;
-                if (rawDiffP < 0)
-                    rawDiffP = 0;
-                float elapsedMsP = rawDiffP;
-                float elapsedSP = elapsedMsP * 0.001;
+                float elapsedSP = ElapsedRaiseSeconds(nowP);
                 currentRemaining = m_RemainingAtRaise - elapsedSP;
                 if (currentRemaining < 0.0)
                     currentRemaining = 0.0;
@@ -301,6 +297,17 @@ class LFPG_FlagBase extends ItemBase
     //
     // Conversion:  vanillaPhase = 1.0 - raiseProgress
     // ========================================================================
+
+    // GetTime is a signed 32-bit millisecond clock. Treat the interval as
+    // unsigned; resetting a negative delta would forgive up to 24.85 days.
+    protected float ElapsedRaiseSeconds(int now)
+    {
+        int delta = now - m_RaisedAtTime;
+        float elapsedMs = delta;
+        if (delta < 0)
+            elapsedMs = elapsedMs + 4294967296.0;
+        return elapsedMs * 0.001;
+    }
 
     // Calcula el raise progress ACTUAL basado en tiempo transcurrido
     // Si IsPowered(), el tiempo no pasa (decay congelado).
@@ -329,20 +336,17 @@ class LFPG_FlagBase extends ItemBase
         }
 
         int now = GetGame().GetTime();
-        int rawDiff = now - m_RaisedAtTime;
+        float elapsedS = ElapsedRaiseSeconds(now);
+        float remaining = m_RemainingAtRaise - elapsedS;
 
-        // Proteccion contra overflow de GetTime() (~24.85 dias uptime)
-        // Si rawDiff es negativo, hubo wrap-around: re-anclar timestamps
-        if (rawDiff < 0)
+        // The periodic refresh reaches this long before a full 49.7-day wrap.
+        // Re-anchor only after accounting for all elapsed time.
+        if (elapsedS >= 2147483.0)
         {
             m_RaisedAtTime = now;
+            m_RemainingAtRaise = Math.Max(remaining, 0.0);
             m_RemainingSeconds = m_RemainingAtRaise;
-            rawDiff = 0;
         }
-
-        float elapsedMs = rawDiff;
-        float elapsedS = elapsedMs * 0.001;
-        float remaining = m_RemainingAtRaise - elapsedS;
 
         if (remaining <= 0.0)
             return 0.0;
@@ -550,7 +554,8 @@ class LFPG_FlagBase extends ItemBase
         if (diff < 0.0)
             diff = -diff;
 
-        if (diff > 0.005)
+        bool terminalChange = current == 0.0 && m_RaiseProgressNet != 0.0;
+        if (diff > 0.005 || terminalChange)
         {
             m_RaiseProgressNet = current;
             SetSynchDirty();
@@ -694,16 +699,7 @@ class LFPG_FlagBase extends ItemBase
         else if (m_RemainingAtRaise > 0.0)
         {
             int now = GetGame().GetTime();
-            int rawDiff = now - m_RaisedAtTime;
-
-            // Proteccion contra overflow de GetTime() (~24.85 dias uptime)
-            if (rawDiff < 0)
-            {
-                rawDiff = 0;
-            }
-
-            float elapsedMs = rawDiff;
-            float elapsedS = elapsedMs * 0.001;
+            float elapsedS = ElapsedRaiseSeconds(now);
             currentRemaining = m_RemainingAtRaise - elapsedS;
             if (currentRemaining < 0.0)
             {
@@ -786,8 +782,8 @@ class LFPG_FlagBase extends ItemBase
             }
             else
             {
-                // El engine restaura las entidades dentro de super.OnInit(), y
-                // LoadGroups() corre DESPUES: que el grupo no exista aqui no
+                // Si la bandera se restaura antes de LoadGroups(),
+                // que el grupo no exista aqui no
                 // significa que sea huerfana, sino que el JSON aun no se ha leido.
                 // m_GroupID NO se toca: es un campo persistido y vaciarlo romperia
                 // el vinculo bandera-grupo de forma irreversible en el proximo save.
