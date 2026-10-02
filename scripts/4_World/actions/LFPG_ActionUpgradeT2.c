@@ -80,6 +80,13 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
 
     override void OnFinishProgressServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target || !action_data.m_Player)
+            return;
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(action_data.m_Player, action_data.m_Target.GetObject()))
+            return;
+        if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+            return;
+
         super.OnFinishProgressServer(action_data);
 
         if (!action_data || !action_data.m_Target)

@@ -49,6 +49,7 @@ class LFPG_GroupNameDialogController extends ViewController
     bool OnConfirmExecute(ButtonCommandArgs args)
     {
         string name = EditGroupName;
+        name.TrimInPlace();
 
         // Validación client-side (preview, no autoritativa).
         // AUDIT #10 F20: las cotas reales son las de la config del server

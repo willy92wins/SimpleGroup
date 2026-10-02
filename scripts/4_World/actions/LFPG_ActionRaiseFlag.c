@@ -107,6 +107,13 @@ class LFPG_ActionRaiseFlag extends ActionContinuousBase
 
     override void OnFinishProgressServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target || !action_data.m_Player)
+            return;
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(action_data.m_Player, action_data.m_Target.GetObject()))
+            return;
+        if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+            return;
+
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;

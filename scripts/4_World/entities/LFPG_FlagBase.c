@@ -381,6 +381,7 @@ class LFPG_FlagBase extends ItemBase
         UpdateAnimationPhase(1.0);
 
         // Raise action and the T3 power latch both call this when the flag goes full.
+        ApplyGroupLifetime();
         // The manager refreshes only when this entity is the registered flag of a live group.
         LFPG_GroupManager raiseMgr = LFPG_GroupManager.Get();
         if (raiseMgr)
@@ -399,6 +400,8 @@ class LFPG_FlagBase extends ItemBase
         if (!lifeMgr)
             return;
         if (!lifeMgr.IsOwnedRegisteredFlag(this))
+            return;
+        if (ComputeCurrentRaiseProgress() <= 0.0)
             return;
 
         SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
@@ -424,6 +427,8 @@ class LFPG_FlagBase extends ItemBase
     void ApplyFailedLoadLifetime()
     {
         #ifdef SERVER
+        if (ComputeCurrentRaiseProgress() <= 0.0)
+            return;
         SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
         SetLifetime(LFPG_GROUP_FLAG_LIFETIME);
 
@@ -564,6 +569,7 @@ class LFPG_FlagBase extends ItemBase
         SetSynchDirty();
 
         // One-shot CallLater es seguro (no afectado por bug 4.5h)
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(DeactivateInviteMode);
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(DeactivateInviteMode, durationMs, false);
         #endif
     }

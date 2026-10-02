@@ -35,6 +35,32 @@
 
 modded class ActionDeployObject
 {
+    override void OnFinishProgressServer(ActionData action_data)
+    {
+        if (!action_data || !action_data.m_Player || !action_data.m_MainItem)
+            return;
+        LFPG_FlagKit_T1 flagKit = LFPG_FlagKit_T1.Cast(action_data.m_MainItem);
+        PlaceObjectActionData placement = PlaceObjectActionData.Cast(action_data);
+        if (flagKit)
+        {
+            if (!placement)
+                return;
+            if (!flagKit.CanBePlaced(action_data.m_Player, placement.m_Position))
+            {
+                placement.m_AlreadyPlaced = false;
+                LFPG_GroupManager kitMgr = LFPG_GroupManager.Get();
+                if (kitMgr)
+                    kitMgr.SendErrorToPlayer(action_data.m_Player.GetIdentity(), action_data.m_Player, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+                return;
+            }
+        }
+        super.OnFinishProgressServer(action_data);
+        // Vanilla marks placement complete BEFORE OnPlacementComplete and deletes
+        // basebuilding kits in OnEndServer. A failed spawn must retain the kit.
+        if (flagKit && !flagKit.DidPlaceSuccessfully())
+            placement.m_AlreadyPlaced = false;
+    }
+
     // ------------------------------------------------------------------------
     // CLIENT: click no dispara la action si LFPG bloquea
     // ------------------------------------------------------------------------
