@@ -28,7 +28,7 @@ class LFPG_FlagKit_T1 extends ItemBase
     // ActionDeployObject usa esto — sin soundset, el deploy puede fallar
     override string GetLoopDeploySoundset()
     {
-        string snd = "placeObject_SoundSet";
+        string snd = "Shelter_Site_Build_Loop_SoundSet";
         return snd;
     }
 
