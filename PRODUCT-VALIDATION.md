@@ -29,13 +29,28 @@ El guard de colisión de ID se concilió por Codex según la autorización desde
   antes de instalar ninguna lista; la repetición verifica la corrección.
 - Sesión cerrada ordenadamente. PBO y nueve archivos originales del perfil
   restaurados y verificados por hash; no es un despliegue de producción.
+- Persistencia, run `bb7408de-bd00-404f-a04f-6c619ea3c10d`: **64 aserciones
+  de producto nativas y 24 comprobaciones independientes de archivos, 0 fallos**.
+  La misión invoca Init/LoadGroups/SaveGroups originales; un adaptador permite
+  observar índices, dirty y modo de solo lectura, sin sustituir esos métodos.
+  Cubre JSON válido/vacío/corrupto, backup, tmp pendiente, IDs/miembros duplicados,
+  líder ausente, versiones futuras y bandera restaurada con perfil perdido.
+- Se niega realmente escritura/borrado mediante handles de Windows en tmp,
+  backup y final, con un control independiente que confirma cada denegación.
+  Los tres guardados fallan conservando dirty y datos recuperables. Al liberar
+  el handle, el reintento guarda el estado más reciente y limpia dirty/tmp.
+  Los archivos se comparan por bytes y se verifica el contenido final/backup.
+  No equivale a una prueba de corte de alimentación ni de caída del proceso.
+  Perfil y PBO originales restaurados por hash tras el cierre ordenado.
 
 ## Límites de la evidencia
 
 El parser cliente se ejercitó con serializadores nativos en el proceso servidor;
 eso no prueba el transporte RPC a varios clientes. La reconciliación de layouts
 no prueba interacción visual. Quedan por ejercitar con jugadores las acciones,
-inventario y UI, además de la recuperación ante fallos de disco/interrupciones.
+inventario y UI, además de interrupciones del proceso o disco físico.
+El dueño deja expresamente pendiente multicliente por no disponer de un segundo
+cliente. No se sustituye esa aceptación por miembros ficticios en una misión.
 No se ha medido rendimiento con carga ni longevidad CE de un servidor real.
 
 Las excepciones de inventario y las decisiones de permisos están documentadas
