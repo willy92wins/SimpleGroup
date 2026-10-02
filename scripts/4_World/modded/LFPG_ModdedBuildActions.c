@@ -92,6 +92,11 @@ class LFPG_BuildGate
         if (!targetObj)
             return true;
 
+        // No membership means no authoritative radius/owner cache yet. The
+        // server still gates the action, including players without a group.
+        if (!LFPG_ClientGroupCache.HasGroup())
+            return true;
+
         vector targetPos = targetObj.GetPosition();
 
         // Inside our own build zone the server resolves the nearest owner as us.
