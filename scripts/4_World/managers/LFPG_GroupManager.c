@@ -3162,16 +3162,14 @@ class LFPG_GroupManager
 
         if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath) || IsFutureGroupsFile(bakPath))
         {
-            m_GroupsLoadFailed = true;
-            LFPG_Log.Error("SaveGroups: newer groups format found. READ ONLY; files retained.");
+            LFPG_Log.Error("SaveGroups: newer groups format found. Save paused; dirty state retained.");
             return false;
         }
 
         int diskCount;
         if (FileExist(finalPath) && !ReadGroupsFile(finalPath, diskCount) && !m_HasVerifiedGroupsTmp)
         {
-            m_GroupsLoadFailed = true;
-            LFPG_Log.Error("SaveGroups: final invalid. READ ONLY; candidates retained.");
+            LFPG_Log.Error("SaveGroups: final unreadable/invalid. Save paused; dirty state retained.");
             return false;
         }
         string legacySource = finalPath;

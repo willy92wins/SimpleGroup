@@ -136,8 +136,13 @@ class LFPG_GroupsStorage
     // its byte-identical copy; migration after rollback gets a numbered copy.
     static bool PreserveLegacy(string path, string backupBase)
     {
-        if (!FileExist(path) || ReadVersion(path) != 1)
+        if (!FileExist(path))
             return true;
+        int version = ReadVersion(path);
+        if (version == FILE_VERSION)
+            return true;
+        if (version != 1)
+            return false;
         string backup = backupBase;
         int index = 0;
         while (FileExist(backup))
