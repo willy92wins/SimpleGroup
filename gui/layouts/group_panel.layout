@@ -22,24 +22,36 @@ WrapSpacerWidgetClass LFPG_GroupPanel {
    hexactsize 1
    vexactsize 1
    {
-    TextWidgetClass GroupNameText {
-     scriptclass "ViewBinding"
+    FrameWidgetClass GroupNameClip {
      ignorepointer 1
-     color 1 1 1 1
+     clipchildren 1
      position 40 12
      size 320 32
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/sdf_MetronBook24"
-     "exact text" 1
-     "exact text size" 24
-     "text halign" center
-     "text valign" center
      {
-      ScriptParamsClass {
-       Binding_Name "GroupName"
+      TextWidgetClass GroupNameText {
+       scriptclass "ViewBinding"
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 320 32
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       font "gui/fonts/sdf_MetronBook24"
+       "exact text" 1
+       "exact text size" 24
+       "text halign" center
+       "text valign" center
+       {
+        ScriptParamsClass {
+         Binding_Name "GroupName"
+        }
+       }
       }
      }
     }

@@ -23,6 +23,7 @@ class LFPG_GroupNameDialogController extends ViewController
 
     protected bool m_CancelHover;
     protected bool m_ConfirmHover;
+    protected int m_NextConfirmAt;
 
     void LFPG_GroupNameDialogController()
     {
@@ -48,6 +49,11 @@ class LFPG_GroupNameDialogController extends ViewController
     // Relay_Command: confirmar nombre
     bool OnConfirmExecute(ButtonCommandArgs args)
     {
+        if (!GetGame())
+            return false;
+        int now = GetGame().GetTime();
+        if (now < m_NextConfirmAt)
+            return true;
         string name = EditGroupName;
         name.TrimInPlace();
 
@@ -76,6 +82,9 @@ class LFPG_GroupNameDialogController extends ViewController
             return false;
 
         ScriptRPC rpc = new ScriptRPC();
+        // Ignore double clicks within the server throttle window. A timeout
+        // permits retry even if the server answers with a generic error.
+        m_NextConfirmAt = now + 500;
         rpc.Write(name);
         rpc.Send(m_TargetFlag, LFPG_RPC_C2S_SET_GROUP_NAME, true, null);
 

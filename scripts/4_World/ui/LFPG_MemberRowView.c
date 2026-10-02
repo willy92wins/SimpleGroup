@@ -103,6 +103,8 @@ class LFPG_MemberRowController extends ViewController
 
         if (m_LayoutRoot)
         {
+            string nameClipName = "MemberNameClip";
+            Widget nameClip = m_LayoutRoot.FindAnyWidget(nameClipName);
             string nameTextName = "MemberNameText";
             TextWidget nameText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(nameTextName));
             if (nameText)
@@ -110,10 +112,14 @@ class LFPG_MemberRowController extends ViewController
                 if (showButtons)
                 {
                     nameText.SetSize(164.0, 34.0);
+                    if (nameClip)
+                        nameClip.SetSize(164.0, 34.0);
                 }
                 else
                 {
                     nameText.SetSize(250.0, 34.0);
+                    if (nameClip)
+                        nameClip.SetSize(250.0, 34.0);
                 }
             }
         }
