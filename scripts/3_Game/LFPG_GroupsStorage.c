@@ -30,14 +30,22 @@ class LFPG_GroupsStorage
         int a = 1;
         int b = 0;
         int size = payload.Length();
-        for (int i = 0; i < size; i = i + 1)
+        // Get on a large native string is expensive. Bound the source string
+        // for each byte read; preserve Adler state across these raw byte blocks.
+        for (int offset = 0; offset < size; offset = offset + 512)
         {
-            string character = payload.Get(i);
-            int octet = character.ToAscii();
-            if (octet < 0)
-                octet = octet + 256;
-            a = (a + octet) % 65521;
-            b = (b + a) % 65521;
+            int length = size - offset;
+            if (length > 512)
+                length = 512;
+            string block = payload.Substring(offset, length);
+            for (int i = 0; i < length; i = i + 1)
+            {
+                int octet = block.Get(i).ToAscii();
+                if (octet < 0)
+                    octet = octet + 256;
+                a = (a + octet) % 65521;
+                b = (b + a) % 65521;
+            }
         }
         return "adler32:" + b.ToString() + ":" + a.ToString();
     }
@@ -140,26 +148,30 @@ class LFPG_GroupsStorage
             return false;
         envelope.m_PayloadParts = new array<string>;
         int start = 0;
-        int characters = 0;
-        for (int offset = 0; offset < envelope.m_PayloadBytes; offset = offset + 1)
+        while (start < envelope.m_PayloadBytes)
         {
-            int octet = payload.Get(offset).ToAscii();
-            if (octet < 0)
-                octet = octet + 256;
-            // A UTF-8 continuation byte is 128..191. Only start a new part
-            // before a complete scalar; the payload comes from JsonSerializer.
-            if (octet < 128 || octet >= 192)
+            // At most 128 bytes also satisfies the 128-scalar format limit.
+            // Inspect only a boundary, not every byte of the large payload.
+            int end = start + PART_CHARACTERS;
+            if (end >= envelope.m_PayloadBytes)
+                end = envelope.m_PayloadBytes;
+            else
             {
-                if (characters == PART_CHARACTERS)
+                while (end > start)
                 {
-                    envelope.m_PayloadParts.Insert(payload.Substring(start, offset - start));
-                    start = offset;
-                    characters = 0;
+                    int octet = payload.Get(end).ToAscii();
+                    if (octet < 0)
+                        octet = octet + 256;
+                    if (octet < 128 || octet >= 192)
+                        break;
+                    end = end - 1;
                 }
-                characters = characters + 1;
             }
+            if (end <= start)
+                return false;
+            envelope.m_PayloadParts.Insert(payload.Substring(start, end - start));
+            start = end;
         }
-        envelope.m_PayloadParts.Insert(payload.Substring(start, envelope.m_PayloadBytes - start));
         envelope.m_Digest = Digest(payload);
         return JsonFileLoader<LFPG_GroupsEnvelope>.SaveFile(path, envelope, error);
     }
