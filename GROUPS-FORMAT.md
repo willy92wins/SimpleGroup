@@ -11,7 +11,7 @@ El lector acepta v1 sin reescribirlo al cargar ni al apagar sin cambios.
   "m_Version": 2,
   "m_ExpectedGroups": 0,
   "m_Digest": "adler32:VALOR_B:VALOR_A",
-  "m_PayloadBytes": 28,
+  "m_PayloadBytes": 29,
   "m_PayloadParts": ["{\"m_Version\":1,\"m_Groups\":[]}"]
 }
 ```

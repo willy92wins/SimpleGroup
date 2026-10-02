@@ -20,8 +20,9 @@ class LFPG_GroupsStorage
     static const int FILE_VERSION = 2;
     // Same bound as vanilla JsonFileLoader. A file reaching it is refused.
     static const int MAX_BYTES = 100000000;
-    // Native JSON string reads truncate at1023 bytes.128 Unicode scalars use
-    // at most512 UTF-8 bytes; SubstringUtf8 never cuts a multibyte character.
+    // Native JSON string reads truncate at 1023 bytes. 128 Unicode scalars
+    // use at most 512 UTF-8 bytes. Slice by byte offsets: SubstringUtf8 stops
+    // working past character offset 8191 in the tested DayZ engine.
     static const int PART_CHARACTERS = 128;
 
     static string Digest(string payload)
@@ -138,14 +139,27 @@ class LFPG_GroupsStorage
         if (envelope.m_PayloadBytes <= 0 || envelope.m_PayloadBytes >= MAX_BYTES)
             return false;
         envelope.m_PayloadParts = new array<string>;
-        int characters = payload.LengthUtf8();
-        for (int offset = 0; offset < characters; offset = offset + PART_CHARACTERS)
+        int start = 0;
+        int characters = 0;
+        for (int offset = 0; offset < envelope.m_PayloadBytes; offset = offset + 1)
         {
-            int partLength = characters - offset;
-            if (partLength > PART_CHARACTERS)
-                partLength = PART_CHARACTERS;
-            envelope.m_PayloadParts.Insert(payload.SubstringUtf8(offset, partLength));
+            int octet = payload.Get(offset).ToAscii();
+            if (octet < 0)
+                octet = octet + 256;
+            // A UTF-8 continuation byte is 128..191. Only start a new part
+            // before a complete scalar; the payload comes from JsonSerializer.
+            if (octet < 128 || octet >= 192)
+            {
+                if (characters == PART_CHARACTERS)
+                {
+                    envelope.m_PayloadParts.Insert(payload.Substring(start, offset - start));
+                    start = offset;
+                    characters = 0;
+                }
+                characters = characters + 1;
+            }
         }
+        envelope.m_PayloadParts.Insert(payload.Substring(start, envelope.m_PayloadBytes - start));
         envelope.m_Digest = Digest(payload);
         return JsonFileLoader<LFPG_GroupsEnvelope>.SaveFile(path, envelope, error);
     }
