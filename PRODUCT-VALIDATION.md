@@ -1,4 +1,23 @@
-# Validación del candidato — 2026-10-02
+# Validación del candidato
+
+## Continuación2026-10-03: v2 en aceptación
+
+Código v2:799918a, basado en mainc8e803c. Opus5.5 r3 MERGE_OK_STATIC tras corregir
+reintento de lectura transitoria y copia parcial; r2+ solo delta. Exportador
+Python3.14:9testsPASS (incluye corrupción, ambigüedad y conservación de fuentes).
+Lint0errores/17avisos de la base; PBO42scripts/63recursos exactos,
+SHA256 `c4a99a8d6dd190fa55f40b4a82be4c52cb83d2c8196c0d3cd2a4f373d625f8b3`.
+
+**Pendiente de ejecución en motor:** vectoresUTF8, lectura v1 sin reescritura,
+migración/backup, corruptos/futuros, fallo de copia, bloqueo de I/O y reintento,
+120identidades y rollback leído por el binario anterior. El build de PBO no
+prueba compilación Enforce ni sustituye estos gates.
+
+F28 inventariado y conservado por compatibilidad; revisión documental Opus sin
+hallazgos F28. Plantilla CE de4clases y guía multimapa revisadas, comentarios de
+lifetime precisados tras revisión. No afirmar CE real/reinicio ni120clientes.
+
+## Histórico2026-10-02 (código anterior a v2)
 
 Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
 Último código: `e0111d3c38ebbaaa255bd01ea13a36b232341c02` (F22 y decisiones F14/F16).
