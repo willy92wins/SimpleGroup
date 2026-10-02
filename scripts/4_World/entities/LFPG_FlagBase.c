@@ -47,6 +47,7 @@ class LFPG_FlagBase extends ItemBase
     protected bool m_IsRegisteredWithManager;
     protected int m_LoadedStorageVersion;
     protected bool m_GroupLifetimeLogged;
+    protected bool m_FailedLoadLifetimeLogged;
     // Filled by OnStoreLoad. Copied onto the live fields in AfterStoreLoad,
     // which runs only after the whole entity load, including LFPG_Flag_T3, succeeds.
     protected string m_PendingGroupID;
@@ -70,6 +71,7 @@ class LFPG_FlagBase extends ItemBase
         m_IsRegisteredWithManager = false;
         m_LoadedStorageVersion = 0;
         m_GroupLifetimeLogged = false;
+        m_FailedLoadLifetimeLogged = false;
         m_PendingGroupID = "";
         m_PendingRemainingSeconds = 0.0;
         m_HasPendingStore = false;
@@ -402,6 +404,29 @@ class LFPG_FlagBase extends ItemBase
             lifeMsg = lifeMsg + " group=";
             lifeMsg = lifeMsg + m_GroupID;
             LFPG_Log.Info(lifeMsg);
+        }
+        #endif
+    }
+
+    // Server only. Failed-load sessions keep a pending flag on the same CE lifetime
+    // as a registered group flag. Does not refresh nearby base objects and does not
+    // treat the flag as registered. ApplyGroupLifetime still owns normal sessions.
+    void ApplyFailedLoadLifetime()
+    {
+        #ifdef SERVER
+        SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
+        SetLifetime(LFPG_GROUP_FLAG_LIFETIME);
+
+        if (!m_FailedLoadLifetimeLogged)
+        {
+            m_FailedLoadLifetimeLogged = true;
+            string preserveMsg = "Flag lifetime preserved, groups file unusable: remaining=";
+            preserveMsg = preserveMsg + GetLifetime().ToString();
+            preserveMsg = preserveMsg + " max=";
+            preserveMsg = preserveMsg + GetLifetimeMax().ToString();
+            preserveMsg = preserveMsg + " group=";
+            preserveMsg = preserveMsg + m_GroupID;
+            LFPG_Log.Info(preserveMsg);
         }
         #endif
     }

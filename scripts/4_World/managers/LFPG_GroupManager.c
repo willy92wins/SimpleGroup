@@ -241,7 +241,11 @@ class LFPG_GroupManager
         for (i = 0; i < count; i = i + 1)
         {
             if (m_PendingFlags[i] == flag)
+            {
+                if (m_GroupsLoadFailed)
+                    flag.ApplyFailedLoadLifetime();
                 return;
+            }
         }
 
         m_PendingFlags.Insert(flag);
@@ -250,8 +254,10 @@ class LFPG_GroupManager
         LFPG_Log.Info(pendMsg);
 
         // Load failed: block the zone now. The audit is still a second away.
+        // The long lifetime is preservation only. The flag stays pending.
         if (m_GroupsLoadFailed)
         {
+            flag.ApplyFailedLoadLifetime();
             float pendProgress = flag.ComputeCurrentRaiseProgress();
             UpdateFlagPositionCache(flag.GetGroupID(), flag.GetPosition(), pendProgress, flag.GetTier());
         }
@@ -388,9 +394,10 @@ class LFPG_GroupManager
         return m_BootAuditDone;
     }
 
-    // Resolve, re-bind, then abandon whatever is still pending. Runs from the
-    // gameplay queue about a second after Init, or from the validation tick if
-    // that tick arrives first. Exactly once.
+    // Resolve, re-bind, then abandon whatever is still pending. A failed load
+    // keeps those flags pending for the session so lifetime and live progress
+    // still see them. Runs from the gameplay queue about a second after Init,
+    // or from the validation tick if that tick arrives first. Exactly once.
     void RunBootAudit()
     {
         if (m_BootAuditDone)
@@ -420,6 +427,7 @@ class LFPG_GroupManager
                 keepMsg = keepMsg + " at ";
                 keepMsg = keepMsg + pFlag.GetPosition().ToString();
                 LFPG_Log.Error(keepMsg);
+                pFlag.ApplyFailedLoadLifetime();
             }
             else
             {
@@ -428,7 +436,10 @@ class LFPG_GroupManager
                 abandonedDeclared = abandonedDeclared + 1;
             }
         }
-        m_PendingFlags.Clear();
+        // Normal sessions drop the list after abandon. A failed load leaves the
+        // flags here: clearing them would freeze progress and stop the top-up.
+        if (!m_GroupsLoadFailed)
+            m_PendingFlags.Clear();
 
         string pendLeft = "Boot audit: flags declared abandoned: ";
         pendLeft = pendLeft + abandonedDeclared.ToString();
@@ -639,6 +650,22 @@ class LFPG_GroupManager
             if (lifeFlag.GetGroupID() == "")
                 continue;
             lifeFlag.ApplyGroupLifetime();
+        }
+
+        // Failed load only. Pending flags are not registered and do not refresh a base.
+        if (!m_GroupsLoadFailed)
+            return;
+
+        int preserveCount = m_PendingFlags.Count();
+        int preserveIdx;
+        for (preserveIdx = 0; preserveIdx < preserveCount; preserveIdx = preserveIdx + 1)
+        {
+            LFPG_FlagBase preserveFlag = m_PendingFlags[preserveIdx];
+            if (!preserveFlag)
+                continue;
+            if (preserveFlag.GetGroupID() == "")
+                continue;
+            preserveFlag.ApplyFailedLoadLifetime();
         }
     }
 
@@ -1117,8 +1144,9 @@ class LFPG_GroupManager
     }
 
     // Nearest other group whose flag lies inside the build radius (XZ) and whose
-    // live raise progress is above zero. Cached progress is used only when that
-    // group has no registered flag entity. Empty string means no foreign owner.
+    // live raise progress is above zero. A registered flag wins. With none, a
+    // pending flag of that group at the cached position supplies live progress.
+    // Otherwise the cached value is kept. Empty string means no foreign owner.
     // A groupless actor passes "" and any such group is foreign.
     // extraMeters widens the search past the build radius. Crafting uses it so a
     // result spawned ahead of the player cannot land inside a foreign zone.
@@ -1159,6 +1187,12 @@ class LFPG_GroupManager
                 if (foFlag)
                     liveProgress = foFlag.ComputeCurrentRaiseProgress();
             }
+            else
+            {
+                LFPG_FlagBase foPending = FindPendingFlagAt(foEntry.m_GroupID, foEntry.m_Position);
+                if (foPending)
+                    liveProgress = foPending.ComputeCurrentRaiseProgress();
+            }
             if (liveProgress <= 0.0)
                 continue;
 
@@ -1166,6 +1200,33 @@ class LFPG_GroupManager
             nearestID = foEntry.m_GroupID;
         }
         return nearestID;
+    }
+
+    // Pending flag of this group whose position matches the cache entry.
+    // Used when the group has no registered flag. Null keeps the cached progress.
+    protected LFPG_FlagBase FindPendingFlagAt(string groupID, vector pos)
+    {
+        if (groupID == "")
+            return null;
+
+        int pendFind;
+        int pendFindCount = m_PendingFlags.Count();
+        for (pendFind = 0; pendFind < pendFindCount; pendFind = pendFind + 1)
+        {
+            LFPG_FlagBase pendFindFlag = m_PendingFlags[pendFind];
+            if (!pendFindFlag)
+                continue;
+            if (pendFindFlag.GetGroupID() != groupID)
+                continue;
+
+            vector pendFindPos = pendFindFlag.GetPosition();
+            float pendDx = pos[0] - pendFindPos[0];
+            float pendDz = pos[2] - pendFindPos[2];
+            float pendDistSq = (pendDx * pendDx) + (pendDz * pendDz);
+            if (pendDistSq < 4.0)
+                return pendFindFlag;
+        }
+        return null;
     }
 
     // ========================================================================
