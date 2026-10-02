@@ -39,8 +39,17 @@ nativa. Se usan únicamente los callbacks que el motor admite.
 
 ## Persistencia (#14)
 
-Se conserva groups.json v1. El formato v2 sigue aplazado según la decisión
-registrada en #14; estas correcciones no migran datos.
+El2026-10-03 el dueño levantó el aplazamiento y pidió implementar v2 ahora.
+El lector conserva v1; las escrituras nuevas usan el envelope v2 con contador,
+checksum y copia previa verificada. El retorno a v1 exporta el estado actual,
+incluidos cambios posteriores a la migración. Ver GROUPS-FORMAT.md.
+
+## Mapas y capacidad (2026-10-03)
+
+Soporte multimapa, con perfiles/CE independientes por mundo. Objetivo100–120
+jugadores. No se interpreta como compartir territorios entre mundos ni como
+capacidad ya medida con120 clientes. El segundo cliente sigue aplazado por
+decisión del dueño; las pruebas sintéticas se identifican como tales.
 
 ## Refresco de lifetime en configuraciones existentes
 

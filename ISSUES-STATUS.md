@@ -36,8 +36,8 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
 | F25 | Guard corregido y probado en motor | `UpgradeFlag` rechaza la segunda llamada en el mismo tick con la referencia anterior y conserva T2 registrada. No se afirma concurrencia de dos clientes. |
 | F26 | Corregido | Trim y clave sin distinción de mayúsculas para nombres nuevos. |
-| F27 | Coste no medido; propuesta de medición | Medir guardado, recuento y consultas con población/objetos representativos antes de proponer optimización. |
-| F28 | Riesgo de handlers retirado; limpieza pendiente propuesta | Constantes RPC, campos NetLow/High, JoinTimestamp y parámetro updateType se mantienen hasta comprobar consumidores externos y compatibilidad de persistencia; destino en la propuesta 3. |
+| F27 | Guardado medido y optimizado; aceptación de carga parcial | 120 identidades: cinco guardados pasan de 3842–4604 ms a 125–191 ms en DayZDiag. Recuento con objetos reales en aceptación; no equivale a 120 clientes conectados. |
+| F28 | Inventario cerrado; contratos conservados por compatibilidad | Ver [F28-COMPATIBILITY.md](F28-COMPATIBILITY.md). Handlers inseguros retirados; campos persistidos, símbolos públicos y firmas se conservan conscientemente. |
 | F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
 | F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
 | F31 | Resuelto por decisión del dueño | Conservar sucesión al salir o expulsar; no implementar sucesión por inactividad. |
@@ -52,10 +52,8 @@ PRs de continuación propuestos, sin cambiar reglas de juego por inferencia:
    burbuja. Aplazada expresamente por falta de segundo cliente.
 2. Aceptación CE y rendimiento en el servidor de destino, más interacción
    física/inspección visual; cada dimensión requiere su evidencia propia.
-3. Limpieza F28: inventariar consumidores de constantes/contratos/argumentos y
-   campos; retirar únicamente lo que se demuestre sin uso y compatible con
-   perfiles legacy. JoinTimestamp forma parte del JSON: no tratar su retirada
-   como si fuera solo un campo privado sin persistencia.
+3. F28 resuelta por inventario y conservación explícita de compatibilidad; no
+   retirar JoinTimestamp ni contratos públicos solo por no tener lectores internos.
 
 Primer run de aceptación `02b4654c-320c-466a-85c4-9b1dc1ac4763` sobre main:
 UI 28 comprobaciones/0 fallos de callbacks y respuesta RPC; acciones/inventario
@@ -67,48 +65,24 @@ Opus 5.5 aprobó el código; r2 sobre el RPC truncado fue MERGE_OK_WITH_LIMIT:
 se rechaza sin mutación y el motor registra una excepción de lectura. La
 limitación y los fallos de fixture previos están en PRODUCT-VALIDATION.md.
 
-## #14: propuesta para un PR futuro de groups.json v2
+## #14: v2 implementada y validada
 
-Estado: **aplazado**, tal como exige [#14](https://github.com/willy92wins/SimpleGroup/issues/14),
-hasta observar estabilidad de #11/#12/#13 en producción. Una suite local verde
-no satisface esa condición. Este documento no activa una migración.
+El dueño levantó expresamente el aplazamiento el2026-10-03: implementar v2 ahora.
+Se implementa envelope con contador y checksum del payload UTF-8 exacto, lectura
+legacy sin reescritura, copias pre-v2 numeradas y exportador v1 que conserva los
+datos posteriores a la migración. Contrato y rollback en [GROUPS-FORMAT.md](GROUPS-FORMAT.md).
 
-La premisa original necesita precisión: el constructor actual de
-`LFPG_GroupsFileData` usa versión 0 y grupos null como centinelas;
-`ValidateGroupsData` rechaza campos obligatorios ausentes. Un archivo v1 con
-versión explícita y array vacío es válido. V1 todavía carece de un contador
-esperado y digest que permitan detectar una alteración que siga siendo un
-payload válido pero haya perdido registros. No se promete que v2 resuelva
-atomicidad, cortes de energía o edición maliciosa.
+Gauntlet Opus5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
+r2 detectó bloqueo del reintento tras copia parcial. Ambos corregidos; r3
+MERGE_OK_STATIC. Los límites nativos de strings se aislaron y corrigieron con
+conciliación de Codex posterior a r3, autorizada por el dueño. Opus revisó también
+el nuevo delta de rendimiento sin hallazgos. Exportador Python: diez tests PASS.
+DayZDiag: 124 comprobaciones y cero fallos, incluidas migración, integridad,
+recuperación, copia parcial y denegación real de lectura. El binario anterior
+cargó los 120 grupos exportados y conservó los cambios posteriores a v2.
+Evidencia y límites en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 
-Propuesta [DESIGN], previa a elegir y verificar las APIs de implementación:
-
-- Lectura de v1 sin reescritura durante el arranque; validación integral antes
-  de instalar grupos. La primera escritura v2 sucede solo por una mutación
-  legítima después de aceptar la migración.
-- Versionado explícito, número esperado de grupos y digest sobre una
-  representación canónica especificada. Orden de grupos/miembros, cadenas,
-  números, codificación y exclusión del propio digest deben quedar definidos
-  con vectores de prueba independientes antes de escribir código. Elegir el
-  algoritmo solo tras verificar su disponibilidad real en DayZ.
-- Política final/tmp/bak explícita y compatible con la actual «gana final
-  válido»; no introducir una supuesta secuencia de commits dentro del digest.
-- Fallo de parseo, contador, digest o versión futura: conservar todos los
-  candidatos y prohibir mutaciones; nunca reemplazar por estado vacío.
-- Backup v1 verificable antes de la primera escritura v2. Para volver a una
-  versión antigua después de nuevas mutaciones, conservar el v2 completo y
-  disponer de una exportación v2→v1 validada con los datos más recientes.
-  Restaurar solo el backup inicial puede perder cambios: no es rollback sin
-  pérdida y requiere una decisión explícita del administrador.
-
-Criterios del futuro PR: cero grupos legítimos; campos obligatorios ausentes;
-registro omitido con JSON aún válido; digest incorrecto; reordenación según
-la canonización; v1 sin cambios al leer; primer guardado v2; versión futura;
-I/O denegado en cada candidato; reinicio entre pasos de escritura; exportación
-de rollback que conserve grupos, líderes, miembros y nombres actuales.
-
-Para levantar el aplazamiento se necesitan build/config identificados,
-observaciones del servidor de destino sobre carga/guardado y reinicios, y
-decisión del dueño sobre suficiencia de esa observación. No se inventa un
-plazo ni un volumen de producción ya cumplidos. #14 solo se cerrará al
-implementar y validar el formato o al descartarlo explícitamente.
+Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados,100–120players.
+Se incluye plantilla CE en [server/README.md](server/README.md). La medición de
+120 identidades sintéticas no acredita120 clientes ni un servidor destino que
+todavía no se ha identificado.

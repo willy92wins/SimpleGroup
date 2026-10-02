@@ -1,4 +1,79 @@
-# Validación del candidato — 2026-10-02
+# Validación del candidato
+
+## Aceptación de v2 — 2026-10-03
+
+Código probado: `d2f8b8c`, basado en main `c8e803c`. PBO SHA256
+`6d80d50a440b9f4840320c316a63004db0fe08fa99f710da165508d297827de6`:
+42 scripts y 64 recursos extraídos idénticos; cuatro modelos ODOL. Compilación
+y ejecución en DayZDiag dedicado. Lint: cero errores, 17 avisos de la base.
+Exportador Python 3.14: diez tests positivos/negativos, fuentes intactas.
+
+Gauntlet: Codex implementó; Opus 5.5 revisó persistencia hasta r3, con r2+ solo
+delta. Sus dos fallos de reintento quedaron corregidos. Codex concilió después
+los límites nativos de strings bajo la autorización del dueño desde r3. Opus
+revisó separadamente el nuevo delta de rendimiento (`8a56295..d2f8b8c`) y emitió
+`MERGE_OK_STATIC`; no equivale por sí solo a aceptación nativa.
+
+- Run `485c82a3-4c6a-41ac-bf28-39bf129242b7`: 124 comprobaciones, cero fallos,
+  incluyendo preparación. V1 leído sin reescritura, apagado limpio sin migrar,
+  primera y segunda migración con backups exactos, cero grupos, registro omitido
+  manteniendo JSON válido, contador/checksum incorrectos, futuro en cada
+  candidato, final corrupto, tmp incompleto, recuperación sin final, copia
+  parcial y reintento con una mutación posterior.
+- Denegación real de lectura mediante un handle exclusivo del host: dirty
+  conservado; al liberar el handle se guardó la mutación actual. La copia
+  parcial se inyectó en el verificador de la fixture, sin modificar producto.
+- Python/zlib verificó los archivos escritos por DayZ y exportó 120 grupos.
+  El servidor cargó además un envelope creado independientemente por Python,
+  con Unicode, un nombre de 525 bytes y coordenadas negativas/grandes.
+- Run `bfd4ff13-ee31-4287-bfbb-1cfc1023a836`: PBO anterior `e0111d3`, cuyo código
+  de producto coincide con `c8e803c`, cargó la exportación v1. Los 120 grupos
+  coincidieron en todos los campos persistidos y conservaron el cambio posterior
+  al bloqueo de lectura. No se restauró el backup inicial como rollback.
+
+### Rendimiento medido
+
+Misma fixture, cinco guardados síncronos por escenario, DayZDiag local:
+
+| Datos sintéticos | Carga optimizada | Guardado antes | Guardado optimizado |
+| --- | ---: | ---: | ---: |
+| 24 grupos, 5 miembros cada uno | 18 ms | 773–923 ms | 61–103 ms |
+| 120 grupos, 1 miembro cada uno | 46 ms | 3842–4604 ms | 125–191 ms |
+
+Los fallos iniciales se conservan como evidencia: JsonSerializer recorta strings
+a 1023 bytes; SubstringUtf8 devuelve vacío desde offset 8192. Experimentos
+aislados confirmaron ambas fronteras. La representación final divide sin cortar
+caracteres y el checksum procesa bloques de bytes pequeños. Una comparación
+aislada del mismo texto midió 550–655 ms frente a 14–23 ms para el checksum,
+con resultados idénticos. No se eliminó ninguna validación para reducir el coste.
+
+Los datos anteriores representan 120 identidades, no 120 clientes conectados.
+El coste síncrono del guardado todavía puede afectar un frame; no certifica el
+hardware ni el conjunto de mods del servidor de destino.
+
+F28: inventario y conservación explícita de contratos públicos/persistidos,
+revisados por Opus. Plantilla CE de cuatro clases y guía de perfiles separados
+por mapa incluidas. Chernarus: 24 banderas T1/T2/T3 creadas con lifetime inicial
+604800 y registrado 3888000; las 24 conservaron identidad, tier y progreso tras
+cierre ordenado y reinicio. Los tres vectores independientes con caracteres de
+2/3/4 bytes atravesando la frontera 512, longitud total 1024, dieron PASS.
+
+La aceptación de recuento sigue abierta: la búsqueda espacial encuentra las 50
+cajas esperadas en la primera base, pero la configuración v3 cargada deja vacía
+la nueva lista de muebles que no existía en ese JSON. Las 24 bases cuentan cero.
+Runs `c7936dcc-9886-4b0b-954e-7f63b98050da` y
+`159cf678-3ed1-4ca0-8a26-49631ab3b9ca`; archivos originales intactos. Este hallazgo
+de migración de configuración requiere corrección propia en #10; no invalida
+las pruebas de v2 ni convierte el recuento fallido en aceptación de carga.
+
+Evidencia local: `C:/Users/guill/sgwork/jobs/completion-20261003/acceptance/`,
+directorios `native-v2-optimized`, `native-rollback-old-reader`,
+`native-string-probe`, `native-perf-probe`; revisiones en el directorio padre.
+Los primeros ensayos fallidos no se presentan como PASS. El diagnóstico del
+plugin vanilla `PluginItemDiagnostic` al iniciar DayZDiag sigue siendo visible;
+no se afirma ausencia absoluta de errores del entorno.
+
+## Histórico2026-10-02 (código anterior a v2)
 
 Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
 Último código: `e0111d3c38ebbaaa255bd01ea13a36b232341c02` (F22 y decisiones F14/F16).

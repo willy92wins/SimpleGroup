@@ -33,7 +33,7 @@ modded class MissionServer
             // borra entidades durante el teardown, cada EEDelete intentaria
             // disolver su grupo y el save final escribiria un fichero vacio.
             mgr.SetShuttingDown();
-            mgr.SaveGroups();
+            mgr.SaveGroupsIfDirty();
         }
 
         LFPG_GroupManager.Destroy();
