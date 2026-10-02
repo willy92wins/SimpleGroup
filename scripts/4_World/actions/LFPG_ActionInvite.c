@@ -73,20 +73,24 @@ class LFPG_ActionInvite extends ActionInteractBase
 
         string playerUID = identity.GetPlainId();
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (mgr)
-        {
-            string groupID = mgr.GetPlayerGroupID(playerUID);
-            if (groupID == "")
-                return false;
-            if (groupID != flag.GetGroupID())
-                return false;
-        }
+        if (!mgr || !mgr.CanMutateGroups())
+            return false;
+        if (!mgr.IsOwnedRegisteredFlag(flag))
+            return false;
+        string groupID = mgr.GetPlayerGroupID(playerUID);
+        if (groupID == "" || groupID != flag.GetGroupID())
+            return false;
 
         return true;
     }
 
     override void OnStartServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target)
+            return;
+        if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+            return;
+
         super.OnStartServer(action_data);
 
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());

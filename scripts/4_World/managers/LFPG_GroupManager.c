@@ -300,7 +300,7 @@ class LFPG_GroupManager
         {
             if (m_PendingFlags[i] == flag)
             {
-                if (m_GroupsLoadFailed)
+                if (m_GroupsLoadFailed || m_DissolveDisabled)
                     flag.ApplyFailedLoadLifetime();
                 return;
             }
@@ -313,7 +313,7 @@ class LFPG_GroupManager
 
         // Load failed: block the zone now. The audit is still a second away.
         // The long lifetime is preservation only. The flag stays pending.
-        if (m_GroupsLoadFailed)
+        if (m_GroupsLoadFailed || m_DissolveDisabled)
         {
             flag.ApplyFailedLoadLifetime();
             float pendProgress = flag.ComputeCurrentRaiseProgress();
@@ -3314,6 +3314,19 @@ class LFPG_GroupManager
             else
             {
                 LFPG_Log.Info("LoadGroups: no profile data. Waiting for restored flags before accepting a fresh world.");
+                // Cover flags restored during super.OnInit, before this load.
+                int missingIndex;
+                for (missingIndex = 0; missingIndex < m_PendingFlags.Count(); missingIndex = missingIndex + 1)
+                {
+                    LFPG_FlagBase missingFlag = m_PendingFlags[missingIndex];
+                    if (missingFlag && missingFlag.GetGroupID() != "")
+                    {
+                        m_GroupsLoadFailed = true;
+                        m_DissolveDisabled = true;
+                        LFPG_Log.Error("Owned flags restored without group profile. READ ONLY; restore profile and restart.");
+                        break;
+                    }
+                }
             }
             return;
         }

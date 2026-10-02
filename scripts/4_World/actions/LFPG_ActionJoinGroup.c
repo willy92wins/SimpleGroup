@@ -111,7 +111,9 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
         string playerName = identity.GetName();
 
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (!mgr)
+        if (!mgr || !mgr.CanMutateGroups())
+            return;
+        if (!mgr.IsOwnedRegisteredFlag(flag))
             return;
 
         // FIX G-16: Re-validar condiciones que pudieron cambiar durante el hold de 2s
