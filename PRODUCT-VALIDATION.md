@@ -74,3 +74,24 @@ en [PRODUCT-DECISIONS.md](PRODUCT-DECISIONS.md). Se conserva groups.json v1.
 El dueño autoriza fusionar tras el gauntlet. La fusión conserva estos límites
 de aceptación: #10 sigue abierta para las verificaciones pendientes y #14
 mantiene aplazada la migración v2. La decisión de #15 está resuelta.
+
+## Continuación de issues y PR #17
+
+Código 3c3d85b: al disolver un grupo conserva la reserva de un nombre legacy
+si otro grupo sigue usándolo. Opus 5.5 r1 MERGE_OK estático; regresión nativa
+antes/después pendiente. Validador: 0 errores/17 avisos iguales a la base;
+PBO 41 scripts/62 recursos exactos, SHA-256
+`2ab9492757d1bff8878b76caaef9348b8be9316d5b7647dca36669a9c0b141de`.
+
+Sobre a8d4a01, run `02b4654c-320c-466a-85c4-9b1dc1ac4763`:
+cliente real, **28 comprobaciones UI/0 fallos** (callbacks reales de apertura,
+Escape/cierre, confirmación/timeout de salida, caché conservada hasta respuesta,
+diálogo de nombre/validación/ACK mediante RPC). No son clics humanos ni
+inspección visual. Acciones/inventario: **38 checks/3 fallos** de fixture aún
+en discriminación; no equivalen a 35 casos de producto aprobados porque hay
+preparaciones y movimientos asíncronos que necesitan confirmación independiente.
+Se conserva el log completo, se cerró el run ordenadamente y se restauraron
+PBO y nueve archivos originales por hash. No hay despliegue productivo.
+
+La resolución individual y propuestas de continuación están en
+[ISSUES-STATUS.md](ISSUES-STATUS.md).

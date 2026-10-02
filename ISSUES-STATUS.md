@@ -31,13 +31,13 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F19 | Corrección aplicada; aceptación de inventario en curso | Retorno SERVER diferido fuera del callback; no es veto atómico y puede fallar si desaparece el destino. El caso de último cupo se sigue por separado en la misma aceptación. |
 | F20 | Corregido | Límites de nombre coherentes 1..48 y compartidos con cliente. |
 | F21 | Corregido | Config inválida se conserva; defaults solo en memoria. Valores de lifetime legacy probados antes/después del fix. |
-| F22 | Identidad validada; resto de unicidad corregido en este PR | Valida IDs/UIDs/líder antes de instalar índices. Conserva perfiles legacy; disolver un duplicado ya no libera el nombre de otro grupo superviviente. No expulsa miembros por reducir maxMembers ni renombra datos antiguos. |
+| F22 | Identidad validada; fix de reserva legacy en este PR, pendiente de prueba nativa | IDs/UIDs/líder cubiertos por el run bb7408de. El delta de nombres 3c3d85b tiene MERGE_OK estático; falta la regresión en motor. Conserva grupos legacy, sin expulsar miembros por reducir maxMembers ni renombrar datos antiguos. |
 | F23 | Corregido | Retira timer anterior al activar/desactivar invitación. |
 | F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
 | F25 | Guard corregido; aceptación de doble finalización pendiente | `UpgradeFlag` exige que oldFlag sea la entidad registrada. No se afirma una prueba de concurrencia del motor. |
 | F26 | Corregido | Trim y clave sin distinción de mayúsculas para nombres nuevos. |
 | F27 | Coste no medido; propuesta de medición | Medir guardado, recuento y consultas con población/objetos representativos antes de proponer optimización. |
-| F28 | Riesgo de handlers retirado; deuda cosmética no bloqueante | No se eliminan constantes/contratos públicos solo por no tener consumidores internos. |
+| F28 | Riesgo de handlers retirado; limpieza pendiente propuesta | Constantes RPC, campos NetLow/High, JoinTimestamp y parámetro updateType se mantienen hasta comprobar consumidores externos y compatibilidad de persistencia; destino en la propuesta 4. |
 | F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
 | F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
 | F31 | Propuesta de producto, no bug de lógica cerrado | Sucesión por inactividad requiere política de plazo, elegibilidad, avisos y recuperación. Se mantiene sucesión al salir/expulsar. |
@@ -48,12 +48,23 @@ La #10 permanece abierta como lista de aceptación y decisiones residuales;
 no debe seguir presentando los defectos corregidos como trabajo por implementar.
 PRs de continuación propuestos, sin cambiar reglas de juego por inferencia:
 
-1. Aceptación con un cliente: acciones, inventario, último cupo y UI; corregir solo
+1. Aceptación con un cliente: acciones, doble finalización de upgrade (F25),
+   inventario, último cupo y UI; corregir solo
    defectos reproducidos. Adjuntar resultados y separar fallos de fixture.
 2. Aceptación multicliente, CE y rendimiento: cada dimensión requiere su evidencia
    propia. Multicliente está aplazado expresamente por falta de segundo cliente.
 3. UX/política F14/F16/F31: definir cada comportamiento antes de implementarlo;
    no condicionar la resolución de los bugs de datos a estas ampliaciones.
+4. Limpieza F28: inventariar consumidores de constantes/contratos/argumentos y
+   campos; retirar únicamente lo que se demuestre sin uso y compatible con
+   perfiles legacy. JoinTimestamp forma parte del JSON: no tratar su retirada
+   como si fuera solo un campo privado sin persistencia.
+
+Primer run de aceptación `02b4654c-320c-466a-85c4-9b1dc1ac4763` sobre main:
+UI 28 comprobaciones/0 fallos de callbacks y respuesta RPC; acciones/inventario
+38 comprobaciones/3 fallos (colocación exenta, último cupo y retorno por exceso).
+Se están discriminando precondiciones y movimiento asíncrono del fixture;
+estos tres resultados no se atribuyen aún al producto ni se presentan como PASS.
 
 ## #14: propuesta para un PR futuro de groups.json v2
 
