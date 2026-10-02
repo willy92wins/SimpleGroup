@@ -42,3 +42,23 @@ static bool LFPG_IsExcludedFromDeploy(EntityAI item)
 
     return false;
 }
+
+// Furniture exemptions also exempt placement from group, zone and quota rules.
+// Flags and plots use dedicated placement rules, not the furniture quota.
+static bool LFPG_IsFurniturePlacementExempt(EntityAI item, array<string> excludedTypes)
+{
+    if (!item)
+        return false;
+    if (item.IsKindOf("LFPG_FlagBase") || item.IsKindOf("LFPG_FlagKit_T1") || item.IsKindOf("GardenPlot"))
+        return false;
+    if (LFPG_IsExcludedFromDeploy(item))
+        return true;
+    if (!excludedTypes)
+        return false;
+    for (int i = 0; i < excludedTypes.Count(); i = i + 1)
+    {
+        if (excludedTypes[i] != "" && item.IsKindOf(excludedTypes[i]))
+            return true;
+    }
+    return false;
+}

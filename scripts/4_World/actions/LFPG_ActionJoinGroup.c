@@ -88,6 +88,13 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
 
     override void OnFinishProgressServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target || !action_data.m_Player)
+            return;
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(action_data.m_Player, action_data.m_Target.GetObject()))
+            return;
+        if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+            return;
+
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;
@@ -105,6 +112,13 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
 
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (!mgr)
+            return;
+        if (!mgr.CanMutateGroups())
+        {
+            mgr.SendGroupsUnavailable(player);
+            return;
+        }
+        if (!mgr.IsOwnedRegisteredFlag(flag))
             return;
 
         // FIX G-16: Re-validar condiciones que pudieron cambiar durante el hold de 2s
@@ -135,5 +149,26 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
             mgr.SendErrorToPlayer(identity, player, "#STR_LFPG_ERR_JOIN_FAILED");
             return;
         }
+    }
+
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (!super.ActionConditionContinue(action_data))
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+            return true;
+
+        PlayerBase player = action_data.m_Player;
+        if (!player)
+            return false;
+        if (!action_data.m_Target)
+            return false;
+
+        Object targetObj = action_data.m_Target.GetObject();
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
+        return true;
     }
 };

@@ -1,166 +1,224 @@
 FrameWidgetClass LFPG_GroupNameDialog {
- size 320 180
+ position 0 0
+ size 460 250
+ halign center_ref
+ valign center_ref
  hexactpos 1
  vexactpos 1
  hexactsize 1
  vexactsize 1
- halign center_ref
- valign center_ref
- position -160 -90
  {
-  ImageWidgetClass DialogBg {
+  PanelWidgetClass DialogBg {
+   ignorepointer 1
+   color 0.1176 0.1176 0.1176 0.9804
    position 0 0
-   size 320 180
+   size 460 250
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.1 0.1 0.12 0.96
-   stretch 1
-   ignorepointer 1
-   {
-   }
-  }
-
-  ImageWidgetClass DialogHeaderBg {
-   position 0 0
-   size 320 36
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.16 0.18 0.22 1.0
-   stretch 1
-   ignorepointer 1
-   {
-   }
+   style rover_sim_colorable
   }
 
   TextWidgetClass DialogTitle {
-   position 10 6
-   size 300 26
+   ignorepointer 1
+   color 1 1 1 1
+   position 0 16
+   size 460 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/Metron"
    text "#STR_LFPG_UI_GROUP_NAME"
+   font "gui/fonts/sdf_MetronBook24"
+   "exact text" 1
+   "exact text size" 26
    "text halign" center
    "text valign" center
-   color 0.9 0.9 0.9 1.0
+  }
+
+  PanelWidgetClass DialogAccent {
    ignorepointer 1
-   {
-   }
+   color 0.7569 0.0941 0.0941 0.7843
+   position 35 58
+   size 390 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style rover_sim_colorable
+  }
+
+  MultilineTextWidgetClass DialogHintText {
+   ignorepointer 1
+   color 0.627 0.627 0.627 1
+   position 30 70
+   size 400 48
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   text "#STR_LFPG_UI_NAME_RULES"
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 18
+   "text halign" center
+   wrap 1
+  }
+
+  PanelWidgetClass NameFieldBg {
+   ignorepointer 1
+   color 0.078 0.078 0.078 1
+   position 30 124
+   size 400 36
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style rover_sim_colorable
+  }
+
+  PanelWidgetClass NameFieldLine {
+   ignorepointer 1
+   color 0.427 0.427 0.427 1
+   position 30 159
+   size 400 1
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style rover_sim_colorable
   }
 
   EditBoxWidgetClass NameEditBox {
    scriptclass "ViewBinding"
-   position 20 50
-   size 280 30
+   color 1 1 1 1
+   position 38 129
+   size 384 26
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.9 0.9 0.9 1.0
-   max_chars 24
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 0
    {
     ScriptParamsClass {
      Binding_Name "EditGroupName"
      Two_Way_Binding 1
-     {
-     }
     }
    }
   }
 
   TextWidgetClass ErrorText {
    scriptclass "ViewBinding"
-   position 20 84
-   size 280 18
+   ignorepointer 1
+   color 0.902 0.235 0.235 1
+   position 30 164
+   size 400 24
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 1.0 0.3 0.3 1.0
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 16
    "text halign" center
-   ignorepointer 1
+   "text valign" center
    {
     ScriptParamsClass {
      Binding_Name "ErrorMessage"
-     {
-     }
-    }
-   }
-  }
-
-  ButtonWidgetClass BtnConfirm {
-   scriptclass "ViewBinding"
-   position 20 110
-   size 135 32
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.2 0.5 0.3 0.9
-   {
-    ScriptParamsClass {
-     Relay_Command "OnConfirmExecute"
-     {
-     }
-    }
-
-    TextWidgetClass BtnConfirmLabel {
-     position 0 0
-     size 135 32
-     hexactpos 1
-     vexactpos 1
-     hexactsize 1
-     vexactsize 1
-     font "gui/fonts/MetronBook"
-     text "#STR_LFPG_UI_CONFIRM"
-     "text halign" center
-     "text valign" center
-     color 0.9 0.9 0.9 1.0
-     ignorepointer 1
-     {
-     }
     }
    }
   }
 
   ButtonWidgetClass BtnCancel {
    scriptclass "ViewBinding"
-   position 165 110
-   size 135 32
+   position 16 196
+   size 160 40
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.5 0.2 0.2 0.9
+   style Empty
    {
-    ScriptParamsClass {
-     Relay_Command "OnCancelExecute"
-     {
-     }
-    }
-
-    TextWidgetClass BtnCancelLabel {
+    PanelWidgetClass BtnCancelPanel {
+     ignorepointer 1
+     color 0 0 0 0
      position 0 0
-     size 135 32
+     size 160 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnCancelLabel {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 160 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
      text "#STR_LFPG_UI_CANCEL"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 20
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnCancelExecute"
+    }
+   }
+  }
+
+  ButtonWidgetClass BtnConfirm {
+   scriptclass "ViewBinding"
+   position 284 196
+   size 160 40
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style Empty
+   {
+    PanelWidgetClass BtnConfirmPanel {
      ignorepointer 1
-     {
-     }
+     color 0 0 0 0
+     position 0 0
+     size 160 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnConfirmLabel {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 160 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
+     text "#STR_LFPG_UI_CONFIRM"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 20
+     "text halign" center
+     "text valign" center
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnConfirmExecute"
     }
    }
   }

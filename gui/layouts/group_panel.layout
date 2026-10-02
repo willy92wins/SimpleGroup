@@ -1,336 +1,278 @@
-FrameWidgetClass LFPG_GroupPanel {
- size 260 348
+WrapSpacerWidgetClass LFPG_GroupPanel {
+ color 0.1176 0.1176 0.1176 0.9804
+ position 16 16
+ size 400 300
+ halign right_ref
+ valign top_ref
  hexactpos 1
  vexactpos 1
  hexactsize 1
  vexactsize 1
- position 0 0
+ style Colorable
+ Padding 0
+ Margin 0
+ "Size To Content V" 1
+ content_halign center
  {
-  ImageWidgetClass PanelBg {
+  FrameWidgetClass HeaderFrame {
    position 0 0
-   size 260 348
+   size 400 52
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.12 0.12 0.14 0.92
-   stretch 1
-   ignorepointer 1
    {
-   }
-  }
-
-  ImageWidgetClass HeaderBg {
-   position 0 0
-   size 260 84
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.16 0.18 0.22 1.0
-   stretch 1
-   ignorepointer 1
-   {
-   }
-  }
-
-  TextWidgetClass GroupNameText {
-   scriptclass "ViewBinding"
-   position 10 4
-   size 168 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/Metron"
-   color 0.9 0.9 0.9 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "GroupName"
-     {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass TierText {
-   scriptclass "ViewBinding"
-   position 180 4
-   size 50 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/Metron"
-   "text halign" right
-   color 0.6 0.75 1.0 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "TierLabel"
-     {
-     }
-    }
-   }
-  }
-
-  ButtonWidgetClass BtnClose {
-   scriptclass "ViewBinding"
-   position 234 3
-   size 22 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.28 0.30 0.34 1.0
-   {
-    ScriptParamsClass {
-     Relay_Command "OnCloseExecute"
-     {
-     }
-    }
-
-    TextWidgetClass BtnCloseText {
-     position 0 0
-     size 22 18
+    FrameWidgetClass GroupNameClip {
+     ignorepointer 1
+     clipchildren 1
+     position 40 12
+     size 320 32
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
-     text "X"
-     "text halign" center
-     "text valign" center
-     color 0.9 0.9 0.9 1.0
-     ignorepointer 1
      {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass TerritoryText {
-   scriptclass "ViewBinding"
-   position 10 24
-   size 240 16
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.6 0.6 0.6 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "TerritoryStatus"
-     {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass DeployText {
-   scriptclass "ViewBinding"
-   position 10 42
-   size 240 14
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.6 0.6 0.6 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "DeployInfo"
-     {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass DeployCountText {
-   scriptclass "ViewBinding"
-   position 10 58
-   size 120 14
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.5 0.6 0.5 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "DeployCount"
-     {
-     }
-    }
-   }
-  }
-
-  TextWidgetClass GardenCountText {
-   scriptclass "ViewBinding"
-   position 130 58
-   size 120 14
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.5 0.6 0.5 1.0
-   ignorepointer 1
-   {
-    ScriptParamsClass {
-     Binding_Name "GardenCount"
-     {
-     }
-    }
-   }
-  }
-
-  FrameWidgetClass DeployHoverZone {
-   position 8 56
-   size 120 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   {
-   }
-  }
-
-  FrameWidgetClass GardenHoverZone {
-   position 128 56
-   size 122 18
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   {
-   }
-  }
-
-  FrameWidgetClass ItemTooltip {
-   position 8 78
-   size 244 100
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   visible 0
-   {
-    ImageWidgetClass TooltipBg {
-     position 0 0
-     size 244 100
-     hexactpos 1
-     vexactpos 1
-     hexactsize 1
-     vexactsize 1
-     color 0.08 0.08 0.10 0.95
-     stretch 1
-     ignorepointer 1
-     {
+      TextWidgetClass GroupNameText {
+       scriptclass "ViewBinding"
+       ignorepointer 1
+       color 1 1 1 1
+       position 0 0
+       size 320 32
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       font "gui/fonts/sdf_MetronBook24"
+       "exact text" 1
+       "exact text size" 24
+       "text halign" center
+       "text valign" center
+       {
+        ScriptParamsClass {
+         Binding_Name "GroupName"
+        }
+       }
+      }
      }
     }
 
-    MultilineTextWidgetClass TooltipText {
-     wrap 1
-     position 6 4
-     size 232 92
-     hexactpos 1
-     vexactpos 1
-     hexactsize 1
-     vexactsize 1
-     font "gui/fonts/MetronBook"
-     color 0.75 0.75 0.75 1.0
-     ignorepointer 1
-     {
-     }
-    }
-   }
-  }
-
-  ImageWidgetClass DividerLine {
-   position 10 78
-   size 240 1
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.3 0.3 0.35 0.6
-   stretch 1
-   ignorepointer 1
-   {
-   }
-  }
-
-  ScrollWidgetClass MemberScroll {
-   position 0 82
-   size 260 222
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   clipchildren 1
-   "Scrollbar V" 1
-   {
-    GridSpacerWidgetClass MemberList {
+    ButtonWidgetClass BtnClose {
      scriptclass "ViewBinding"
-     position 0 0
-     size 260 222
+     position 360 12
+     size 28 28
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     "Size To Content V" 1
-     columns 1
-     rows 0
+     style Empty
+     {
+      PanelWidgetClass BtnClosePanel {
+       ignorepointer 1
+       color 0 0 0 0
+       position 0 0
+       size 28 28
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       style rover_sim_colorable
+      }
+
+      ImageWidgetClass BtnCloseIcon {
+       ignorepointer 1
+       color 0.627 0.627 0.627 1
+       position 7 7
+       size 14 14
+       hexactpos 1
+       vexactpos 1
+       hexactsize 1
+       vexactsize 1
+       image0 "set:dayz_gui image:icon_x"
+       mode blend
+       "src alpha" 1
+       stretch 1
+       filter 1
+      }
+     }
      {
       ScriptParamsClass {
-       Binding_Name "MemberRows"
-       {
-       }
+       Relay_Command "OnCloseExecute"
       }
      }
     }
    }
   }
 
-  ButtonWidgetClass BtnLeave {
-   scriptclass "ViewBinding"
-   position 10 308
-   size 240 26
+  FrameWidgetClass GapTitle {
+   ignorepointer 1
+   position 0 0
+   size 400 2
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   color 0.6 0.2 0.2 0.9
+  }
+
+  PanelWidgetClass AccentLine {
+   ignorepointer 1
+   color 0.7569 0.0941 0.0941 0.7843
+   position 0 0
+   size 340 3
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style rover_sim_colorable
+  }
+
+  FrameWidgetClass GapAccent {
+   ignorepointer 1
+   position 0 0
+   size 400 8
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+  }
+
+  TextWidgetClass TerritoryText {
+   scriptclass "ViewBinding"
+   ignorepointer 1
+   color 0.627 0.627 0.627 1
+   position 0 0
+   size 400 26
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 18
+   "text halign" center
+   "text valign" center
    {
     ScriptParamsClass {
-     Relay_Command "OnLeaveExecute"
-     {
-     }
+     Binding_Name "TerritoryStatus"
     }
+   }
+  }
 
-    TextWidgetClass BtnLeaveText {
+  FrameWidgetClass GapList {
+   ignorepointer 1
+   position 0 0
+   size 400 12
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+  }
+
+  GridSpacerWidgetClass MemberList {
+   scriptclass "ViewBinding"
+   position 0 0
+   size 368 34
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   Padding 0
+   Margin 0
+   "Size To Content V" 1
+   Columns 1
+   Rows 100
+   {
+    ScriptParamsClass {
+     Binding_Name "MemberRows"
+    }
+   }
+  }
+
+  FrameWidgetClass GapDivider {
+   ignorepointer 1
+   position 0 0
+   size 400 10
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+  }
+
+  PanelWidgetClass DividerBottom {
+   ignorepointer 1
+   color 0.196 0.196 0.196 1
+   position 0 0
+   size 368 1
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style rover_sim_colorable
+  }
+
+  FrameWidgetClass GapLeave {
+   ignorepointer 1
+   position 0 0
+   size 400 12
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+  }
+
+  ButtonWidgetClass BtnLeave {
+   scriptclass "ViewBinding"
+   position 0 0
+   size 368 40
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
+   style Empty
+   {
+    PanelWidgetClass BtnLeavePanel {
+     ignorepointer 1
+     color 0 0 0 0
      position 0 0
-     size 240 26
+     size 368 40
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnLeaveText {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 368 40
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
      text "#STR_LFPG_UI_LEAVE_GROUP"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 18
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
-     ignorepointer 1
-     {
-     }
     }
    }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnLeaveExecute"
+    }
+   }
+  }
+
+  FrameWidgetClass GapBottom {
+   ignorepointer 1
+   position 0 0
+   size 400 14
+   hexactpos 1
+   vexactpos 1
+   hexactsize 1
+   vexactsize 1
   }
  }
 }

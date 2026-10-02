@@ -1,20 +1,24 @@
 // ============================================================================
 // LFPG_MemberRowView.c - 4_World/ui
-// ScriptView para cada fila de miembro en el panel de grupo
-// Usa Dabs MVC: ScriptView + ViewController con ViewBindings
+// One member row in the group panel. Dabs ScriptView plus ViewController.
 //
-// Bindings del layout:
-//  - LeaderStar: TextWidget (* si es lider, vacio si no)
-//  - MemberName: TextWidget (nombre del jugador)
-//  - BtnTransfer: visible solo para lider, no en su propia fila
-//  - BtnKick: visible solo para lider, no en su propia fila
+// Layout bindings:
+//  - LeaderTag: localized "Leader" on the leader row, empty otherwise
+//  - MemberName: player name, with the localized "(you)" on the local row
+//  - BtnTransfer: visible to the leader, hidden on the leader's own row
+//  - BtnKick: visible to the leader, hidden on the leader's own row
+//
+// An offline name is grey. The row has no online dot.
 // ============================================================================
 
 class LFPG_MemberRowController extends ViewController
 {
     // Bound properties (nombres deben coincidir con Binding_Name del layout)
-    string LeaderStar;
+    string LeaderTag;
     string MemberName;
+
+    static const int BTN_IDLE = ARGB(0, 0, 0, 0);
+    static const int BTN_HOT = ARGB(255, 255, 0, 0);
 
     // Datos internos (no bindeados)
     string m_MemberUID;
@@ -25,6 +29,8 @@ class LFPG_MemberRowController extends ViewController
     // Second click must arrive before this mission time (ms). 0 means not armed.
     protected int m_KickConfirmUntil;
     protected int m_TransferConfirmUntil;
+    protected bool m_TransferHover;
+    protected bool m_KickHover;
 
     // Buttons (loaded by LoadWidgetsAsVariables)
     ButtonWidget BtnTransfer;
@@ -32,7 +38,7 @@ class LFPG_MemberRowController extends ViewController
 
     void LFPG_MemberRowController()
     {
-        LeaderStar = "";
+        LeaderTag = "";
         MemberName = "";
         m_MemberUID = "";
         m_IsLeader = false;
@@ -40,6 +46,8 @@ class LFPG_MemberRowController extends ViewController
         m_IsOnline = false;
         m_KickConfirmUntil = 0;
         m_TransferConfirmUntil = 0;
+        m_TransferHover = false;
+        m_KickHover = false;
     }
 
     void SetData(string uid, string name, bool isLeader, bool isLocalPlayer, bool localIsLeader, bool isOnline)
@@ -54,19 +62,24 @@ class LFPG_MemberRowController extends ViewController
         m_IsLeader = isLeader;
         m_IsSelf = isLocalPlayer;
 
-        // Estrella de lider
         if (isLeader)
         {
-            LeaderStar = "*";
+            LeaderTag = Widget.TranslateString("#STR_LFPG_UI_LEADER");
         }
         else
         {
-            LeaderStar = "";
+            LeaderTag = "";
         }
 
         MemberName = name;
+        if (isLocalPlayer)
+        {
+            string youTag = Widget.TranslateString("#STR_LFPG_UI_YOU");
+            MemberName = MemberName + " ";
+            MemberName = MemberName + youTag;
+        }
 
-        string propStar = "LeaderStar";
+        string propStar = "LeaderTag";
         NotifyPropertyChanged(propStar);
 
         string propName = "MemberName";
@@ -88,7 +101,29 @@ class LFPG_MemberRowController extends ViewController
             BtnKick.Show(showButtons);
         }
 
-        // Indicador online/offline
+        if (m_LayoutRoot)
+        {
+            string nameClipName = "MemberNameClip";
+            Widget nameClip = m_LayoutRoot.FindAnyWidget(nameClipName);
+            string nameTextName = "MemberNameText";
+            TextWidget nameText = TextWidget.Cast(m_LayoutRoot.FindAnyWidget(nameTextName));
+            if (nameText)
+            {
+                if (showButtons)
+                {
+                    nameText.SetSize(164.0, 34.0);
+                    if (nameClip)
+                        nameClip.SetSize(164.0, 34.0);
+                }
+                else
+                {
+                    nameText.SetSize(250.0, 34.0);
+                    if (nameClip)
+                        nameClip.SetSize(250.0, 34.0);
+                }
+            }
+        }
+
         m_IsOnline = isOnline;
 
         // A recycled row must not keep the previous member's confirm.
@@ -98,7 +133,99 @@ class LFPG_MemberRowController extends ViewController
             m_TransferConfirmUntil = 0;
             SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
             SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+            PaintRowButtons();
         }
+    }
+
+    // Hot while that button's confirm is armed or the pointer is over it.
+    protected void PaintRowButtons()
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string transferPanelName = "BtnTransferPanel";
+        Widget transferPanel = m_LayoutRoot.FindAnyWidget(transferPanelName);
+        if (transferPanel)
+        {
+            bool transferHot = false;
+            if (m_TransferConfirmUntil > 0)
+            {
+                transferHot = true;
+            }
+            if (m_TransferHover)
+            {
+                transferHot = true;
+            }
+            if (transferHot)
+            {
+                transferPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                transferPanel.SetColor(BTN_IDLE);
+            }
+        }
+
+        string kickPanelName = "BtnKickPanel";
+        Widget kickPanel = m_LayoutRoot.FindAnyWidget(kickPanelName);
+        if (kickPanel)
+        {
+            bool kickHot = false;
+            if (m_KickConfirmUntil > 0)
+            {
+                kickHot = true;
+            }
+            if (m_KickHover)
+            {
+                kickHot = true;
+            }
+            if (kickHot)
+            {
+                kickPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                kickPanel.SetColor(BTN_IDLE);
+            }
+        }
+    }
+
+    override bool OnMouseEnter(Widget w, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string enteredName = w.GetName();
+        if (enteredName == "BtnTransfer")
+        {
+            m_TransferHover = true;
+            PaintRowButtons();
+        }
+        else if (enteredName == "BtnKick")
+        {
+            m_KickHover = true;
+            PaintRowButtons();
+        }
+        return false;
+    }
+
+    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string leftName = w.GetName();
+        if (leftName == "BtnTransfer")
+        {
+            m_TransferHover = false;
+            PaintRowButtons();
+        }
+        else if (leftName == "BtnKick")
+        {
+            m_KickHover = false;
+            PaintRowButtons();
+        }
+        return false;
     }
 
     protected void SetCaption(string widgetName, string stringId)
@@ -135,11 +262,13 @@ class LFPG_MemberRowController extends ViewController
         {
             m_TransferConfirmUntil = nowTransfer + 3000;
             SetCaption("BtnTransferLabel", "#STR_LFPG_UI_CONFIRM_TRANSFER");
+            PaintRowButtons();
             return true;
         }
 
         m_TransferConfirmUntil = 0;
         SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+        PaintRowButtons();
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_TRANSFER, m_MemberUID);
         return true;
     }
@@ -153,6 +282,7 @@ class LFPG_MemberRowController extends ViewController
             {
                 m_KickConfirmUntil = 0;
                 SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+                PaintRowButtons();
             }
         }
         if (m_TransferConfirmUntil > 0)
@@ -161,6 +291,7 @@ class LFPG_MemberRowController extends ViewController
             {
                 m_TransferConfirmUntil = 0;
                 SetCaption("BtnTransferLabel", "#STR_LFPG_UI_TRANSFER");
+                PaintRowButtons();
             }
         }
     }
@@ -186,11 +317,13 @@ class LFPG_MemberRowController extends ViewController
         {
             m_KickConfirmUntil = nowKick + 3000;
             SetCaption("BtnKickLabel", "#STR_LFPG_UI_CONFIRM_KICK");
+            PaintRowButtons();
             return true;
         }
 
         m_KickConfirmUntil = 0;
         SetCaption("BtnKickLabel", "#STR_LFPG_UI_KICK");
+        PaintRowButtons();
         SendMemberRPC(LFPG_RPC_C2S_REQUEST_KICK, m_MemberUID);
         return true;
     }
@@ -213,6 +346,8 @@ class LFPG_MemberRowController extends ViewController
 // ============================================================================
 class LFPG_MemberRowView extends ScriptView
 {
+    static const int NAME_ONLINE = ARGB(255, 255, 255, 255);
+    static const int NAME_OFFLINE = ARGB(255, 118, 118, 118);
     override string GetLayoutFile()
     {
         return "SimpleGroup/gui/layouts/group_member_row.layout";
@@ -251,9 +386,7 @@ class LFPG_MemberRowView extends ScriptView
             ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
         }
 
-        // FIX AUDIT: Forzar carga de imagen procedural en RowBg y OnlineIndicator
-        InitRowBackground();
-        InitOnlineIndicator(isOnline);
+        ApplyOnlineLook(isOnline);
     }
 
     // FIX I-20: Update in-place (mismo row reciclado, evita recrear widgets)
@@ -264,49 +397,28 @@ class LFPG_MemberRowView extends ScriptView
         {
             ctrl.SetData(uid, name, isLeader, isLocalPlayer, localIsLeader, isOnline);
         }
-        // Indicator puede cambiar online/offline
-        InitOnlineIndicator(isOnline);
+        ApplyOnlineLook(isOnline);
     }
 
-    // Indicador online: verde = online, gris = offline
-    protected void InitOnlineIndicator(bool isOnline)
+    // Name colour only. Offline names are grey.
+    protected void ApplyOnlineLook(bool isOnline)
     {
         Widget root = GetLayoutRoot();
         if (!root)
             return;
 
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-        string nameIndicator = "OnlineIndicator";
-        ImageWidget indicator = ImageWidget.Cast(root.FindAnyWidget(nameIndicator));
-        if (indicator)
+        string nameTextName = "MemberNameText";
+        TextWidget nameText = TextWidget.Cast(root.FindAnyWidget(nameTextName));
+        if (!nameText)
+            return;
+
+        if (isOnline)
         {
-            indicator.LoadImageFile(0, colorTex);
-            if (isOnline)
-            {
-                indicator.SetColor(ARGB(255, 80, 200, 80));
-            }
-            else
-            {
-                indicator.SetColor(ARGB(255, 100, 100, 100));
-            }
+            nameText.SetColor(NAME_ONLINE);
         }
-    }
-
-    // FIX AUDIT: ImageWidget necesita LoadImageFile() + SetColor() para colores procedurales
-    protected void InitRowBackground()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-        string nameBg = "RowBg";
-        ImageWidget rowBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
-        if (rowBg)
+        else
         {
-            // Layout color 0.15 0.15 0.18 0.5 → ARGB(128, 38, 38, 46)
-            rowBg.LoadImageFile(0, colorTex);
-            rowBg.SetColor(ARGB(128, 38, 38, 46));
+            nameText.SetColor(NAME_OFFLINE);
         }
     }
 };

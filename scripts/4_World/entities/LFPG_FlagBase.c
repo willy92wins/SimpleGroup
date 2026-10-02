@@ -20,6 +20,9 @@
 
 class LFPG_FlagBase extends ItemBase
 {
+    // Group-owned flags stay in the CE for 45 days and are topped up while registered.
+    static const float LFPG_GROUP_FLAG_LIFETIME = 3888000.0;
+
     // ========================================================================
     // PERSISTED FIELDS - guardados en OnStoreSave, restaurados en OnStoreLoad
     // ========================================================================
@@ -46,6 +49,13 @@ class LFPG_FlagBase extends ItemBase
     // AUDIT #10 L1-F05: estado calculado sin config, pendiente de rehacer.
     protected bool m_ConfigReinitQueued;
     protected bool m_FullRaisePendingConfig;
+    protected bool m_GroupLifetimeLogged;
+    protected bool m_FailedLoadLifetimeLogged;
+    // Filled by OnStoreLoad. Copied onto the live fields in AfterStoreLoad,
+    // which runs only after the whole entity load, including LFPG_Flag_T3, succeeds.
+    protected string m_PendingGroupID;
+    protected float m_PendingRemainingSeconds;
+    protected bool m_HasPendingStore;
 
     // ========================================================================
     // CONSTRUCTOR - Registro de SyncVars (DEBE ser aqui, NO en EEInit)
@@ -63,6 +73,11 @@ class LFPG_FlagBase extends ItemBase
         m_RemainingAtRaise = 0.0;
         m_IsRegisteredWithManager = false;
         m_LoadedStorageVersion = 0;
+        m_GroupLifetimeLogged = false;
+        m_FailedLoadLifetimeLogged = false;
+        m_PendingGroupID = "";
+        m_PendingRemainingSeconds = 0.0;
+        m_HasPendingStore = false;
         m_SkipDissolveOnDelete = false;
 
         // SyncVar registration - string var names assigned to locals first
@@ -127,10 +142,24 @@ class LFPG_FlagBase extends ItemBase
             LFPG_GroupManager mgr = LFPG_GroupManager.Get();
             if (mgr)
             {
-                string dissolveMsg = "EEDelete: dissolving group=";
-                dissolveMsg = dissolveMsg + m_GroupID;
-                LFPG_Log.Info(dissolveMsg);
-                mgr.DissolveGroup(m_GroupID);
+                // Only the flag the manager still has registered for this group
+                // may dissolve it. A duplicate with the same id only drops its
+                // own pending/abandoned cache row.
+                LFPG_FlagBase registeredFlag = mgr.GetGroupFlag(m_GroupID);
+                if (registeredFlag == this)
+                {
+                    string dissolveMsg = "EEDelete: dissolving group=";
+                    dissolveMsg = dissolveMsg + m_GroupID;
+                    LFPG_Log.Info(dissolveMsg);
+                    mgr.DissolveGroup(m_GroupID);
+                }
+                else
+                {
+                    mgr.ReleaseUnregisteredFlag(this);
+                    string keepMsg = "EEDelete: not the registered flag, group kept=";
+                    keepMsg = keepMsg + m_GroupID;
+                    LFPG_Log.Info(keepMsg);
+                }
             }
             else
             {
@@ -243,11 +272,7 @@ class LFPG_FlagBase extends ItemBase
             if (m_RemainingAtRaise > 0.0)
             {
                 int nowP = GetGame().GetTime();
-                int rawDiffP = nowP - m_RaisedAtTime;
-                if (rawDiffP < 0)
-                    rawDiffP = 0;
-                float elapsedMsP = rawDiffP;
-                float elapsedSP = elapsedMsP * 0.001;
+                float elapsedSP = ElapsedRaiseSeconds(nowP);
                 currentRemaining = m_RemainingAtRaise - elapsedSP;
                 if (currentRemaining < 0.0)
                     currentRemaining = 0.0;
@@ -272,6 +297,17 @@ class LFPG_FlagBase extends ItemBase
     //
     // Conversion:  vanillaPhase = 1.0 - raiseProgress
     // ========================================================================
+
+    // GetTime is a signed 32-bit millisecond clock. Treat the interval as
+    // unsigned; resetting a negative delta would forgive up to 24.85 days.
+    protected float ElapsedRaiseSeconds(int now)
+    {
+        int delta = now - m_RaisedAtTime;
+        float elapsedMs = delta;
+        if (delta < 0)
+            elapsedMs = elapsedMs + 4294967296.0;
+        return elapsedMs * 0.001;
+    }
 
     // Calcula el raise progress ACTUAL basado en tiempo transcurrido
     // Si IsPowered(), el tiempo no pasa (decay congelado).
@@ -300,20 +336,17 @@ class LFPG_FlagBase extends ItemBase
         }
 
         int now = GetGame().GetTime();
-        int rawDiff = now - m_RaisedAtTime;
+        float elapsedS = ElapsedRaiseSeconds(now);
+        float remaining = m_RemainingAtRaise - elapsedS;
 
-        // Proteccion contra overflow de GetTime() (~24.85 dias uptime)
-        // Si rawDiff es negativo, hubo wrap-around: re-anclar timestamps
-        if (rawDiff < 0)
+        // The periodic refresh reaches this long before a full 49.7-day wrap.
+        // Re-anchor only after accounting for all elapsed time.
+        if (elapsedS >= 2147483.0)
         {
             m_RaisedAtTime = now;
+            m_RemainingAtRaise = Math.Max(remaining, 0.0);
             m_RemainingSeconds = m_RemainingAtRaise;
-            rawDiff = 0;
         }
-
-        float elapsedMs = rawDiff;
-        float elapsedS = elapsedMs * 0.001;
-        float remaining = m_RemainingAtRaise - elapsedS;
 
         if (remaining <= 0.0)
             return 0.0;
@@ -350,6 +383,70 @@ class LFPG_FlagBase extends ItemBase
         SetSynchDirty();
 
         UpdateAnimationPhase(1.0);
+
+        // Raise action and the T3 power latch both call this when the flag goes full.
+        ApplyGroupLifetime();
+        // The manager refreshes only when this entity is the registered flag of a live group.
+        LFPG_GroupManager raiseMgr = LFPG_GroupManager.Get();
+        if (raiseMgr)
+        {
+            raiseMgr.NotifyFlagRaised(this);
+        }
+        #endif
+    }
+
+    // Server only. Sets the CE lifetime used while this flag is the registered flag
+    // of a live group. Logs the values once per entity, at the first application.
+    void ApplyGroupLifetime()
+    {
+        #ifdef SERVER
+        LFPG_GroupManager lifeMgr = LFPG_GroupManager.Get();
+        if (!lifeMgr)
+            return;
+        if (!lifeMgr.IsOwnedRegisteredFlag(this))
+            return;
+        if (ComputeCurrentRaiseProgress() <= 0.0)
+            return;
+
+        SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
+        SetLifetime(LFPG_GROUP_FLAG_LIFETIME);
+
+        if (!m_GroupLifetimeLogged)
+        {
+            m_GroupLifetimeLogged = true;
+            string lifeMsg = "Flag lifetime at registration: remaining=";
+            lifeMsg = lifeMsg + GetLifetime().ToString();
+            lifeMsg = lifeMsg + " max=";
+            lifeMsg = lifeMsg + GetLifetimeMax().ToString();
+            lifeMsg = lifeMsg + " group=";
+            lifeMsg = lifeMsg + m_GroupID;
+            LFPG_Log.Info(lifeMsg);
+        }
+        #endif
+    }
+
+    // Server only. Failed-load sessions keep a pending flag on the same CE lifetime
+    // as a registered group flag. Does not refresh nearby base objects and does not
+    // treat the flag as registered. ApplyGroupLifetime still owns normal sessions.
+    void ApplyFailedLoadLifetime()
+    {
+        #ifdef SERVER
+        if (ComputeCurrentRaiseProgress() <= 0.0)
+            return;
+        SetLifetimeMax(LFPG_GROUP_FLAG_LIFETIME);
+        SetLifetime(LFPG_GROUP_FLAG_LIFETIME);
+
+        if (!m_FailedLoadLifetimeLogged)
+        {
+            m_FailedLoadLifetimeLogged = true;
+            string preserveMsg = "Flag lifetime preserved, groups file unusable: remaining=";
+            preserveMsg = preserveMsg + GetLifetime().ToString();
+            preserveMsg = preserveMsg + " max=";
+            preserveMsg = preserveMsg + GetLifetimeMax().ToString();
+            preserveMsg = preserveMsg + " group=";
+            preserveMsg = preserveMsg + m_GroupID;
+            LFPG_Log.Info(preserveMsg);
+        }
         #endif
     }
 
@@ -457,7 +554,8 @@ class LFPG_FlagBase extends ItemBase
         if (diff < 0.0)
             diff = -diff;
 
-        if (diff > 0.005)
+        bool terminalChange = current == 0.0 && m_RaiseProgressNet != 0.0;
+        if (diff > 0.005 || terminalChange)
         {
             m_RaiseProgressNet = current;
             SetSynchDirty();
@@ -476,6 +574,7 @@ class LFPG_FlagBase extends ItemBase
         SetSynchDirty();
 
         // One-shot CallLater es seguro (no afectado por bug 4.5h)
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(DeactivateInviteMode);
         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(DeactivateInviteMode, durationMs, false);
         #endif
     }
@@ -600,16 +699,7 @@ class LFPG_FlagBase extends ItemBase
         else if (m_RemainingAtRaise > 0.0)
         {
             int now = GetGame().GetTime();
-            int rawDiff = now - m_RaisedAtTime;
-
-            // Proteccion contra overflow de GetTime() (~24.85 dias uptime)
-            if (rawDiff < 0)
-            {
-                rawDiff = 0;
-            }
-
-            float elapsedMs = rawDiff;
-            float elapsedS = elapsedMs * 0.001;
+            float elapsedS = ElapsedRaiseSeconds(now);
             currentRemaining = m_RemainingAtRaise - elapsedS;
             if (currentRemaining < 0.0)
             {
@@ -639,18 +729,21 @@ class LFPG_FlagBase extends ItemBase
             return false;
         }
 
-        m_LoadedStorageVersion = storageVer;
-
-        // v1+ fields (presentes en todas las versiones)
+        // v1+ fields. Keep them pending until AfterStoreLoad. LFPG_Flag_T3 reads
+        // m_LoadedStorageVersion before its own OnStoreLoad returns, so the version
+        // itself cannot wait.
         string groupID = "";
         if (!ctx.Read(groupID))
             return false;
-        m_GroupID = groupID;
 
         float remaining = 0.0;
         if (!ctx.Read(remaining))
             return false;
-        m_RemainingSeconds = remaining;
+
+        m_LoadedStorageVersion = storageVer;
+        m_PendingGroupID = groupID;
+        m_PendingRemainingSeconds = remaining;
+        m_HasPendingStore = true;
 
         return true;
     }
@@ -658,6 +751,13 @@ class LFPG_FlagBase extends ItemBase
     override void AfterStoreLoad()
     {
         super.AfterStoreLoad();
+
+        if (m_HasPendingStore)
+        {
+            m_GroupID = m_PendingGroupID;
+            m_RemainingSeconds = m_PendingRemainingSeconds;
+            m_HasPendingStore = false;
+        }
 
         // Restaurar estado de raise desde datos persistidos
         m_RaisedAtTime = GetGame().GetTime();
@@ -682,8 +782,8 @@ class LFPG_FlagBase extends ItemBase
             }
             else
             {
-                // El engine restaura las entidades dentro de super.OnInit(), y
-                // LoadGroups() corre DESPUES: que el grupo no exista aqui no
+                // Si la bandera se restaura antes de LoadGroups(),
+                // que el grupo no exista aqui no
                 // significa que sea huerfana, sino que el JSON aun no se ha leido.
                 // m_GroupID NO se toca: es un campo persistido y vaciarlo romperia
                 // el vinculo bandera-grupo de forma irreversible en el proximo save.

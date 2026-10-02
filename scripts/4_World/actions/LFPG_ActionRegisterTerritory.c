@@ -84,19 +84,21 @@ class LFPG_ActionRegisterTerritory extends ActionContinuousBase
             return false;
 
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (mgr)
-        {
-            if (!mgr.IsBootAuditDone())
-                return false;
-            if (mgr.HasGroup(playerUID))
-                return false;
-        }
+        if (!mgr || !mgr.CanMutateGroups())
+            return false;
+        if (mgr.HasGroup(playerUID))
+            return false;
 
         return true;
     }
 
     override void OnFinishProgressServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target)
+            return;
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(action_data.m_Player, action_data.m_Target.GetObject()))
+            return;
+
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;
@@ -116,8 +118,11 @@ class LFPG_ActionRegisterTerritory extends ActionContinuousBase
         if (!mgr)
             return;
 
-        if (!mgr.IsBootAuditDone())
+        if (!mgr.CanMutateGroups())
+        {
+            mgr.SendGroupsUnavailable(player);
             return;
+        }
 
         if (flag.HasGroup())
             return;
@@ -139,5 +144,26 @@ class LFPG_ActionRegisterTerritory extends ActionContinuousBase
         string logMsg = "Player registered territory: ";
         logMsg = logMsg + playerUID;
         LFPG_Log.Info(logMsg);
+    }
+
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (!super.ActionConditionContinue(action_data))
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+            return true;
+
+        PlayerBase player = action_data.m_Player;
+        if (!player)
+            return false;
+        if (!action_data.m_Target)
+            return false;
+
+        Object targetObj = action_data.m_Target.GetObject();
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
+        return true;
     }
 };

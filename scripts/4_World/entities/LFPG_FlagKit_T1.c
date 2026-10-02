@@ -13,6 +13,13 @@
 
 class LFPG_FlagKit_T1 extends ItemBase
 {
+    protected bool m_PlacementSucceeded;
+
+    bool DidPlaceSuccessfully()
+    {
+        return m_PlacementSucceeded;
+    }
+
     override bool IsDeployable()
     {
         return true;
@@ -28,7 +35,7 @@ class LFPG_FlagKit_T1 extends ItemBase
     // ActionDeployObject usa esto — sin soundset, el deploy puede fallar
     override string GetLoopDeploySoundset()
     {
-        string snd = "placeObject_SoundSet";
+        string snd = "Shelter_Site_Build_Loop_SoundSet";
         return snd;
     }
 
@@ -58,125 +65,74 @@ class LFPG_FlagKit_T1 extends ItemBase
         if (!super.CanBePlaced(player, position))
             return false;
 
-        // FIX AUDIT: Jugador con grupo existente no puede colocar otra bandera
         PlayerBase pb = PlayerBase.Cast(player);
-        if (pb)
-        {
-            #ifdef SERVER
-            PlayerIdentity identity = pb.GetIdentity();
-            if (identity)
-            {
-                LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-                if (mgr)
-                {
-                    // Limpiar grupo zombi primero (defensivo)
-                    mgr.CleanupStaleGroupForPlayer(identity.GetPlainId());
-
-                    if (mgr.HasGroup(identity.GetPlainId()))
-                        return false;
-
-                    if (mgr.IsPositionInTerritory(position))
-                        return false;
-                }
-            }
-            #else
-            if (LFPG_ClientGroupCache.HasGroup())
-                return false;
-            #endif
-        }
-
+        if (!pb)
+            return false;
+        #ifdef SERVER
+        PlayerIdentity identity = pb.GetIdentity();
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (!identity || !mgr || !mgr.CanMutateGroups())
+            return false;
+        // A placement predicate must never dissolve groups as a side effect.
+        if (mgr.HasGroup(identity.GetPlainId()))
+            return false;
+        if (mgr.IsPositionInTerritory(position))
+            return false;
+        #else
+        if (LFPG_ClientGroupCache.HasGroup())
+            return false;
+        #endif
         return true;
     }
 
-    // Patron FenceKit: spawn entity + HideAllSelections
-    // ActionDeployObject.OnEndServer borrara el kit (IsBasebuildingKit=true)
     override void OnPlacementComplete(Man player, vector position = "0 0 0", vector orientation = "0 0 0")
     {
         super.OnPlacementComplete(player, position, orientation);
-
         #ifdef SERVER
-            // Obtener UID del jugador primero (necesario para cleanup y creacion)
-            PlayerBase pb = PlayerBase.Cast(player);
-            if (!pb)
-                return;
+        m_PlacementSucceeded = false;
+        PlayerBase pb = PlayerBase.Cast(player);
+        if (!pb)
+            return;
+        PlayerIdentity identity = pb.GetIdentity();
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (!identity || !mgr)
+            return;
+        if (!mgr.CanMutateGroups())
+        {
+            mgr.SendGroupsUnavailable(pb);
+            return;
+        }
+        if (!CanBePlaced(player, position))
+        {
+            mgr.SendErrorToPlayer(identity, pb, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+            return;
+        }
 
-            PlayerIdentity identity = pb.GetIdentity();
-            if (!identity)
-                return;
+        Object obj = GetGame().CreateObjectEx("LFPG_Flag_T1", position, ECE_CREATEPHYSICS | ECE_PLACE_ON_SURFACE);
+        LFPG_FlagBase flag = LFPG_FlagBase.Cast(obj);
+        if (!flag)
+        {
+            LFPG_Log.Error("Failed to spawn territory flag; kit retained.");
+            return;
+        }
+        flag.SetPosition(position);
+        flag.SetOrientation(orientation);
 
-            string playerUID = identity.GetPlainId();
-            string playerName = identity.GetName();
+        string playerUID = identity.GetPlainId();
+        string tempName = LFPG_GroupData.GenerateTempName(playerUID);
+        string groupID = mgr.CreateGroup(playerUID, identity.GetName(), tempName, flag);
+        if (groupID == "")
+        {
+            flag.SetSkipDissolveOnDelete();
+            GetGame().ObjectDelete(flag);
+            mgr.SendErrorToPlayer(identity, pb, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+            return;
+        }
 
-            LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-            if (!mgr)
-                return;
-
-            // FIX: Limpiar grupo zombi si la bandera del jugador fue destruida
-            // pero el grupo sobrevivio (EEDelete fallo, admin delete, etc.)
-            // Esto limpia m_PlayerToGroup, m_Groups, m_FlagPositions, m_GroupNames
-            mgr.CleanupStaleGroupForPlayer(playerUID);
-
-            // Validar overlap de territorio server-side
-            if (mgr.IsPositionInTerritory(position))
-            {
-                string overlapMsg = "Territory overlap rejected server-side at ";
-                overlapMsg = overlapMsg + position.ToString();
-                LFPG_Log.Error(overlapMsg);
-
-                // Notificar al jugador via RPC (ERROR_MSG via PlayerBase)
-                ScriptRPC errRpc = new ScriptRPC();
-                string errKey = "#STR_LFPG_ERR_TERRITORY_BLOCKED";
-                errRpc.Write(errKey);
-                errRpc.Send(pb, LFPG_RPC_S2C_ERROR_MSG, true, identity);
-                return;
-            }
-
-            // Spawnar bandera T1 en la posicion del hologram
-            string flagClass = "LFPG_Flag_T1";
-            Object obj = GetGame().CreateObjectEx(flagClass, position, ECE_CREATEPHYSICS | ECE_PLACE_ON_SURFACE);
-            LFPG_FlagBase flag = LFPG_FlagBase.Cast(obj);
-            if (!flag)
-            {
-                string errMsg = "Failed to spawn LFPG_Flag_T1 at ";
-                errMsg = errMsg + position.ToString();
-                LFPG_Log.Error(errMsg);
-                return;
-            }
-
-            flag.SetPosition(position);
-            flag.SetOrientation(orientation);
-
-            // Auto-registrar al jugador como dueno
-            if (!mgr.HasGroup(playerUID))
-            {
-                string tempName = LFPG_GroupData.GenerateTempName(playerUID);
-                string groupID = mgr.CreateGroup(playerUID, playerName, tempName, flag);
-                if (groupID != "")
-                {
-                    mgr.SendOpenNameDialog(identity, flag, groupID);
-                    mgr.SendGroupSyncFull(identity, groupID, flag, flag);
-
-                    // Fallback fiable: enviar tambien via PlayerBase (siempre existe en client).
-                    // GROUP_SYNC_FULL via flag puede perderse si la entidad flag
-                    // no se ha replicado al cliente aun (race condition de JIP).
-                    // LIGHTWEIGHT_SYNC via PlayerBase garantiza que s_HasGroup=true.
-                    mgr.SendLightweightSync(identity, groupID, flag, pb);
-
-                    string logMsg = "Territory placed + auto-registered: ";
-                    logMsg = logMsg + playerUID;
-                    LFPG_Log.Info(logMsg);
-                }
-            }
-            else
-            {
-                string warnMsg = "Player already has group, flag placed but no group created: ";
-                warnMsg = warnMsg + playerUID;
-                LFPG_Log.Error(warnMsg);
-            }
-
-            // Patron FenceKit: ocultar el kit, NO borrarlo manualmente
-            // ActionDeployObject.OnEndServer se encarga del Delete
-            HideAllSelections();
+        mgr.SendOpenNameDialog(identity, flag, groupID);
+        mgr.SendGroupSyncFull(identity, groupID, flag, pb);
+        m_PlacementSucceeded = true;
+        HideAllSelections();
         #endif
     }
 

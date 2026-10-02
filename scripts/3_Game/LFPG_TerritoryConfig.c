@@ -18,7 +18,8 @@
 // se mergen defaults de los campos nuevos sin sobrescribir los existentes.
 // v2 -> v3: anadidos m_NoBaseRequiredTypes y m_UnrestrictedTypes
 // v3 -> v4: m_FurnitureCountedTypes and m_NoDropInForeignTerritoryTypes
-const int LFPG_CONFIG_VERSION = 4;
+// v4 -> v5: m_MinRefreshLifetime (seconds). Negative disables base refresh.
+const int LFPG_CONFIG_VERSION = 5;
 
 class LFPG_TerritoryConfig
 {
@@ -61,6 +62,7 @@ class LFPG_TerritoryConfig
     // --- Whitelist: tipos excluidos del conteo de muebles ---
     // Items deployables vanilla/mods que NO deben contar (BatteryCharger, Fireplace,
     // ExpansionMarket, Traders, etc.). Usa IsKindOf para cubrir herencia.
+    // Tambien exentos de grupo/zona/cupo al colocar; la blacklist sigue prevaleciendo.
     ref array<string> m_FurnitureExcludedTypes;
 
     // --- Garden Plots ---
@@ -89,6 +91,10 @@ class LFPG_TerritoryConfig
     // --- Recalibracion ---
     // FIX G-3: Interval largo por default (integrity check). Recalibrate es on-demand.
     int m_RecalibrationIntervalSeconds;
+
+    // While a flag is raised, objects inside the build radius whose max lifetime
+    // is at least this many seconds are reset to that max. Negative disables it.
+    int m_MinRefreshLifetime;
 
     // --- Energia T3 ---
     float m_BatteryDrainPerSecond;
@@ -165,6 +171,7 @@ class LFPG_TerritoryConfig
         // FIX G-3: Recalibrate default 30min (antes 30s). Es fallback integrity check;
         // el flujo normal es on-demand por grupo.
         m_RecalibrationIntervalSeconds = 1800;
+        m_MinRefreshLifetime = 86400;
 
         // Garden plots: conteo separado por defecto
         m_EnablePlots = true;
@@ -378,6 +385,10 @@ class LFPG_TerritoryConfig
             m_NoDropInForeignTerritoryTypes = tmpNoDrop.m_NoDropInForeignTerritoryTypes;
         }
 
+        // The constructor supplies m_MinRefreshLifetime when the key is absent.
+        // Keep an explicit admin value even when the file still declares v4 or older.
+        // Load deliberately leaves existing config files unchanged on disk.
+
         m_ConfigVersion = LFPG_CONFIG_VERSION;
     }
 
@@ -554,7 +565,16 @@ class LFPG_TerritoryConfig
         if (FileExist(filePath))
         {
             config = new LFPG_TerritoryConfig();
-            JsonFileLoader<LFPG_TerritoryConfig>.JsonLoadFile(filePath, config);
+            string loadError = "";
+            if (!JsonFileLoader<LFPG_TerritoryConfig>.LoadFile(filePath, config, loadError))
+            {
+                // Deserialization may have changed a prefix of the object.
+                // Discard that partial state and preserve the admin's file.
+                LFPG_Log.Error("Config load failed; using defaults for this session. Original file retained: " + loadError);
+                config = new LFPG_TerritoryConfig();
+                config.ComputeDerivedValues();
+                return config;
+            }
 
             // FIX M-21: Mergear defaults si el config es de version previa
             if (config.m_ConfigVersion < LFPG_CONFIG_VERSION)
@@ -566,8 +586,8 @@ class LFPG_TerritoryConfig
                 migMsg = migMsg + "), merging new defaults.";
                 LFPG_Log.Info(migMsg);
                 config.MergeNewDefaults();
-                // Persistir el merge
-                JsonFileLoader<LFPG_TerritoryConfig>.JsonSaveFile(filePath, config);
+                // Apply new defaults in memory. Never truncate an existing
+                // admin config during startup just to persist a version bump.
             }
 
             string loadMsg = "Config loaded from: ";
@@ -577,10 +597,15 @@ class LFPG_TerritoryConfig
         else
         {
             config = new LFPG_TerritoryConfig();
-            JsonFileLoader<LFPG_TerritoryConfig>.JsonSaveFile(filePath, config);
-            string createMsg = "Default config created at: ";
-            createMsg = createMsg + filePath;
-            LFPG_Log.Info(createMsg);
+            string saveError = "";
+            if (!JsonFileLoader<LFPG_TerritoryConfig>.SaveFile(filePath, config, saveError))
+                LFPG_Log.Error("Cannot create default config: " + saveError);
+            else
+            {
+                string createMsg = "Default config created at: ";
+                createMsg = createMsg + filePath;
+                LFPG_Log.Info(createMsg);
+            }
         }
 
         config.ComputeDerivedValues();

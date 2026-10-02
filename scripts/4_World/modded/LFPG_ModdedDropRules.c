@@ -173,29 +173,6 @@ modded class CraftWoodenCrate
     }
 }
 
-modded class DayZPlayerInventory
-{
-    override bool PlayerCheckRequestDst(notnull InventoryLocation src, notnull InventoryLocation dst, float radius)
-    {
-        if (!super.PlayerCheckRequestDst(src, dst, radius))
-            return false;
-
-        if (!GetGame().IsDedicatedServer())
-            return true;
-        if (dst.GetType() != InventoryLocationType.GROUND)
-            return true;
-
-        EntityAI dstItem = dst.GetItem();
-        if (!dstItem)
-            return true;
-
-        DayZPlayer dstOwner = GetDayZPlayerOwner();
-        PlayerBase dstPlayer = PlayerBase.Cast(dstOwner);
-        if (!dstPlayer)
-            return true;
-
-        if (LFPG_IsListedDropBlocked(dstItem, dstPlayer, dst.GetPos()))
-            return false;
-        return true;
-    }
-}
+// DayZPlayerInventory is engine-owned and cannot be modded (DayZ 1.29).
+// ActionDropItem, ItemBase.CanSwapEntities and the server-side deferred
+// EEItemLocationChanged return enforce the blacklist using supported hooks.

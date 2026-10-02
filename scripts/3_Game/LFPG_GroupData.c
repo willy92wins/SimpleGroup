@@ -245,7 +245,9 @@ class LFPG_GroupsFileData
 
     void LFPG_GroupsFileData()
     {
-        m_Version = 1;
-        m_Groups = new array<ref LFPG_GroupData>;
+        // Missing JSON fields must not silently become a valid empty save.
+        // SaveGroups initializes both explicitly; legacy v1 writes contain both.
+        m_Version = 0;
+        m_Groups = null;
     }
 };

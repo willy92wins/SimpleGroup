@@ -35,6 +35,37 @@
 
 modded class ActionDeployObject
 {
+    override void OnFinishProgressServer(ActionData action_data)
+    {
+        if (!action_data || !action_data.m_Player || !action_data.m_MainItem)
+            return;
+        LFPG_FlagKit_T1 flagKit = LFPG_FlagKit_T1.Cast(action_data.m_MainItem);
+        PlaceObjectActionData placement = PlaceObjectActionData.Cast(action_data);
+        if (flagKit)
+        {
+            if (!placement)
+                return;
+            if (!flagKit.CanBePlaced(action_data.m_Player, placement.m_Position))
+            {
+                placement.m_AlreadyPlaced = false;
+                LFPG_GroupManager kitMgr = LFPG_GroupManager.Get();
+                if (kitMgr)
+                {
+                    if (!kitMgr.CanMutateGroups())
+                        kitMgr.SendGroupsUnavailable(action_data.m_Player);
+                    else
+                        kitMgr.SendErrorToPlayer(action_data.m_Player.GetIdentity(), action_data.m_Player, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+                }
+                return;
+            }
+        }
+        super.OnFinishProgressServer(action_data);
+        // Vanilla marks placement complete BEFORE OnPlacementComplete and deletes
+        // basebuilding kits in OnEndServer. A failed spawn must retain the kit.
+        if (flagKit && !flagKit.DidPlaceSuccessfully())
+            placement.m_AlreadyPlaced = false;
+    }
+
     // ------------------------------------------------------------------------
     // CLIENT: click no dispara la action si LFPG bloquea
     // ------------------------------------------------------------------------
@@ -66,6 +97,12 @@ modded class ActionDeployObject
         {
             if (action_data && action_data.m_Player && action_data.m_Player.IsPlacingServer() && action_data.m_MainItem)
             {
+                LFPG_GroupManager kitMgr = LFPG_GroupManager.Get();
+                if (LFPG_FlagKit_T1.Cast(action_data.m_MainItem) && kitMgr && !kitMgr.CanMutateGroups())
+                {
+                    kitMgr.SendGroupsUnavailable(action_data.m_Player);
+                    return false;
+                }
                 Hologram holoServer = action_data.m_Player.GetHologramServer();
                 if (holoServer)
                 {
@@ -88,6 +125,12 @@ modded class ActionDeployObject
 bool LFPG_IsDeployBlockedClient(ItemBase item, vector pos)
 {
     if (!item)
+        return false;
+
+    // The server is authoritative while its configurable exclusions are unknown.
+    if (!LFPG_ClientGroupCache.s_PlacementRulesReceived)
+        return false;
+    if (LFPG_ClientGroupCache.IsFurniturePlacementExemptCached(item))
         return false;
 
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
@@ -134,6 +177,13 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
     if (!cfg)
         return false;
 
+    // No-drop blacklist wins over list B and list A, including a type on both lists.
+    if (LFPG_IsListedDropBlocked(item, player, pos))
+        return true;
+
+    if (LFPG_IsFurniturePlacementExempt(item, cfg.m_FurnitureExcludedTypes))
+        return false;
+
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
     if (cfg.IsUnrestricted(item))
         return false;
@@ -168,4 +218,26 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
         return true;
 
     return false;
+}
+
+// Hunting traps do not use ActionDeployObject. ActionDeployBase places them at
+// the player position plus direction times POSITION_OFFSET when the action has
+// no hologram. Only the no-drop blacklist applies here.
+modded class ActionDeployHuntingTrap
+{
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (g_Game.IsDedicatedServer())
+        {
+            if (action_data && action_data.m_Player && action_data.m_MainItem)
+            {
+                vector trapPos = action_data.m_Player.GetPosition();
+                vector trapDir = action_data.m_Player.GetDirection();
+                trapPos = trapPos + (trapDir * POSITION_OFFSET);
+                if (LFPG_IsListedDropBlocked(action_data.m_MainItem, action_data.m_Player, trapPos))
+                    return false;
+            }
+        }
+        return super.ActionConditionContinue(action_data);
+    }
 }

@@ -18,6 +18,8 @@ const int LFPG_GROUPS_FILE_VERSION = 1;
 
 class LFPG_GroupManager
 {
+    // Radius scans per validation tick. The interval still gates each flag.
+    static const int LFPG_BASE_REFRESH_BATCH = 4;
     // ========================================================================
     // SINGLETON
     // ========================================================================
@@ -68,6 +70,7 @@ class LFPG_GroupManager
     // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
     protected ref array<string> m_OrphanBuffer;
     protected ref array<Man> m_PlayerSearchBuffer;
+    protected ref array<Man> m_SyncRecipientBuffer;
     protected ref array<Object> m_RecalObjectBuffer;
     protected ref array<CargoBase> m_RecalCargoBuffer;
 
@@ -95,20 +98,26 @@ class LFPG_GroupManager
     // FIX M2: Dirty flag para saves diferidos (counters)
     protected bool m_IsDirty;
 
-    // One-shot boot audit. Init finishes before the engine restores entities,
-    // so orphan checks and the abandon pass wait for the first validation tick.
+    // One-shot boot audit after initial restoration. Pending registration also
+    // handles entities restored before Init; do not assume one engine order.
     protected bool m_BootAuditDone;
 
     // groups.json or its backup exists but could not be used. Saves must not
     // replace those files. A fresh install (neither file present) leaves this false.
     protected bool m_GroupsLoadFailed;
-    protected bool m_GroupsLoadFailedLogged;
+    protected bool m_GroupsSourceMissing;
+    // Retired C2S routes are ignored. Logged once so a modified client cannot flood the RPT.
+    protected bool m_LoggedRetiredRpc;
 
     // FIX F: Recalibracion periodica de counters
     // Primer tick: siempre recalibrar (post-startup)
     // Ticks siguientes: cada m_RecalibrationIntervalSeconds (configurable, default 30s)
     protected bool m_NeedsCounterRecalibration;
     protected int m_RecalibrationTickCounter;
+
+    // Last base-lifetime refresh time (ms) per group. Allocated once, not per tick.
+    protected ref map<string, int> m_BaseRefreshAt;
+    protected int m_BaseRefreshCursor;
 
     // ========================================================================
     // CONSTRUCTOR
@@ -123,6 +132,7 @@ class LFPG_GroupManager
         m_RPCThrottle = new map<string, int>;
         m_OrphanBuffer = new array<string>;
         m_PlayerSearchBuffer = new array<Man>;
+        m_SyncRecipientBuffer = new array<Man>;
         m_RecalObjectBuffer = new array<Object>;
         m_RecalCargoBuffer = new array<CargoBase>;
         m_PendingFlags = new array<LFPG_FlagBase>;
@@ -134,9 +144,11 @@ class LFPG_GroupManager
         m_IsDirty = false;
         m_BootAuditDone = false;
         m_GroupsLoadFailed = false;
-        m_GroupsLoadFailedLogged = false;
+        m_LoggedRetiredRpc = false;
         m_NeedsCounterRecalibration = true;
         m_RecalibrationTickCounter = 0;
+        m_BaseRefreshAt = new map<string, int>;
+        m_BaseRefreshCursor = 0;
     }
 
     void ~LFPG_GroupManager()
@@ -161,45 +173,59 @@ class LFPG_GroupManager
         if (FileExist(staleTmp))
         {
             string tmpFinal = LFPG_TerritoryConfig.GetGroupsPath();
-            bool tmpRecovered = false;
-
-            // AUDIT #10 L1-F06 / L3-F03: un tmp que verifica se promueve aunque
-            // tenga 0 grupos (antes se descartaba y LoadGroups resucitaba el
-            // .bak). Con un final que NO verifica (truncado por un crash en la
-            // promocion) el tmp tambien gana; el final se aparta, no se borra.
             int tmpCount = 0;
-            if (ReadGroupsFile(staleTmp, tmpCount))
+            int finalCount = 0;
+            bool finalValid = ReadGroupsFile(tmpFinal, finalCount);
+            bool tmpValid = ReadGroupsFile(staleTmp, tmpCount);
+            if (IsFutureGroupsFile(tmpFinal) || IsFutureGroupsFile(staleTmp))
             {
+                m_GroupsLoadFailed = true;
+            }
+            else if (finalValid)
+            {
+                // The verified final wins. Preserve unused candidates for the admin.
+                if (!MoveAside(staleTmp, ".discarded"))
+                    m_GroupsLoadFailed = true;
+            }
+            else if (!tmpValid)
+            {
+                // Both candidates are unusable: read-only also means no moving
+                // or rewriting the corrupt input. The admin chooses recovery.
+                m_GroupsLoadFailed = true;
+            }
+            else
+            {
+                LFPG_GroupsFileData oldFinal = new LFPG_GroupsFileData();
+                string recoveryError = "";
                 if (FileExist(tmpFinal))
                 {
-                    int finalCount = 0;
-                    if (!ReadGroupsFile(tmpFinal, finalCount))
+                    if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpFinal, oldFinal, recoveryError))
                     {
-                        if (MoveAside(tmpFinal, ".corrupt"))
-                            LFPG_Log.Error("Init: groups.json does not verify; moved to groups.json.corrupt.");
+                        // A newer file belongs to another reader, not to recovery.
+                        if (oldFinal.m_Version > LFPG_GROUPS_FILE_VERSION)
+                            m_GroupsLoadFailed = true;
                     }
+                    if (!m_GroupsLoadFailed && !MoveAside(tmpFinal, ".corrupt"))
+                        m_GroupsLoadFailed = true;
                 }
-
-                if (!FileExist(tmpFinal))
+                LFPG_GroupsFileData recoveredData = new LFPG_GroupsFileData();
+                if (!m_GroupsLoadFailed)
                 {
-                    if (CopyFile(staleTmp, tmpFinal))
+                    if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(staleTmp, recoveredData, recoveryError))
+                        m_GroupsLoadFailed = true;
+                    else if (!CopyFile(staleTmp, tmpFinal))
+                        m_GroupsLoadFailed = true;
+                    else if (!GroupsFileMatches(tmpFinal, recoveredData))
+                        m_GroupsLoadFailed = true;
+                    else
                     {
-                        tmpRecovered = true;
-                        string recMsg = "Init: recovered groups.json from tmp with ";
-                        recMsg = recMsg + tmpCount.ToString();
-                        recMsg = recMsg + " groups.";
-                        LFPG_Log.Info(recMsg);
                         DeleteFile(staleTmp);
+                        LFPG_Log.Info("Init: verified groups.json recovered from tmp.");
                     }
                 }
             }
-
-            if (!tmpRecovered)
-            {
-                // Tampoco se tira: se aparta para que el admin pueda revisarlo.
-                if (MoveAside(staleTmp, ".discarded"))
-                    LFPG_Log.Info("Init: unused tmp moved to groups.json.tmp.discarded.");
-            }
+            if (m_GroupsLoadFailed)
+                LFPG_Log.Error("Init: recovery incomplete. READ ONLY; recovery files retained. Restore profile and restart.");
         }
 
         // Cargar config
@@ -220,12 +246,10 @@ class LFPG_GroupManager
         cfgPendMsg = cfgPendMsg + cfgPendCount.ToString();
         LFPG_Log.Info(cfgPendMsg);
 
-        // Flags are not in the world yet. The gameplay call queue runs after
-        // mission main() restores entities; preserve the main boot gate.
+        // Keep the boot gate; pending flags cover either restoration order.
         LoadGroups();
 
-        // Nothing to resolve yet. Kept so a flag that registered pending during
-        // Init (tests, or a future engine order) is not left waiting a full tick.
+        // Resolve flags already restored, without abandoning any pending ID.
         ResolvePendingFlags();
 
         // One second, once. The validation tick repeats the audit only if this
@@ -268,12 +292,26 @@ class LFPG_GroupManager
         if (!flag)
             return;
 
+        // A restored owner ID proves this is not a fresh world. Never clear it
+        // just because the profile directory was moved or lost.
+        if (m_GroupsSourceMissing && flag.GetGroupID() != "")
+        {
+            if (!m_GroupsLoadFailed)
+                LFPG_Log.Error("Groups profile missing but owned flags exist. Groups are READ ONLY; restore the profile and restart.");
+            m_GroupsLoadFailed = true;
+            m_DissolveDisabled = true;
+        }
+
         int count = m_PendingFlags.Count();
         int i;
         for (i = 0; i < count; i = i + 1)
         {
             if (m_PendingFlags[i] == flag)
+            {
+                if (m_GroupsLoadFailed || m_DissolveDisabled)
+                    flag.ApplyFailedLoadLifetime();
                 return;
+            }
         }
 
         m_PendingFlags.Insert(flag);
@@ -282,8 +320,10 @@ class LFPG_GroupManager
         LFPG_Log.Info(pendMsg);
 
         // Load failed: block the zone now. The audit is still a second away.
-        if (m_GroupsLoadFailed)
+        // The long lifetime is preservation only. The flag stays pending.
+        if (m_GroupsLoadFailed || m_DissolveDisabled)
         {
+            flag.ApplyFailedLoadLifetime();
             float pendProgress = flag.ComputeCurrentRaiseProgress();
             UpdateFlagPositionCache(flag.GetGroupID(), flag.GetPosition(), pendProgress, flag.GetTier());
         }
@@ -315,7 +355,7 @@ class LFPG_GroupManager
     }
 
     // Boot audit. Runs once, on the first validation tick, after ResolvePendingFlags.
-    // Init itself is too early: the engine restores entities after MissionServer.OnInit.
+    // Pending flags cover restoration both before and after Init.
     //
     // Two jobs:
     //  1. Re-bind flags that lost their group id on an earlier boot.
@@ -367,7 +407,7 @@ class LFPG_GroupManager
                 LFPG_FlagBase candidate = LFPG_FlagBase.Cast(m_RecalObjectBuffer[j]);
                 if (!candidate)
                     continue;
-                if (candidate.GetGroupID() != "")
+                if (candidate.GetGroupID() != "" && GroupExists(candidate.GetGroupID()))
                     continue;
 
                 candidate.SetGroupID(bindID);
@@ -420,9 +460,21 @@ class LFPG_GroupManager
         return m_BootAuditDone;
     }
 
-    // Resolve, re-bind, then abandon whatever is still pending. Runs from the
-    // gameplay queue about a second after Init, or from the validation tick if
-    // that tick arrives first. Exactly once.
+    bool CanMutateGroups()
+    {
+        return m_BootAuditDone && !m_GroupsLoadFailed && !m_IsShuttingDown;
+    }
+
+    void SendGroupsUnavailable(PlayerBase player)
+    {
+        if (player && player.GetIdentity())
+            SendErrorToPlayer(player.GetIdentity(), player, "#STR_LFPG_ERR_GROUPS_UNAVAILABLE");
+    }
+
+    // Resolve, re-bind, then abandon whatever is still pending. A failed load
+    // keeps those flags pending for the session so lifetime and live progress
+    // still see them. Runs from the gameplay queue about a second after Init,
+    // or from the validation tick if that tick arrives first. Exactly once.
     void RunBootAudit()
     {
         if (m_BootAuditDone)
@@ -432,6 +484,7 @@ class LFPG_GroupManager
 
         ResolvePendingFlags();
         AuditOrphansAtBoot();
+        ResolvePendingFlags();
 
         int pendLeftCount = m_PendingFlags.Count();
         int abandonedDeclared = 0;
@@ -442,9 +495,11 @@ class LFPG_GroupManager
             if (!pFlag)
                 continue;
 
-            if (m_GroupsLoadFailed)
+            if (m_GroupsLoadFailed || m_DissolveDisabled)
             {
                 string keptID = pFlag.GetGroupID();
+                if (IsOwnedRegisteredFlag(pFlag))
+                    continue;
                 float keptProgress = pFlag.ComputeCurrentRaiseProgress();
                 UpdateFlagPositionCache(keptID, pFlag.GetPosition(), keptProgress, pFlag.GetTier());
                 string keepMsg = "Boot audit: load failed, flag kept group id ";
@@ -452,6 +507,7 @@ class LFPG_GroupManager
                 keepMsg = keepMsg + " at ";
                 keepMsg = keepMsg + pFlag.GetPosition().ToString();
                 LFPG_Log.Error(keepMsg);
+                pFlag.ApplyFailedLoadLifetime();
             }
             else
             {
@@ -460,7 +516,10 @@ class LFPG_GroupManager
                 abandonedDeclared = abandonedDeclared + 1;
             }
         }
-        m_PendingFlags.Clear();
+        // Normal sessions drop the list after abandon. A failed load leaves the
+        // flags here: clearing them would freeze progress and stop the top-up.
+        if (!m_GroupsLoadFailed && !m_DissolveDisabled)
+            m_PendingFlags.Clear();
 
         string pendLeft = "Boot audit: flags declared abandoned: ";
         pendLeft = pendLeft + abandonedDeclared.ToString();
@@ -608,7 +667,7 @@ class LFPG_GroupManager
             {
                 removeEntry = true;
             }
-            else if (!m_GroupsLoadFailed)
+            else if (!m_GroupsLoadFailed && !m_DissolveDisabled)
             {
                 if (!m_Groups.Contains(posCache.m_GroupID) && posCache.m_GroupID != LFPG_ABANDONED_GROUP)
                     removeEntry = true;
@@ -638,7 +697,6 @@ class LFPG_GroupManager
         if (m_IsDirty)
         {
             SaveGroups();
-            m_IsDirty = false;
         }
 
         // VISUAL SYNC: Actualizar SyncVar de progress en todas las banderas
@@ -653,6 +711,224 @@ class LFPG_GroupManager
                 syncFlag.RefreshVisualProgress();
             }
         }
+
+        MaintainRegisteredFlagLifetimes();
+        RefreshRaisedBases();
+    }
+
+    // Top up every flag that still belongs to a group. Abandoned flags are not in the map.
+    protected void MaintainRegisteredFlagLifetimes()
+    {
+        int lifeCount = m_GroupFlags.Count();
+        int lifeIdx;
+        for (lifeIdx = 0; lifeIdx < lifeCount; lifeIdx = lifeIdx + 1)
+        {
+            LFPG_FlagBase lifeFlag = m_GroupFlags.GetElement(lifeIdx);
+            if (!lifeFlag)
+                continue;
+            if (lifeFlag.GetGroupID() == "")
+                continue;
+            lifeFlag.ApplyGroupLifetime();
+        }
+
+        // Failed load only. Pending flags are not registered and do not refresh a base.
+        if (!m_GroupsLoadFailed && !m_DissolveDisabled)
+            return;
+
+        int preserveCount = m_PendingFlags.Count();
+        int preserveIdx;
+        for (preserveIdx = 0; preserveIdx < preserveCount; preserveIdx = preserveIdx + 1)
+        {
+            LFPG_FlagBase preserveFlag = m_PendingFlags[preserveIdx];
+            if (!preserveFlag)
+                continue;
+            if (preserveFlag.GetGroupID() == "")
+                continue;
+            preserveFlag.RefreshVisualProgress();
+            preserveFlag.ApplyFailedLoadLifetime();
+        }
+    }
+
+    // At most LFPG_BASE_REFRESH_BATCH radius scans per tick, and each group at most
+    // once per m_RecalibrationIntervalSeconds. Lowered flags (progress <= 0) are skipped.
+    protected void RefreshRaisedBases()
+    {
+        if (!m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+
+        int refreshCount = m_GroupFlags.Count();
+        if (refreshCount == 0)
+            return;
+
+        int nowMs = GetGame().GetTime();
+        int intervalMs = m_Config.m_RecalibrationIntervalSeconds * 1000;
+        int scanned = 0;
+        int seen = 0;
+
+        if (m_BaseRefreshCursor >= refreshCount)
+            m_BaseRefreshCursor = 0;
+
+        while (seen < refreshCount && scanned < LFPG_BASE_REFRESH_BATCH)
+        {
+            string refreshID = m_GroupFlags.GetKey(m_BaseRefreshCursor);
+            m_BaseRefreshCursor = m_BaseRefreshCursor + 1;
+            if (m_BaseRefreshCursor >= refreshCount)
+                m_BaseRefreshCursor = 0;
+            seen = seen + 1;
+
+            LFPG_FlagBase refreshFlag = m_GroupFlags.Get(refreshID);
+            if (!refreshFlag)
+                continue;
+            if (!IsOwnedRegisteredFlag(refreshFlag))
+                continue;
+
+            float refreshProgress = refreshFlag.ComputeCurrentRaiseProgress();
+            if (refreshProgress <= 0.0)
+                continue;
+
+            int lastRefresh = 0;
+            bool hasStamp = m_BaseRefreshAt.Find(refreshID, lastRefresh);
+            if (hasStamp)
+            {
+                int sinceRefresh = nowMs - lastRefresh;
+                if (sinceRefresh >= 0 && sinceRefresh < intervalMs)
+                    continue;
+            }
+
+            RefreshBaseAroundFlag(refreshFlag);
+            m_BaseRefreshAt.Set(refreshID, nowMs);
+            scanned = scanned + 1;
+        }
+    }
+
+    // Same radius query the furniture recount uses. Resets remaining lifetime to max
+    // for objects at or above m_MinRefreshLifetime. Players, creatures and the flag are skipped.
+    void RefreshBaseAroundFlag(LFPG_FlagBase flag)
+    {
+        if (!flag || !m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
+            return;
+
+        vector refreshPos = flag.GetPosition();
+        float refreshRadius = m_Config.m_BuildRadiusMeters;
+
+        m_RecalObjectBuffer.Clear();
+        m_RecalCargoBuffer.Clear();
+        GetGame().GetObjectsAtPosition(refreshPos, refreshRadius, m_RecalObjectBuffer, m_RecalCargoBuffer);
+
+        float lifeThreshold = m_Config.m_MinRefreshLifetime;
+        int refreshObjCount = m_RecalObjectBuffer.Count();
+        int refreshObj;
+        for (refreshObj = 0; refreshObj < refreshObjCount; refreshObj = refreshObj + 1)
+        {
+            Object refreshObjRef = m_RecalObjectBuffer[refreshObj];
+            if (!refreshObjRef)
+                continue;
+            if (refreshObjRef == flag)
+                continue;
+
+            EntityAI refreshEnt = EntityAI.Cast(refreshObjRef);
+            if (!refreshEnt)
+                continue;
+            if (refreshEnt.IsMan())
+                continue;
+            if (refreshEnt.IsPlayer())
+                continue;
+            if (refreshEnt.IsAnimal())
+                continue;
+            if (refreshEnt.IsZombie())
+                continue;
+            if (refreshEnt.IsDayZCreature())
+                continue;
+
+            float lifeMax = refreshEnt.GetLifetimeMax();
+            if (lifeMax < lifeThreshold)
+                continue;
+
+            refreshEnt.SetLifetime(lifeMax);
+        }
+    }
+
+    // Called from LFPG_FlagBase.SetFullyRaised when a raise finishes.
+    // Abandoned flags (T3 power latch included) are not registered and do not refresh.
+    void NotifyFlagRaised(LFPG_FlagBase flag)
+    {
+        if (!flag || !m_Config)
+            return;
+        if (m_Config.m_MinRefreshLifetime < 0)
+            return;
+        if (!IsOwnedRegisteredFlag(flag))
+            return;
+
+        RefreshBaseAroundFlag(flag);
+
+        string raisedID = flag.GetGroupID();
+        if (raisedID != "")
+        {
+            m_BaseRefreshAt.Set(raisedID, GetGame().GetTime());
+        }
+    }
+
+    // Duplicate or leftover flag: drop pending registration and an abandoned
+    // position row at this spot. Does not touch the group's registered cache.
+    void ReleaseUnregisteredFlag(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return;
+
+        int pendIdx;
+        int pendCount = m_PendingFlags.Count();
+        for (pendIdx = 0; pendIdx < pendCount; pendIdx = pendIdx + 1)
+        {
+            if (m_PendingFlags[pendIdx] == flag)
+            {
+                m_PendingFlags.Remove(pendIdx);
+                break;
+            }
+        }
+
+        RemoveAbandonedFlagPosition(flag.GetPosition());
+
+        // Pending flags are cached under their persisted ID, not ABANDONED.
+        // Never remove a registered flag's row when deleting a duplicate.
+        string pendingID = flag.GetGroupID();
+        if (pendingID != "" && !GetGroupFlag(pendingID))
+        {
+            RemoveFlagPositionCache(pendingID);
+            // Another pending flag can share this ID. Keep its protection.
+            for (pendIdx = 0; pendIdx < m_PendingFlags.Count(); pendIdx = pendIdx + 1)
+            {
+                LFPG_FlagBase remainingPending = m_PendingFlags[pendIdx];
+                if (remainingPending && remainingPending.GetGroupID() == pendingID)
+                    UpdateFlagPositionCache(pendingID, remainingPending.GetPosition(), remainingPending.ComputeCurrentRaiseProgress(), remainingPending.GetTier());
+            }
+        }
+    }
+
+    // True only when this entity is the flag registered for a group that still exists.
+    bool IsOwnedRegisteredFlag(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return false;
+
+        string ownedID = flag.GetGroupID();
+        if (ownedID == "")
+            return false;
+        if (!m_Groups.Contains(ownedID))
+            return false;
+
+        LFPG_FlagBase ownedFlag = GetGroupFlag(ownedID);
+        if (!ownedFlag)
+            return false;
+        if (ownedFlag != flag)
+            return false;
+
+        return true;
     }
 
     // ========================================================================
@@ -682,6 +958,7 @@ class LFPG_GroupManager
 
         m_GroupFlags.Set(groupID, flag);
         UpdateFlagPositionCache(groupID, flag.GetPosition(), flag.ComputeCurrentRaiseProgress(), flag.GetTier());
+        flag.ApplyGroupLifetime();
 
         // FIX C4: Restaurar MemberCount desde datos del grupo (tras restart)
         // + Sincronizar posicion persistida para fallback en LIGHTWEIGHT_SYNC
@@ -720,6 +997,10 @@ class LFPG_GroupManager
             m_GroupFlags.Remove(groupID);
         }
         RemoveFlagPositionCache(groupID);
+        if (m_BaseRefreshAt.Contains(groupID))
+        {
+            m_BaseRefreshAt.Remove(groupID);
+        }
     }
 
     // ========================================================================
@@ -958,8 +1239,9 @@ class LFPG_GroupManager
     }
 
     // Nearest other group whose flag lies inside the build radius (XZ) and whose
-    // live raise progress is above zero. Cached progress is used only when that
-    // group has no registered flag entity. Empty string means no foreign owner.
+    // live raise progress is above zero. A registered flag wins. With none, a
+    // pending flag of that group at the cached position supplies live progress.
+    // Otherwise the cached value is kept. Empty string means no foreign owner.
     // A groupless actor passes "" and any such group is foreign.
     // extraMeters widens the search past the build radius. Crafting uses it so a
     // result spawned ahead of the player cannot land inside a foreign zone.
@@ -1000,6 +1282,12 @@ class LFPG_GroupManager
                 if (foFlag)
                     liveProgress = foFlag.ComputeCurrentRaiseProgress();
             }
+            else
+            {
+                LFPG_FlagBase foPending = FindPendingFlagAt(foEntry.m_GroupID, foEntry.m_Position);
+                if (foPending)
+                    liveProgress = foPending.ComputeCurrentRaiseProgress();
+            }
             if (liveProgress <= 0.0)
                 continue;
 
@@ -1007,6 +1295,33 @@ class LFPG_GroupManager
             nearestID = foEntry.m_GroupID;
         }
         return nearestID;
+    }
+
+    // Pending flag of this group whose position matches the cache entry.
+    // Used when the group has no registered flag. Null keeps the cached progress.
+    protected LFPG_FlagBase FindPendingFlagAt(string groupID, vector pos)
+    {
+        if (groupID == "")
+            return null;
+
+        int pendFind;
+        int pendFindCount = m_PendingFlags.Count();
+        for (pendFind = 0; pendFind < pendFindCount; pendFind = pendFind + 1)
+        {
+            LFPG_FlagBase pendFindFlag = m_PendingFlags[pendFind];
+            if (!pendFindFlag)
+                continue;
+            if (pendFindFlag.GetGroupID() != groupID)
+                continue;
+
+            vector pendFindPos = pendFindFlag.GetPosition();
+            float pendDx = pos[0] - pendFindPos[0];
+            float pendDz = pos[2] - pendFindPos[2];
+            float pendDistSq = (pendDx * pendDx) + (pendDz * pendDz);
+            if (pendDistSq < 4.0)
+                return pendFindFlag;
+        }
+        return null;
     }
 
     // ========================================================================
@@ -1262,11 +1577,14 @@ class LFPG_GroupManager
     // Crear grupo: jugador sin grupo coloca bandera
     string CreateGroup(string playerUID, string playerName, string groupName, LFPG_FlagBase flag)
     {
+        if (!CanMutateGroups())
+            return "";
+
         // Validaciones
         if (m_PlayerToGroup.Contains(playerUID))
             return "";
 
-        if (m_GroupNames.Contains(groupName))
+        if (m_GroupNames.Contains(GroupNameKey(groupName)))
             return "";
 
         if (!flag)
@@ -1274,6 +1592,11 @@ class LFPG_GroupManager
 
         // Crear ID
         string groupID = LFPG_GroupData.GenerateGroupID(playerUID);
+        if (m_Groups.Contains(groupID))
+        {
+            LFPG_Log.Error("CreateGroup: generated group ID already exists; creation rejected");
+            return "";
+        }
 
         // Crear datos del grupo
         LFPG_GroupData group = new LFPG_GroupData();
@@ -1303,7 +1626,7 @@ class LFPG_GroupManager
         // (se normalizaran cuando el lider escoja un nombre real)
         if (!IsTempGroupName(groupName))
         {
-            m_GroupNames.Set(groupName, true);
+            m_GroupNames.Set(GroupNameKey(groupName), true);
         }
 
         // Configurar la bandera
@@ -1341,6 +1664,9 @@ class LFPG_GroupManager
     // Disolver grupo: se llama al destruir bandera o grupo huerfano
     void DissolveGroup(string groupID)
     {
+        if (m_GroupsLoadFailed)
+            return;
+
         // Durante el apagado el estado final ya se guardo: ni mutar ni persistir.
         if (m_IsShuttingDown)
         {
@@ -1376,9 +1702,9 @@ class LFPG_GroupManager
         }
 
         // Limpiar nombre (solo si no es temporal — los temp nunca entraron al set)
-        if (!IsTempGroupName(group.m_GroupName) && m_GroupNames.Contains(group.m_GroupName))
+        if (!IsTempGroupName(group.m_GroupName) && m_GroupNames.Contains(GroupNameKey(group.m_GroupName)))
         {
-            m_GroupNames.Remove(group.m_GroupName);
+            m_GroupNames.Remove(GroupNameKey(group.m_GroupName));
         }
 
         // Destruir objetos desplegados si la config lo indica
@@ -1409,6 +1735,9 @@ class LFPG_GroupManager
     // Anadir miembro
     bool AddMember(string groupID, string playerUID, string playerName)
     {
+        if (!CanMutateGroups())
+            return false;
+
         if (!m_Groups.Contains(groupID))
             return false;
 
@@ -1426,7 +1755,7 @@ class LFPG_GroupManager
             return false;
 
         // FIX G-16: Double-check que el grupo sigue existiendo tras los guards anteriores
-        // (race entre HandleRequestJoin y DissolveGroup)
+        // (grupo disuelto mientras terminaba la accion de unirse)
         if (!m_Groups.Contains(groupID))
             return false;
 
@@ -1460,6 +1789,9 @@ class LFPG_GroupManager
     // Quitar miembro - con traspaso de liderazgo si es lider que abandona
     bool RemoveMember(string groupID, string playerUID)
     {
+        if (!CanMutateGroups())
+            return false;
+
         if (!m_Groups.Contains(groupID))
             return false;
 
@@ -1566,6 +1898,9 @@ class LFPG_GroupManager
     // Transferir liderazgo (solo por peticion voluntaria del lider)
     bool TransferLeadership(string groupID, string currentLeaderUID, string newLeaderUID)
     {
+        if (!CanMutateGroups())
+            return false;
+
         if (!m_Groups.Contains(groupID))
             return false;
 
@@ -1576,11 +1911,14 @@ class LFPG_GroupManager
         if (!group.IsLeader(currentLeaderUID))
             return false;
 
+        if (newLeaderUID == currentLeaderUID)
+            return false;
+
         if (!group.IsMember(newLeaderUID))
             return false;
 
         group.m_LeaderUID = newLeaderUID;
-        SaveGroups();
+        MarkDirty();
 
         SendGroupSyncUpdateToMembers(group, LFPG_SYNC_LEADER_CHANGED);
         return true;
@@ -1646,6 +1984,9 @@ class LFPG_GroupManager
     // ========================================================================
     bool CleanupStaleGroupForPlayer(string playerUID)
     {
+        if (!CanMutateGroups())
+            return false;
+
         // Con la red de seguridad activa nadie borra grupos, ni siquiera por
         // la via del kit: el estado de arranque no es de fiar.
         if (m_DissolveDisabled)
@@ -1677,7 +2018,13 @@ class LFPG_GroupManager
     // ========================================================================
     bool UpgradeFlag(string groupID, string newClassName, LFPG_FlagBase oldFlag)
     {
+        if (!CanMutateGroups())
+            return false;
+
         if (!oldFlag || groupID == "")
+            return false;
+
+        if (GetGroupFlag(groupID) != oldFlag)
             return false;
 
         if (!m_Groups.Contains(groupID))
@@ -1771,8 +2118,16 @@ class LFPG_GroupManager
     // ========================================================================
     // NAME VALIDATION
     // ========================================================================
+    static string GroupNameKey(string name)
+    {
+        name.TrimInPlace();
+        name.ToLower();
+        return name;
+    }
+
     int ValidateGroupName(string name)
     {
+        name.TrimInPlace();
         int nameLen = name.Length();
         if (nameLen < m_Config.m_GroupNameMinLength)
             return LFPG_NAME_TOO_SHORT;
@@ -1791,7 +2146,7 @@ class LFPG_GroupManager
         }
 
         // Check nombre duplicado - O(1) via map
-        if (m_GroupNames.Contains(name))
+        if (m_GroupNames.Contains(GroupNameKey(name)))
             return LFPG_NAME_TAKEN;
 
         return LFPG_NAME_OK;
@@ -1899,6 +2254,21 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
+    // CREATE_GROUP, REQUEST_JOIN, START_INVITE and DESTROY_FLAG are unused.
+    // Enum values stay so older clients do not shift the id space.
+    protected bool IsRetiredClientRpc(int rpc_type)
+    {
+        if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_REQUEST_JOIN)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_START_INVITE)
+            return true;
+        if (rpc_type == LFPG_RPC_C2S_DESTROY_FLAG)
+            return true;
+        return false;
+    }
+
     // RPC HANDLER - Server-side dispatcher
     // ========================================================================
     void HandleRPC(PlayerIdentity sender, int rpc_type, ParamsReadContext ctx, LFPG_FlagBase flag)
@@ -1916,19 +2286,25 @@ class LFPG_GroupManager
             return;
         }
 
-        if (rpc_type == LFPG_RPC_C2S_CREATE_GROUP)
+        if (IsRetiredClientRpc(rpc_type))
         {
-            // RESERVED — no triggered from client (group created via Action/OnPlacementComplete)
-            HandleCreateGroup(sender, ctx, flag);
+            if (!m_LoggedRetiredRpc)
+            {
+                m_LoggedRetiredRpc = true;
+                LFPG_Log.Debug("Ignored a retired client RPC");
+            }
+            return;
         }
-        else if (rpc_type == LFPG_RPC_C2S_SET_GROUP_NAME)
+
+        if (!CanMutateGroups() && rpc_type != LFPG_RPC_C2S_REQUEST_GROUP_DATA)
+        {
+            SendGroupsUnavailable(PlayerBase.Cast(sender.GetPlayer()));
+            return;
+        }
+
+        if (rpc_type == LFPG_RPC_C2S_SET_GROUP_NAME)
         {
             HandleSetGroupName(sender, ctx, flag);
-        }
-        else if (rpc_type == LFPG_RPC_C2S_REQUEST_JOIN)
-        {
-            // RESERVED — no triggered from client (join via ActionJoinGroup.OnStartServer)
-            HandleRequestJoin(sender, ctx, flag);
         }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_LEAVE)
         {
@@ -1942,16 +2318,6 @@ class LFPG_GroupManager
         {
             HandleRequestTransfer(sender, ctx, flag);
         }
-        else if (rpc_type == LFPG_RPC_C2S_START_INVITE)
-        {
-            // RESERVED — no triggered from client (invite via ActionInvite.OnStartServer)
-            HandleStartInvite(sender, ctx, flag);
-        }
-        else if (rpc_type == LFPG_RPC_C2S_DESTROY_FLAG)
-        {
-            // RESERVED — no triggered from client (destroy via ActionDestroyFlag.OnStartServer)
-            HandleDestroyFlag(sender, ctx, flag);
-        }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_GROUP_DATA)
         {
             HandleRequestGroupData(sender, ctx, flag);
@@ -1962,15 +2328,6 @@ class LFPG_GroupManager
     // RPC HANDLERS - Individual operations
     // ========================================================================
 
-    // FIX G-14: Marcado como DEPRECATED — no se dispara desde cliente.
-    // La creacion de grupo ocurre via LFPG_FlagKit_T1.OnPlacementComplete o
-    // LFPG_ActionRegisterTerritory.OnStartServer. Este handler se rechaza
-    // para evitar doble-register race.
-    protected void HandleCreateGroup(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        LFPG_Log.Error("HandleCreateGroup called - rejected (use ActionRegisterTerritory or FlagKit placement instead)");
-    }
-
     protected void HandleSetGroupName(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
         string senderUID = sender.GetPlainId();
@@ -1978,6 +2335,7 @@ class LFPG_GroupManager
         string newName = "";
         if (!ctx.Read(newName))
             return;
+        newName.TrimInPlace();
 
         string groupID = GetPlayerGroupID(senderUID);
         if (groupID == "")
@@ -1991,6 +2349,10 @@ class LFPG_GroupManager
         if (!group.IsLeader(senderUID))
             return;
 
+        // A real name is final. The dialog is only offered while the name is still #TEMP#.
+        if (!IsTempGroupName(group.m_GroupName))
+            return;
+
         // Validar nombre
         int result = ValidateGroupName(newName);
         if (result != LFPG_NAME_OK)
@@ -2000,48 +2362,20 @@ class LFPG_GroupManager
         }
 
         // Quitar nombre viejo del set (si no era temporal — los temp nunca entraron)
-        if (!IsTempGroupName(group.m_GroupName) && m_GroupNames.Contains(group.m_GroupName))
+        if (!IsTempGroupName(group.m_GroupName) && m_GroupNames.Contains(GroupNameKey(group.m_GroupName)))
         {
-            m_GroupNames.Remove(group.m_GroupName);
+            m_GroupNames.Remove(GroupNameKey(group.m_GroupName));
         }
 
         // Asignar nuevo nombre (el nombre validado no puede ser temp — LFPG_NAME_ALLOWED_CHARS no incluye '#')
         group.m_GroupName = newName;
-        m_GroupNames.Set(newName, true);
+        m_GroupNames.Set(GroupNameKey(newName), true);
 
-        SaveGroups();
+        MarkDirty();
 
         SendNameResult(sender, flag, LFPG_NAME_OK);
         // Notificar a todos con sync completo (nombre cambio)
         SendGroupSyncUpdateToMembers(group, LFPG_SYNC_COUNT_CHANGED);
-    }
-
-    protected void HandleRequestJoin(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        string senderUID = sender.GetPlainId();
-        string senderName = sender.GetName();
-
-        // No debe tener grupo
-        if (HasGroup(senderUID))
-            return;
-
-        // La bandera debe estar en invite mode
-        if (!flag || !flag.IsInviteModeActive())
-            return;
-
-        // FIX C-7: Distance check (proximidad requerida para unirse)
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        string groupID = flag.GetGroupID();
-        if (groupID == "")
-            return;
-
-        bool added = AddMember(groupID, senderUID, senderName);
-        if (added)
-        {
-            SendGroupSyncFull(sender, groupID, flag, flag);
-        }
     }
 
     protected void HandleRequestLeave(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
@@ -2090,62 +2424,10 @@ class LFPG_GroupManager
         TransferLeadership(groupID, senderUID, targetUID);
     }
 
-    protected void HandleStartInvite(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        if (!flag)
-            return;
-
-        // FIX C-7, G-15: Validar ownership + proximidad (10m)
-        if (!ValidateSenderOwnsFlag(sender, flag))
-            return;
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        // Activar invite mode
-        int durationMs = m_Config.m_InviteDurationSeconds * 1000;
-        flag.ActivateInviteMode(durationMs);
-    }
-
-    protected void HandleDestroyFlag(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        if (!flag)
-            return;
-
-        // FIX C-7, G-15: Validar ownership + proximidad (10m)
-        if (!ValidateSenderOwnsFlag(sender, flag))
-            return;
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        string senderUID = sender.GetPlainId();
-        string groupID = flag.GetGroupID();
-
-        LFPG_GroupData group = m_Groups.Get(groupID);
-        if (!group || !group.IsLeader(senderUID))
-            return;
-
-        // Verificar que el jugador tiene hatchet en manos (LFPG_ToolMatcher en Fase F)
-        PlayerBase player = PlayerBase.Cast(sender.GetPlayer());
-        if (!player)
-            return;
-
-        EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
-        if (!itemInHands)
-            return;
-
-        if (!LFPG_IsHatchet(itemInHands))
-            return;
-
-        // Disolver grupo y destruir bandera
-        DissolveGroup(groupID);
-
-        // Borrar la entidad de la bandera del mundo
-        GetGame().ObjectDelete(flag);
-    }
-
     protected void HandleRequestGroupData(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
         string senderUID = sender.GetPlainId();
+        SendPlacementRules(GetPlayerByUID(senderUID));
         string groupID = GetPlayerGroupID(senderUID);
         if (groupID == "")
             return;
@@ -2178,6 +2460,9 @@ class LFPG_GroupManager
     // ========================================================================
     void OnPlayerJoined(string playerUID, PlayerBase player)
     {
+        SendPlacementRules(player);
+        if (m_GroupsLoadFailed)
+            SendGroupsUnavailable(player);
         if (!HasGroup(playerUID))
             return;
 
@@ -2223,6 +2508,35 @@ class LFPG_GroupManager
     // ========================================================================
     // SEND RPC HELPERS - Server -> Client
     // ========================================================================
+
+    // Independent policy sync also reaches players without a group. Existing
+    // group payloads and saved files keep their original wire/storage format.
+    void SendPlacementRules(PlayerBase player)
+    {
+        if (!m_Config || !player || !player.GetIdentity())
+            return;
+        ScriptRPC rules = new ScriptRPC();
+        int count = 0;
+        if (m_Config.m_FurnitureExcludedTypes)
+            count = m_Config.m_FurnitureExcludedTypes.Count();
+        rules.Write(count);
+        for (int i = 0; i < count; i = i + 1)
+            rules.Write(m_Config.m_FurnitureExcludedTypes[i]);
+        int noBaseCount = 0;
+        if (m_Config.m_NoBaseRequiredTypes)
+            noBaseCount = m_Config.m_NoBaseRequiredTypes.Count();
+        rules.Write(noBaseCount);
+        for (int n = 0; n < noBaseCount; n = n + 1)
+            rules.Write(m_Config.m_NoBaseRequiredTypes[n]);
+        int unrestrictedCount = 0;
+        if (m_Config.m_UnrestrictedTypes)
+            unrestrictedCount = m_Config.m_UnrestrictedTypes.Count();
+        rules.Write(unrestrictedCount);
+        for (int u = 0; u < unrestrictedCount; u = u + 1)
+            rules.Write(m_Config.m_UnrestrictedTypes[u]);
+        rules.Write(LFPG_PLACEMENT_RULES_END);
+        rules.Send(player, LFPG_RPC_S2C_PLACEMENT_RULES, true, player.GetIdentity());
+    }
 
     // rpcTarget: entidad via la que se envia el RPC al cliente.
     // Normalmente es flag (cuando el jugador esta cerca y la flag esta en su network bubble).
@@ -2446,12 +2760,13 @@ class LFPG_GroupManager
 
         LFPG_FlagBase flag = GetGroupFlag(group.m_GroupID);
 
-        // Una sola llamada a GetPlayers (antes se llamaba N veces, una por miembro)
-        m_PlayerSearchBuffer.Clear();
-        GetGame().GetPlayers(m_PlayerSearchBuffer);
+        // SendGroupSyncFull uses m_PlayerSearchBuffer for online status. Keep
+        // recipients separate so its nested call cannot invalidate this loop.
+        m_SyncRecipientBuffer.Clear();
+        GetGame().GetPlayers(m_SyncRecipientBuffer);
 
         int memberCount = group.m_Members.Count();
-        int playerCount = m_PlayerSearchBuffer.Count();
+        int playerCount = m_SyncRecipientBuffer.Count();
         int i;
         int j;
 
@@ -2463,7 +2778,7 @@ class LFPG_GroupManager
 
             for (j = 0; j < playerCount; j = j + 1)
             {
-                Man man = m_PlayerSearchBuffer[j];
+                Man man = m_SyncRecipientBuffer[j];
                 if (!man)
                     continue;
                 PlayerIdentity identity = man.GetIdentity();
@@ -2668,36 +2983,103 @@ class LFPG_GroupManager
     }
 
     // ========================================================================
-    // PERSISTENCE - JSON atomico
+    // PERSISTENCE - recoverable JSON replacement (not atomic)
     // ========================================================================
     // AUDIT #10 L1-F06 / L3-F03: lectura verificada de un fichero de grupos.
     // true solo si deserializa y su version es soportada; groupCount = grupos.
     // Un fichero valido con 0 grupos es legitimo (se disolvio el ultimo).
+    // Validate the entire staged file before installing a single group/index.
+    protected bool ValidateGroupsData(LFPG_GroupsFileData data)
+    {
+        if (!data || !data.m_Groups || data.m_Version != LFPG_GROUPS_FILE_VERSION)
+            return false;
+
+        map<string, bool> groupIDs = new map<string, bool>;
+        map<string, bool> memberUIDs = new map<string, bool>;
+        int i;
+        int j;
+        for (i = 0; i < data.m_Groups.Count(); i = i + 1)
+        {
+            LFPG_GroupData record = data.m_Groups[i];
+            if (!record || record.m_GroupID == "" || record.m_LeaderUID == "")
+                return false;
+            if (!record.m_Members || record.m_Members.Count() == 0)
+                return false;
+            if (groupIDs.Contains(record.m_GroupID))
+                return false;
+            groupIDs.Set(record.m_GroupID, true);
+            bool leaderPresent = false;
+            for (j = 0; j < record.m_Members.Count(); j = j + 1)
+            {
+                LFPG_MemberData recordMember = record.m_Members[j];
+                if (!recordMember || recordMember.m_PlayerUID == "")
+                    return false;
+                if (memberUIDs.Contains(recordMember.m_PlayerUID))
+                    return false;
+                memberUIDs.Set(recordMember.m_PlayerUID, true);
+                if (recordMember.m_PlayerUID == record.m_LeaderUID)
+                    leaderPresent = true;
+            }
+            if (!leaderPresent)
+                return false;
+        }
+        return true;
+    }
+
     protected bool ReadGroupsFile(string path, out int groupCount)
     {
         groupCount = 0;
-        if (!FileExist(path))
-            return false;
         LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
         string probeErr = "";
         if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, probeErr))
             return false;
-        if (!probe || !probe.m_Groups)
-            return false;
-        if (probe.m_Version > LFPG_GROUPS_FILE_VERSION)
+        if (!ValidateGroupsData(probe))
             return false;
         groupCount = probe.m_Groups.Count();
         return true;
     }
 
+    protected bool IsFutureGroupsFile(string path)
+    {
+        if (!FileExist(path))
+            return false;
+        LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
+        string error = "";
+        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, error))
+            return false;
+        return probe.m_Version > LFPG_GROUPS_FILE_VERSION;
+    }
+
+    // Compare the complete persisted payload, including member identities.
+    protected bool GroupsFileMatches(string path, LFPG_GroupsFileData expected)
+    {
+        LFPG_GroupsFileData actual = new LFPG_GroupsFileData();
+        string error = "";
+        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, actual, error))
+            return false;
+        if (!ValidateGroupsData(actual))
+            return false;
+        string expectedJSON = "";
+        string actualJSON = "";
+        if (!JsonFileLoader<LFPG_GroupsFileData>.MakeData(expected, expectedJSON, error, false))
+            return false;
+        if (!JsonFileLoader<LFPG_GroupsFileData>.MakeData(actual, actualJSON, error, false))
+            return false;
+        return expectedJSON == actualJSON;
+    }
+
     // Aparta un fichero sin destruirlo: copia a path+suffix y solo borra el
-    // original si la copia salio bien (CopyFile no sobrescribe: se borra antes
-    // el apartado anterior). false = el original sigue en su sitio.
+    // original si la copia salio bien. Los apartados anteriores se preservan
+    // con un sufijo numerico. false = el original sigue en su sitio.
     protected bool MoveAside(string path, string suffix)
     {
         string aside = path + suffix;
-        if (FileExist(aside))
-            DeleteFile(aside);
+        int asideIndex = 0;
+        while (FileExist(aside))
+        {
+            asideIndex = asideIndex + 1;
+            aside = path + suffix + "." + asideIndex.ToString();
+        }
         if (!CopyFile(path, aside))
         {
             string mvErr = "MoveAside: cannot copy ";
@@ -2710,10 +3092,17 @@ class LFPG_GroupManager
         return DeleteFile(path);
     }
 
-    void SaveGroups()
+    bool SaveGroups()
     {
+        // Failed-load sessions never write ANY groups file, including .session.
+        if (m_GroupsLoadFailed)
+            return false;
+        m_IsDirty = true;
+        if (!m_BootAuditDone)
+            return false;
         LFPG_GroupsFileData fileData = new LFPG_GroupsFileData();
         fileData.m_Version = LFPG_GROUPS_FILE_VERSION;
+        fileData.m_Groups = new array<ref LFPG_GroupData>;
 
         // Copiar grupos al array
         int i;
@@ -2727,58 +3116,55 @@ class LFPG_GroupManager
             }
         }
 
-        // Cuenta realmente serializada. El bucle inserta condicionalmente, asi que
-        // esto puede ser < m_Groups.Count(); el verify se compara contra ESTE valor.
-        int expectedCount = fileData.m_Groups.Count();
-
-        // Fail closed: never rotate groups.json, the backup or the tmp.
-        // The in-memory state goes to a side file until an admin restores the original.
-        if (m_GroupsLoadFailed)
+        if (!ValidateGroupsData(fileData))
         {
-            string sessionPath = "$profile:SimpleGroup/groups.json.session";
-            string sessionError = "";
-            if (!JsonFileLoader<LFPG_GroupsFileData>.SaveFile(sessionPath, fileData, sessionError))
-            {
-                string sessErr = "SaveGroups: session file write failed: ";
-                sessErr = sessErr + sessionError;
-                LFPG_Log.Error(sessErr);
-            }
-            if (!m_GroupsLoadFailedLogged)
-            {
-                m_GroupsLoadFailedLogged = true;
-                LFPG_Log.Error("groups.json could not be loaded. This session is saved to groups.json.session. Restore or fix groups.json and restart.");
-            }
-            return;
+            LFPG_Log.Error("SaveGroups: inconsistent in-memory groups; save refused.");
+            return false;
         }
 
         string tmpPath = LFPG_TerritoryConfig.GetGroupsTmpPath();
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
 
+        if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath))
+        {
+            m_GroupsLoadFailed = true;
+            LFPG_Log.Error("SaveGroups: newer groups format found. READ ONLY; files retained.");
+            return false;
+        }
+
+        // Finish a previous verified write before reusing tmp. Otherwise a
+        // truncated retry could erase the only copy of the most recent state.
+        bool retryPending = false;
+        LFPG_GroupsFileData pendingData = new LFPG_GroupsFileData();
+        string pendingError = "";
+        if (FileExist(tmpPath))
+        {
+            if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpPath, pendingData, pendingError))
+            {
+                if (ValidateGroupsData(pendingData) && !GroupsFileMatches(finalPath, pendingData))
+                {
+                    retryPending = true;
+                    fileData = pendingData;
+                }
+            }
+        }
+
         // 1. Serializar a tmp. Si falla, no se toca ni el final ni el bak.
         string saveError = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.SaveFile(tmpPath, fileData, saveError))
+        if (!retryPending && !JsonFileLoader<LFPG_GroupsFileData>.SaveFile(tmpPath, fileData, saveError))
         {
             string err1 = "SaveGroups: SaveFile to tmp failed: ";
             err1 = err1 + saveError;
             LFPG_Log.Error(err1);
-            return;
+            return false;
         }
 
-        // 2. Releer el tmp: un fichero que no deserializa no se promueve.
-        LFPG_GroupsFileData verifyData = new LFPG_GroupsFileData();
-        string verifyError = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpPath, verifyData, verifyError))
+        // 2. Re-read the complete payload before touching final/backup.
+        if (!GroupsFileMatches(tmpPath, fileData))
         {
-            string err2 = "SaveGroups: verify read of tmp failed: ";
-            err2 = err2 + verifyError;
-            LFPG_Log.Error(err2);
-            return;
-        }
-        if (!verifyData.m_Groups || verifyData.m_Groups.Count() != expectedCount)
-        {
-            LFPG_Log.Error("SaveGroups: tmp group count mismatch. Rotation aborted.");
-            return;
+            LFPG_Log.Error("SaveGroups: tmp payload mismatch. Rotation aborted.");
+            return false;
         }
 
         // 3. Backup del actual. Cualquier fallo aborta antes de tocar el final.
@@ -2787,21 +3173,28 @@ class LFPG_GroupManager
         //    buena): se aparta a groups.json.corrupt y el .bak queda intacto.
         if (FileExist(finalPath))
         {
-            int finalGroups = 0;
-            if (ReadGroupsFile(finalPath, finalGroups))
+            LFPG_GroupsFileData previousData = new LFPG_GroupsFileData();
+            string previousError = "";
+            bool previousLoaded = JsonFileLoader<LFPG_GroupsFileData>.LoadFile(finalPath, previousData, previousError);
+            if (previousLoaded && ValidateGroupsData(previousData))
             {
                 if (FileExist(bakPath))
                 {
                     if (!DeleteFile(bakPath))
                     {
                         LFPG_Log.Error("SaveGroups: cannot delete stale backup. Rotation aborted.");
-                        return;
+                        return false;
                     }
                 }
                 if (!CopyFile(finalPath, bakPath))
                 {
                     LFPG_Log.Error("SaveGroups: cannot copy final to backup. Rotation aborted.");
-                    return;
+                    return false;
+                }
+                if (!GroupsFileMatches(bakPath, previousData))
+                {
+                    LFPG_Log.Error("SaveGroups: backup payload mismatch. Final and verified tmp retained.");
+                    return false;
                 }
             }
             else
@@ -2809,7 +3202,7 @@ class LFPG_GroupManager
                 if (!MoveAside(finalPath, ".corrupt"))
                 {
                     LFPG_Log.Error("SaveGroups: final does not verify and cannot be moved aside. Rotation aborted.");
-                    return;
+                    return false;
                 }
                 LFPG_Log.Error("SaveGroups: final did not verify; backup kept, final moved to groups.json.corrupt.");
             }
@@ -2824,14 +3217,21 @@ class LFPG_GroupManager
                 if (!DeleteFile(finalPath))
                 {
                     LFPG_Log.Error("SaveGroups: cannot delete final before retry. Rotation aborted.");
-                    return;
+                    return false;
                 }
             }
             if (!CopyFile(tmpPath, finalPath))
             {
                 LFPG_Log.Error("SaveGroups: cannot promote tmp to final. Backup still holds prior state.");
-                return;
+                return false;
             }
+        }
+
+        // CopyFile success alone is not proof of a complete destination.
+        if (!GroupsFileMatches(finalPath, fileData))
+        {
+            LFPG_Log.Error("SaveGroups: final payload mismatch. Verified tmp retained; save will retry.");
+            return false;
         }
 
         // 5. Limpiar tmp solo tras una rotacion completa.
@@ -2839,13 +3239,24 @@ class LFPG_GroupManager
         {
             DeleteFile(tmpPath);
         }
+        // Bounded to one retry: final now matches pendingData even if removing
+        // tmp failed, so the next call writes the current in-memory state.
+        if (retryPending)
+            return SaveGroups();
+        m_IsDirty = false;
+        return true;
     }
 
     void LoadGroups()
     {
+        if (m_GroupsLoadFailed)
+            return;
+
         string filePath = LFPG_TerritoryConfig.GetGroupsPath();
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string dirPath = LFPG_TerritoryConfig.GetConfigDir();
+
+        m_GroupsSourceMissing = !FileExist(filePath) && !FileExist(bakPath) && !FileExist(LFPG_TerritoryConfig.GetGroupsTmpPath());
 
         // Crear directorio si no existe
         if (!FileExist(dirPath))
@@ -2862,6 +3273,12 @@ class LFPG_GroupManager
         {
             if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(filePath, fileData, loadError))
             {
+                if (fileData.m_Version > LFPG_GROUPS_FILE_VERSION)
+                {
+                    m_GroupsLoadFailed = true;
+                    LFPG_Log.Error("LoadGroups: newer groups format. READ ONLY; no fallback or rewrite.");
+                    return;
+                }
                 // Un fichero valido con 0 grupos es un estado legitimo (se disolvio
                 // el ultimo grupo). Tratarlo como corrupto hacia caer al backup y
                 // RESUCITAR grupos ya borrados.
@@ -2879,13 +3296,13 @@ class LFPG_GroupManager
                 fileData = new LFPG_GroupsFileData();
                 if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(bakPath, fileData, loadError))
                 {
-                    if (fileData && fileData.m_Groups && fileData.m_Groups.Count() > 0)
+                    if (ValidateGroupsData(fileData))
                     {
                         loaded = true;
                         if (!FileExist(filePath))
                         {
-                            CopyFile(bakPath, filePath);
-                            LFPG_Log.Info("groups.json missing; recovered from backup and promoted.");
+                            // Preserve the backup; the next successful save promotes it.
+                            LFPG_Log.Info("groups.json missing; loaded verified backup (including zero groups).");
                         }
                         else
                         {
@@ -2898,59 +3315,44 @@ class LFPG_GroupManager
 
         if (!loaded)
         {
-            string freshMsg = "LoadGroups: no usable data in primary or backup. Starting fresh. Last error: ";
-            freshMsg = freshMsg + loadError;
-            LFPG_Log.Error(freshMsg);
-            // Neither file means a fresh install. A file that exists but cannot
-            // be used must not be overwritten by a later save.
-            if (FileExist(filePath) || FileExist(bakPath))
+            if (!m_GroupsSourceMissing)
+            {
                 m_GroupsLoadFailed = true;
+                LFPG_Log.Error("LoadGroups: no usable groups file. READ ONLY; restore groups.json and restart. No groups files will be written.");
+            }
+            else
+            {
+                LFPG_Log.Info("LoadGroups: no profile data. Waiting for restored flags before accepting a fresh world.");
+                // Cover flags restored during super.OnInit, before this load.
+                int missingIndex;
+                for (missingIndex = 0; missingIndex < m_PendingFlags.Count(); missingIndex = missingIndex + 1)
+                {
+                    LFPG_FlagBase missingFlag = m_PendingFlags[missingIndex];
+                    if (missingFlag && missingFlag.GetGroupID() != "")
+                    {
+                        m_GroupsLoadFailed = true;
+                        m_DissolveDisabled = true;
+                        LFPG_Log.Error("Owned flags restored without group profile. READ ONLY; restore profile and restart.");
+                        break;
+                    }
+                }
+            }
             return;
         }
 
-        // No tragarse un formato mas nuevo que el que este build entiende.
-        if (fileData.m_Version > LFPG_GROUPS_FILE_VERSION)
+        if (!ValidateGroupsData(fileData))
         {
-            string verErr = "LoadGroups: file version ";
-            verErr = verErr + fileData.m_Version.ToString();
-            verErr = verErr + " is newer than supported ";
-            verErr = verErr + LFPG_GROUPS_FILE_VERSION.ToString();
-            verErr = verErr + ". Refusing to load.";
-            LFPG_Log.Error(verErr);
             m_GroupsLoadFailed = true;
+            LFPG_Log.Error("LoadGroups: unsupported version or invalid/duplicate group/member record. READ ONLY; no partial groups loaded.");
             return;
         }
 
         // Reconstruir estructuras en memoria con VALIDACION por grupo (FIX I-22)
         int i;
         int count = fileData.m_Groups.Count();
-        int skippedCount = 0;
         for (i = 0; i < count; i = i + 1)
         {
             LFPG_GroupData group = fileData.m_Groups[i];
-
-            // Validacion de integridad: descarta grupos corruptos silenciosamente
-            if (!group || group.m_GroupID == "")
-            {
-                skippedCount = skippedCount + 1;
-                continue;
-            }
-            if (group.m_LeaderUID == "")
-            {
-                string skipLeader = "Skipping corrupt group (no leader): ";
-                skipLeader = skipLeader + group.m_GroupID;
-                LFPG_Log.Error(skipLeader);
-                skippedCount = skippedCount + 1;
-                continue;
-            }
-            if (!group.m_Members || group.m_Members.Count() == 0)
-            {
-                string skipMembers = "Skipping corrupt group (no members): ";
-                skipMembers = skipMembers + group.m_GroupID;
-                LFPG_Log.Error(skipMembers);
-                skippedCount = skippedCount + 1;
-                continue;
-            }
 
             // Sanear nombre si es temporal o invalido (se renombrara al siguiente login)
             if (group.m_GroupName == "")
@@ -2978,7 +3380,7 @@ class LFPG_GroupManager
             }
             if (!isTempName && group.m_GroupName != "")
             {
-                m_GroupNames.Set(group.m_GroupName, true);
+                m_GroupNames.Set(GroupNameKey(group.m_GroupName), true);
             }
 
             // Reconstruir player->group map con validacion de UID
@@ -2992,14 +3394,6 @@ class LFPG_GroupManager
                     m_PlayerToGroup.Set(member.m_PlayerUID, group.m_GroupID);
                 }
             }
-        }
-
-        if (skippedCount > 0)
-        {
-            string skipMsg = "LoadGroups: skipped ";
-            skipMsg = skipMsg + skippedCount.ToString();
-            skipMsg = skipMsg + " corrupt group entries.";
-            LFPG_Log.Error(skipMsg);
         }
 
         string logMsg = "Loaded ";

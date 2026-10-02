@@ -111,6 +111,13 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
 
     override void OnFinishProgressServer(ActionData action_data)
     {
+        if (!action_data || !action_data.m_Target || !action_data.m_Player)
+            return;
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(action_data.m_Player, action_data.m_Target.GetObject()))
+            return;
+        if (!ActionCondition(action_data.m_Player, action_data.m_Target, action_data.m_MainItem))
+            return;
+
         LFPG_FlagBase flag = LFPG_FlagBase.Cast(action_data.m_Target.GetObject());
         if (!flag)
             return;
@@ -125,5 +132,26 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
 
         float delta = config.m_FlagLowerRatePerSecond;
         flag.DecrementRaiseProgress(delta);
+    }
+
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (!super.ActionConditionContinue(action_data))
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+            return true;
+
+        PlayerBase player = action_data.m_Player;
+        if (!player)
+            return false;
+        if (!action_data.m_Target)
+            return false;
+
+        Object targetObj = action_data.m_Target.GetObject();
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
+        return true;
     }
 };
