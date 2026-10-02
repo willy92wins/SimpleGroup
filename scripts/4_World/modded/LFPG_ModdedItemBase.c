@@ -63,6 +63,15 @@ modded class ItemBase
         if (mgrCfg)
         {
             LFPG_TerritoryConfig cfgEarly = mgrCfg.GetConfig();
+            if (cfgEarly && LFPG_IsFurniturePlacementExempt(this, cfgEarly.m_FurnitureExcludedTypes))
+            {
+                // Vanilla moves a placed hand item to ground after this callback.
+                // Do not reinterpret that move as a list-A drop in foreign land.
+                InventoryLocation exemptLoc = new InventoryLocation;
+                if (GetInventory().GetCurrentInventoryLocation(exemptLoc) && exemptLoc.GetType() == InventoryLocationType.HANDS)
+                    m_LFPG_JustPlaced = true;
+                return;
+            }
             if (cfgEarly && (cfgEarly.IsNoBaseRequired(this) || cfgEarly.IsUnrestricted(this)))
                 return;
         }
