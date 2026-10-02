@@ -12,10 +12,6 @@ modded class MissionGameplay
         // Inicializar cache del cliente
         LFPG_ClientGroupCache.Init();
 
-        // FIX I-15: Normalizar colores de UI (DayZ aplica LV negativo por default)
-        Widget.SetLV(0);
-        Widget.SetTextLV(0);
-
         // FIX C2: Panel ya no se pre-crea. Se instancia al pulsar P.
         LFPG_Log.Info("MissionGameplay initialized (client).");
     }
