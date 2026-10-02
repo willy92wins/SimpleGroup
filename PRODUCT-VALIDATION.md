@@ -95,3 +95,19 @@ PBO y nueve archivos originales por hash. No hay despliegue productivo.
 
 La resolución individual y propuestas de continuación están en
 [ISSUES-STATUS.md](ISSUES-STATUS.md).
+
+### Decisiones F14/F16/F31
+
+Código e0111d3: Destroy continuo de 5 segundos y recuperación del nombre temporal
+desde el panel, por PlayerBase. F31 conserva sucesión al salir/expulsar por
+decisión explícita. Opus 5.5 r1: **MERGE_OK estático**, sin hallazgos bloqueantes.
+Validador: 0 errores/17 avisos; UI reconcile: 0 FAIL/0 WARN. PBO extraído con
+41 scripts y 62 recursos exactos, SHA-256
+`2d819410c99c638b36d06c1d9ceba0a36a67916e03a6ed5ecc2a0d46ad8a0a9c`.
+
+La prueba nativa sigue pendiente de banco libre. La misión preparada inicia
+la acción a través del gestor cliente original y usa su API de automatización
+para simular mantener la entrada; observa inicio/cancelación/fin en servidor.
+Esto no simula una pulsación física de teclado. El probe de UI cancela el nombre
+inicial, lo reabre sin referencia a bandera y comprueba respuestas reales del
+servidor, además de peticiones obsoletas/truncadas. No se presenta como ejecutado.
