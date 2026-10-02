@@ -1,7 +1,8 @@
 # Validación del candidato — 2026-10-02
 
-Código probado: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
-Estado: candidato revisado; aceptación de producción pendiente.
+Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
+Último código: `a8d4a01404b5deb20d77a5db4e388e3fedd2727e` (fix de config descrito abajo).
+Estado: integración revisada y fusión autorizada; aceptación de producción pendiente.
 
 ## Revisión de producto
 
@@ -10,14 +11,21 @@ Desde r2 se revisaron exclusivamente cambios y cierre de hallazgos.
 Acciones: r2 OK. Territorio, persistencia, UI/sync y F17: r3 OK.
 El guard de colisión de ID se concilió por Codex según la autorización desde r3.
 
+Revisión final de integración de #1, #5, #6, #7, #8, #9 y #16: Opus r1 encontró
+que la migración a config v5 sobrescribía el ajuste explícito de lifetime en
+archivos antiguos. Codex lo reprodujo en motor y corrigió en a8d4a01; Opus r2,
+limitado a ese delta, emitió **MERGE_OK**. Todos los heads originales son
+ancestros reales de la integración; se conserva su historial al fusionar.
+
 ## Comprobaciones ejecutadas
 
 - Validador: 0 errores, 17 avisos iguales a la base, sin avisos nuevos.
 - UI: 3 layouts, 41 fuentes y 49 claves; 0 fallos y 0 avisos de reconciliación.
-- PBO extraído: 41 scripts y 62 recursos coinciden con las fuentes; config.bin
-  y cuatro modelos ODOL presentes. SHA-256:
-  `a52c02fe217ba83d85f84810ac0f296fd3f2a0dbdbf44ce11fc15b3b3873153a`.
-- DayZ 1.29.163709, sin file patching: servidor y cliente compilan y cargan el mod.
+- PBO a8d4a01 extraído: 41 scripts y 62 recursos coinciden con las fuentes;
+  config.bin y cuatro modelos ODOL presentes. SHA-256:
+  `9aaf1ebad8f02984f18ed76dbc02070cc173b5533cc61656bfbd53b44f85b4da`.
+- En 11ba729, DayZ 1.29.163709 sin file patching: servidor y cliente compilan
+  y cargan el mod. La repetición de a8d4a01 descrita abajo ejecuta el servidor.
 - Misión aislada, run `ac54e426-ba46-4f00-a352-a123244f98e6`:
   **50 comprobaciones nativas, 0 fallos**. Cubre grupo/líder/miembros,
   nombres, bandera duplicada, guardado y relectura de JSON, cero grupos,
@@ -42,6 +50,14 @@ El guard de colisión de ID se concilió por Codex según la autorización desde
   Los archivos se comparan por bytes y se verifica el contenido final/backup.
   No equivale a una prueba de corte de alimentación ni de caída del proceso.
   Perfil y PBO originales restaurados por hash tras el cierre ordenado.
+- Config, misma fixture antes y después: run `5417e77b-5998-4b37-b541-f6697e67e850`
+  con 11ba729 reproduce ocho fallos de valor; run
+  `cff55c57-5e38-4064-869b-60eaaf47213d` con a8d4a01 termina **30 checks,
+  cero fallos** (24 aserciones de producto y seis de preparación).
+  Cubre v4 con -1/0/3600, v3 con -1, v5 con -1 y clave ausente = 86400,
+  con dos cargas de cada caso. Doce archivos guardados como evidencia coinciden
+  byte a byte con las entradas originales. Se conserva el JSON del admin.
+  Cierre ordenado y restauración de PBO/perfil comprobados por hash.
 
 ## Límites de la evidencia
 
@@ -55,4 +71,6 @@ No se ha medido rendimiento con carga ni longevidad CE de un servidor real.
 
 Las excepciones de inventario y las decisiones de permisos están documentadas
 en [PRODUCT-DECISIONS.md](PRODUCT-DECISIONS.md). Se conserva groups.json v1.
-La PR permanece en borrador hasta completar la aceptación del producto.
+El dueño autoriza fusionar tras el gauntlet. La fusión conserva estos límites
+de aceptación: #10 sigue abierta para las verificaciones pendientes y #14
+mantiene aplazada la migración v2. La decisión de #15 está resuelta.
