@@ -97,8 +97,8 @@ class LFPG_GroupManager
     // FIX M2: Dirty flag para saves diferidos (counters)
     protected bool m_IsDirty;
 
-    // One-shot boot audit. Init finishes before the engine restores entities,
-    // so orphan checks and the abandon pass wait for the first validation tick.
+    // One-shot boot audit after initial restoration. Pending registration also
+    // handles entities restored before Init; do not assume one engine order.
     protected bool m_BootAuditDone;
 
     // groups.json or its backup exists but could not be used. Saves must not
@@ -175,13 +175,21 @@ class LFPG_GroupManager
             int finalCount = 0;
             bool finalValid = ReadGroupsFile(tmpFinal, finalCount);
             bool tmpValid = ReadGroupsFile(staleTmp, tmpCount);
-            if (finalValid || !tmpValid)
+            if (IsFutureGroupsFile(tmpFinal) || IsFutureGroupsFile(staleTmp))
+            {
+                m_GroupsLoadFailed = true;
+            }
+            else if (finalValid)
             {
                 // The verified final wins. Preserve unused candidates for the admin.
                 if (!MoveAside(staleTmp, ".discarded"))
                     m_GroupsLoadFailed = true;
-                if (!finalValid && !tmpValid)
-                    m_GroupsLoadFailed = true;
+            }
+            else if (!tmpValid)
+            {
+                // Both candidates are unusable: read-only also means no moving
+                // or rewriting the corrupt input. The admin chooses recovery.
+                m_GroupsLoadFailed = true;
             }
             else
             {
@@ -236,12 +244,10 @@ class LFPG_GroupManager
         cfgPendMsg = cfgPendMsg + cfgPendCount.ToString();
         LFPG_Log.Info(cfgPendMsg);
 
-        // Flags are not in the world yet. The gameplay call queue runs after
-        // mission main() restores entities; preserve the main boot gate.
+        // Keep the boot gate; pending flags cover either restoration order.
         LoadGroups();
 
-        // Nothing to resolve yet. Kept so a flag that registered pending during
-        // Init (tests, or a future engine order) is not left waiting a full tick.
+        // Resolve flags already restored, without abandoning any pending ID.
         ResolvePendingFlags();
 
         // One second, once. The validation tick repeats the audit only if this
@@ -3084,6 +3090,17 @@ class LFPG_GroupManager
         return true;
     }
 
+    protected bool IsFutureGroupsFile(string path)
+    {
+        if (!FileExist(path))
+            return false;
+        LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
+        string error = "";
+        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, error))
+            return false;
+        return probe.m_Version > LFPG_GROUPS_FILE_VERSION;
+    }
+
     // Compare the complete persisted payload, including member identities.
     protected bool GroupsFileMatches(string path, LFPG_GroupsFileData expected)
     {
@@ -3129,9 +3146,11 @@ class LFPG_GroupManager
     bool SaveGroups()
     {
         // Failed-load sessions never write ANY groups file, including .session.
-        if (m_GroupsLoadFailed || !m_BootAuditDone)
+        if (m_GroupsLoadFailed)
             return false;
         m_IsDirty = true;
+        if (!m_BootAuditDone)
+            return false;
         LFPG_GroupsFileData fileData = new LFPG_GroupsFileData();
         fileData.m_Version = LFPG_GROUPS_FILE_VERSION;
         fileData.m_Groups = new array<ref LFPG_GroupData>;
@@ -3158,9 +3177,33 @@ class LFPG_GroupManager
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
 
+        if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath))
+        {
+            m_GroupsLoadFailed = true;
+            LFPG_Log.Error("SaveGroups: newer groups format found. READ ONLY; files retained.");
+            return false;
+        }
+
+        // Finish a previous verified write before reusing tmp. Otherwise a
+        // truncated retry could erase the only copy of the most recent state.
+        bool retryPending = false;
+        LFPG_GroupsFileData pendingData = new LFPG_GroupsFileData();
+        string pendingError = "";
+        if (FileExist(tmpPath))
+        {
+            if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpPath, pendingData, pendingError))
+            {
+                if (ValidateGroupsData(pendingData) && !GroupsFileMatches(finalPath, pendingData))
+                {
+                    retryPending = true;
+                    fileData = pendingData;
+                }
+            }
+        }
+
         // 1. Serializar a tmp. Si falla, no se toca ni el final ni el bak.
         string saveError = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.SaveFile(tmpPath, fileData, saveError))
+        if (!retryPending && !JsonFileLoader<LFPG_GroupsFileData>.SaveFile(tmpPath, fileData, saveError))
         {
             string err1 = "SaveGroups: SaveFile to tmp failed: ";
             err1 = err1 + saveError;
@@ -3181,8 +3224,10 @@ class LFPG_GroupManager
         //    buena): se aparta a groups.json.corrupt y el .bak queda intacto.
         if (FileExist(finalPath))
         {
-            int finalGroups = 0;
-            if (ReadGroupsFile(finalPath, finalGroups))
+            LFPG_GroupsFileData previousData = new LFPG_GroupsFileData();
+            string previousError = "";
+            bool previousLoaded = JsonFileLoader<LFPG_GroupsFileData>.LoadFile(finalPath, previousData, previousError);
+            if (previousLoaded && ValidateGroupsData(previousData))
             {
                 if (FileExist(bakPath))
                 {
@@ -3195,6 +3240,11 @@ class LFPG_GroupManager
                 if (!CopyFile(finalPath, bakPath))
                 {
                     LFPG_Log.Error("SaveGroups: cannot copy final to backup. Rotation aborted.");
+                    return false;
+                }
+                if (!GroupsFileMatches(bakPath, previousData))
+                {
+                    LFPG_Log.Error("SaveGroups: backup payload mismatch. Final and verified tmp retained.");
                     return false;
                 }
             }
@@ -3240,6 +3290,10 @@ class LFPG_GroupManager
         {
             DeleteFile(tmpPath);
         }
+        // Bounded to one retry: final now matches pendingData even if removing
+        // tmp failed, so the next call writes the current in-memory state.
+        if (retryPending)
+            return SaveGroups();
         m_IsDirty = false;
         return true;
     }
@@ -3270,6 +3324,12 @@ class LFPG_GroupManager
         {
             if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(filePath, fileData, loadError))
             {
+                if (fileData.m_Version > LFPG_GROUPS_FILE_VERSION)
+                {
+                    m_GroupsLoadFailed = true;
+                    LFPG_Log.Error("LoadGroups: newer groups format. READ ONLY; no fallback or rewrite.");
+                    return;
+                }
                 // Un fichero valido con 0 grupos es un estado legitimo (se disolvio
                 // el ultimo grupo). Tratarlo como corrupto hacia caer al backup y
                 // RESUCITAR grupos ya borrados.
