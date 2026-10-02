@@ -11,13 +11,17 @@ El lector acepta v1 sin reescribirlo al cargar ni al apagar sin cambios.
   "m_Version": 2,
   "m_ExpectedGroups": 0,
   "m_Digest": "adler32:VALOR_B:VALOR_A",
-  "m_Payload": "{\"m_Version\":1,\"m_Groups\":[]}"
+  "m_PayloadBytes": 28,
+  "m_PayloadParts": ["{\"m_Version\":1,\"m_Groups\":[]}"]
 }
 ```
 
 El digest del ejemplo es un marcador, no un vector válido. El contenido
-protegido son exactamente los bytes UTF-8 de `m_Payload` tras decodificar
-los escapes del JSON exterior. El escritor usa el JSON compacto de DayZ.
+protegido son exactamente los bytes UTF-8 de concatenar `m_PayloadParts` en
+orden tras decodificar los escapes del JSON exterior. El escritor usa el JSON compacto de DayZ.
+Cada parte contiene1–128 caracteres Unicode y como máximo512bytes UTF-8;
+`m_PayloadBytes` declara la longitud total. El lector nativo recorta strings JSON
+largos a1023bytes: dividir sin cortar caracteres evita esa pérdida silenciosa.
 No se ordenan arrays ni se vuelve a serializar el payload para verificarlo.
 Así no se depende de que Python y DayZ impriman floats de la misma forma.
 Reordenar claves/espacios exteriores no altera el checksum; editar el string

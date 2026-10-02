@@ -11,7 +11,8 @@ class LFPG_GroupsEnvelope
     int m_Version = 0;
     int m_ExpectedGroups = -1;
     string m_Digest = "";
-    string m_Payload = "";
+    int m_PayloadBytes = -1;
+    ref array<string> m_PayloadParts;
 };
 
 class LFPG_GroupsStorage
@@ -19,6 +20,9 @@ class LFPG_GroupsStorage
     static const int FILE_VERSION = 2;
     // Same bound as vanilla JsonFileLoader. A file reaching it is refused.
     static const int MAX_BYTES = 100000000;
+    // Native JSON string reads truncate at1023 bytes.128 Unicode scalars use
+    // at most512 UTF-8 bytes; SubstringUtf8 never cuts a multibyte character.
+    static const int PART_CHARACTERS = 128;
 
     static string Digest(string payload)
     {
@@ -92,12 +96,13 @@ class LFPG_GroupsStorage
             LFPG_GroupsEnvelope envelope = new LFPG_GroupsEnvelope();
             if (!JsonFileLoader<LFPG_GroupsEnvelope>.LoadData(raw, envelope, error))
                 return false;
-            if (envelope.m_ExpectedGroups < 0 || envelope.m_Payload == "" || envelope.m_Digest != Digest(envelope.m_Payload))
+            string payload;
+            if (envelope.m_ExpectedGroups < 0 || !ReadPayload(envelope, payload))
             {
                 error = "Groups envelope integrity mismatch";
                 return false;
             }
-            if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(envelope.m_Payload, staged, error))
+            if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(payload, staged, error))
                 return false;
             if (!staged.m_Groups || staged.m_Groups.Count() != envelope.m_ExpectedGroups)
             {
@@ -126,10 +131,44 @@ class LFPG_GroupsStorage
         LFPG_GroupsEnvelope envelope = new LFPG_GroupsEnvelope();
         envelope.m_Version = FILE_VERSION;
         envelope.m_ExpectedGroups = data.m_Groups.Count();
-        if (!JsonFileLoader<LFPG_GroupsFileData>.MakeData(data, envelope.m_Payload, error, false))
+        string payload;
+        if (!JsonFileLoader<LFPG_GroupsFileData>.MakeData(data, payload, error, false))
             return false;
-        envelope.m_Digest = Digest(envelope.m_Payload);
+        envelope.m_PayloadBytes = payload.Length();
+        if (envelope.m_PayloadBytes <= 0 || envelope.m_PayloadBytes >= MAX_BYTES)
+            return false;
+        envelope.m_PayloadParts = new array<string>;
+        int characters = payload.LengthUtf8();
+        for (int offset = 0; offset < characters; offset = offset + PART_CHARACTERS)
+        {
+            int partLength = characters - offset;
+            if (partLength > PART_CHARACTERS)
+                partLength = PART_CHARACTERS;
+            envelope.m_PayloadParts.Insert(payload.SubstringUtf8(offset, partLength));
+        }
+        envelope.m_Digest = Digest(payload);
         return JsonFileLoader<LFPG_GroupsEnvelope>.SaveFile(path, envelope, error);
+    }
+
+    static bool ReadPayload(LFPG_GroupsEnvelope envelope, out string payload)
+    {
+        payload = "";
+        if (!envelope.m_PayloadParts || envelope.m_PayloadParts.Count() == 0)
+            return false;
+        if (envelope.m_PayloadBytes <= 0 || envelope.m_PayloadBytes >= MAX_BYTES)
+            return false;
+        int bytes = 0;
+        for (int i = 0; i < envelope.m_PayloadParts.Count(); i = i + 1)
+        {
+            string part = envelope.m_PayloadParts[i];
+            if (part == "" || part.LengthUtf8() > PART_CHARACTERS || part.Length() > 512)
+                return false;
+            bytes = bytes + part.Length();
+            if (bytes > envelope.m_PayloadBytes)
+                return false;
+            payload = payload + part;
+        }
+        return bytes == envelope.m_PayloadBytes && Digest(payload) == envelope.m_Digest;
     }
 
     // Never overwrite an earlier migration backup. A retried migration can reuse

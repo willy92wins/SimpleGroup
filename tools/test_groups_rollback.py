@@ -27,7 +27,8 @@ class RollbackTests(unittest.TestCase):
             data = self.data
         payload = json.dumps(data, ensure_ascii=False)
         envelope = dict(m_Version=2, m_ExpectedGroups=len(data["m_Groups"]),
-                        m_Payload=payload, m_Digest=rollback.digest(payload))
+                        m_PayloadParts=[payload[i:i+128] for i in range(0,len(payload),128)],
+                        m_PayloadBytes=len(payload.encode("utf-8")), m_Digest=rollback.digest(payload))
         envelope.update(overrides)
         path = self.root / ("groups.json" + suffix)
         path.write_text(json.dumps(envelope), encoding="utf-8")
@@ -48,7 +49,7 @@ class RollbackTests(unittest.TestCase):
 
     def test_omitted_record_count_and_checksum_rejected(self):
         for overrides in (dict(m_ExpectedGroups=2), dict(m_Digest="adler32:0:1"),
-                          dict(m_Payload='{"m_Version":1,"m_Groups":[]}')):
+                          dict(m_PayloadParts=['{"m_Version":1,"m_Groups":[]}'])):
             with self.subTest(overrides=overrides):
                 self.put(**overrides)
                 with self.assertRaises(ValueError):
@@ -103,6 +104,26 @@ class RollbackTests(unittest.TestCase):
         for text in ('{"m_Version":1,"m_Version":2}', '{"x":NaN}'):
             with self.subTest(text=text), self.assertRaises(ValueError):
                 rollback.parse(text)
+
+    def test_part_boundaries_omissions_reordering_and_byte_count(self):
+        source = self.put()
+        base = json.loads(source.read_text())
+        for kind in ("omit", "reorder", "oversize", "wrongbytes", "empty"):
+            envelope = copy.deepcopy(base)
+            parts = envelope["m_PayloadParts"]
+            if kind == "omit":
+                parts.pop()
+            elif kind == "reorder":
+                parts[0], parts[1] = parts[1], parts[0]
+            elif kind == "oversize":
+                envelope["m_PayloadParts"] = ["".join(parts)]
+            elif kind == "wrongbytes":
+                envelope["m_PayloadBytes"] += 1
+            else:
+                parts.insert(0, "")
+            source.write_text(json.dumps(envelope),encoding="utf-8")
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                rollback.decode(source)
 
 
 if __name__ == "__main__":

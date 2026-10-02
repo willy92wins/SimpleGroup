@@ -71,10 +71,16 @@ def decode(path):
         return validate(envelope)
     if version != 2:
         raise ValueError("unsupported file version")
-    payload = envelope.get("m_Payload")
+    parts = envelope.get("m_PayloadParts")
+    size = envelope.get("m_PayloadBytes")
     count = envelope.get("m_ExpectedGroups")
-    if not isinstance(payload, str) or not payload or type(count) is not int or count < 0:
+    if not isinstance(parts, list) or not parts or type(size) is not int or not 0 < size < 100000000 or type(count) is not int or count < 0:
         raise ValueError("incomplete envelope")
+    if any(not isinstance(part, str) or not 0 < len(part) <= 128 or len(part.encode("utf-8")) > 512 for part in parts):
+        raise ValueError("invalid payload part")
+    payload = "".join(parts)
+    if len(payload.encode("utf-8")) != size:
+        raise ValueError("payload byte count mismatch")
     if envelope.get("m_Digest") != digest(payload):
         raise ValueError("payload checksum mismatch")
     data = validate(parse(payload))
