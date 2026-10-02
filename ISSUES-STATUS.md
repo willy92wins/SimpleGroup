@@ -15,7 +15,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F03 | Corregido | `Init` / `RunBootAudit`: las banderas restauradas conservan su identidad cuando falta/falla el perfil. |
 | F04 | Corregido | `SaveGroups`: valida el final antes de rotar backup; recuperación e I/O denegado ejercitados. |
 | F05 | Corregida la resurrección desde tmp vacío; límite documentado | Cero grupos es válido. CopyFile/DeleteFile siguen sin promesa de atomicidad ante interrupción física. |
-| F06 | Transporte corregido; aceptación parcial | Full/lightweight sync a miembros usa PlayerBase. Entrega fuera de burbuja, invitaciones y transferencia con dos clientes siguen pendientes. El diálogo de nombre sigue ligado a bandera cercana. |
+| F06 | Transporte corregido; aceptación parcial | Full/lightweight sync a miembros usa PlayerBase. Entrega fuera de burbuja, invitaciones y transferencia con dos clientes siguen pendientes. El diálogo automático sigue ligado a bandera cercana; F16 añade recuperación desde el panel por PlayerBase, pendiente de aceptación nativa. |
 | F07 | Refresco implementado; aceptación CE pendiente | `ApplyGroupLifetime` / `RefreshRaisedBases`: comprobar types.xml, reinicios y vida efectiva del servidor de destino. |
 | F08 | Guards de carga/shutdown/identidad corregidos | `LFPG_FlagBase.EEDelete`: borrar la bandera real sigue disolviendo el grupo; no se promete supervivencia ante wipe administrativo. |
 | F09 | Corregido | `LFPG_FlagKit_T1.OnPlacementComplete`: revalida y conserva el kit cuando falla la creación. |
@@ -23,9 +23,9 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F11 | Corregido | Reaplica configuración a banderas restauradas tras cargar config. |
 | F12 | Corregido | `LFPG_CountsAsFurniture`: colocación, drop y recuento comparten filtros de muebles y listas A/B. |
 | F13 | Corregido | `RegisterFlag` recupera el tier de la entidad restaurada. |
-| F14 | Salida/kick/transfer tienen confirmación; mejora Destroy propuesta | Destroy sigue siendo acción inmediata con herramienta. Una confirmación adicional requiere decidir UX; no se declara implementada. |
+| F14 | Decisión aplicada; aceptación nativa pendiente | Destroy usa acción continua de 5 segundos con revalidación al completar. Salida/kick/transfer conservan confirmación. |
 | F15 | Corregido | Los RPC RESERVED no mutan; se retiraron sus handlers inseguros. |
-| F16 | Mitigado; mejora de acceso propuesta | Se muestra Unnamed y se repite el diálogo al reconectar. Abrirlo de nuevo desde el panel para un grupo aún temporal sería un PR de UX; no habilita renombrar nombres definitivos. |
+| F16 | Decisión aplicada; aceptación nativa pendiente | El líder de un grupo temporal puede reabrir el nombre desde el panel. Petición y ACK por PlayerBase, ligados al grupo actual. No permite renombrar nombres definitivos. |
 | F17 | Decisión implementada | Exclusiones eximen grupo/zona/cupo; blacklist prevalece. Excepciones sin actor documentadas. |
 | F18 | Corregido | `CanBePlaced` no disuelve grupos ni guarda datos. |
 | F19 | Corrección aplicada; aceptación de inventario en curso | Retorno SERVER diferido fuera del callback; no es veto atómico y puede fallar si desaparece el destino. El caso de último cupo se sigue por separado en la misma aceptación. |
@@ -40,7 +40,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F28 | Riesgo de handlers retirado; limpieza pendiente propuesta | Constantes RPC, campos NetLow/High, JoinTimestamp y parámetro updateType se mantienen hasta comprobar consumidores externos y compatibilidad de persistencia; destino en la propuesta 4. |
 | F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
 | F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
-| F31 | Propuesta de producto, no bug de lógica cerrado | Sucesión por inactividad requiere política de plazo, elegibilidad, avisos y recuperación. Se mantiene sucesión al salir/expulsar. |
+| F31 | Resuelto por decisión del dueño | Conservar sucesión al salir o expulsar; no implementar sucesión por inactividad. |
 | F32 | Refutado en la ruta descrita | La ventana de config durante restauración se trata en F11. |
 | F33 | Corregido | Throttle por tipo y feedback; Leave conserva caché hasta confirmación del servidor. |
 
@@ -53,8 +53,8 @@ PRs de continuación propuestos, sin cambiar reglas de juego por inferencia:
    defectos reproducidos. Adjuntar resultados y separar fallos de fixture.
 2. Aceptación multicliente, CE y rendimiento: cada dimensión requiere su evidencia
    propia. Multicliente está aplazado expresamente por falta de segundo cliente.
-3. UX/política F14/F16/F31: definir cada comportamiento antes de implementarlo;
-   no condicionar la resolución de los bugs de datos a estas ampliaciones.
+3. Aceptar las decisiones F14/F16: mantener Destroy 5 segundos y recuperar
+   nombre temporal desde el panel. F31 queda resuelto sin cambio de código.
 4. Limpieza F28: inventariar consumidores de constantes/contratos/argumentos y
    campos; retirar únicamente lo que se demuestre sin uso y compatible con
    perfiles legacy. JoinTimestamp forma parte del JSON: no tratar su retirada

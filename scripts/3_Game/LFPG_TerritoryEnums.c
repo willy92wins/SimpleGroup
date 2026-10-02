@@ -16,6 +16,7 @@ const int LFPG_RPC_C2S_START_INVITE       = 74521605;
 const int LFPG_RPC_C2S_DESTROY_FLAG       = 74521606;
 const int LFPG_RPC_C2S_REQUEST_GROUP_DATA = 74521607;
 const int LFPG_RPC_C2S_SET_GROUP_NAME     = 74521608;
+const int LFPG_RPC_C2S_SET_PANEL_NAME     = 74521609;
 
 // ----- Server -> Client -----
 const int LFPG_RPC_S2C_GROUP_SYNC_FULL    = 74521620;
@@ -27,6 +28,7 @@ const int LFPG_RPC_S2C_DEPLOY_DENIED      = 74521625;
 const int LFPG_RPC_S2C_ERROR_MSG          = 74521626;
 const int LFPG_RPC_S2C_LIGHTWEIGHT_SYNC   = 74521627;
 const int LFPG_RPC_S2C_PLACEMENT_RULES    = 74521628;
+const int LFPG_RPC_S2C_PANEL_NAME_RESULT  = 74521629;
 
 // Nonzero terminator: native serializers can return true/zero past the payload.
 const int LFPG_PLACEMENT_RULES_END       = 1279676487;

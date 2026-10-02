@@ -2230,6 +2230,8 @@ class LFPG_GroupManager
             userRpc = true;
         else if (rpcType == LFPG_RPC_C2S_SET_GROUP_NAME)
             userRpc = true;
+        else if (rpcType == LFPG_RPC_C2S_SET_PANEL_NAME)
+            userRpc = true;
 
         if (!userRpc)
             return;
@@ -2318,6 +2320,10 @@ class LFPG_GroupManager
         {
             HandleSetGroupName(sender, ctx, flag);
         }
+        else if (rpc_type == LFPG_RPC_C2S_SET_PANEL_NAME)
+        {
+            HandleSetGroupName(sender, ctx, null, true);
+        }
         else if (rpc_type == LFPG_RPC_C2S_REQUEST_LEAVE)
         {
             HandleRequestLeave(sender, ctx, flag);
@@ -2340,7 +2346,7 @@ class LFPG_GroupManager
     // RPC HANDLERS - Individual operations
     // ========================================================================
 
-    protected void HandleSetGroupName(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
+    protected void HandleSetGroupName(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag, bool fromPanel = false)
     {
         string senderUID = sender.GetPlainId();
 
@@ -2349,8 +2355,20 @@ class LFPG_GroupManager
             return;
         newName.TrimInPlace();
 
+        string requestedGroupID = "";
+        if (fromPanel)
+        {
+            // Nonempty trailing identity also rejects truncated native payloads.
+            if (!ctx.Read(requestedGroupID))
+                return;
+            if (requestedGroupID == "")
+                return;
+        }
+
         string groupID = GetPlayerGroupID(senderUID);
         if (groupID == "")
+            return;
+        if (fromPanel && requestedGroupID != groupID)
             return;
 
         LFPG_GroupData group = m_Groups.Get(groupID);
@@ -2881,12 +2899,23 @@ class LFPG_GroupManager
 
     protected void SendNameResult(PlayerIdentity target, LFPG_FlagBase flag, int result)
     {
-        if (!target || !flag)
+        if (!target)
             return;
 
         ScriptRPC rpc = new ScriptRPC();
         rpc.Write(result);
-        rpc.Send(flag, LFPG_RPC_S2C_NAME_RESULT, true, target);
+        if (flag)
+        {
+            rpc.Send(flag, LFPG_RPC_S2C_NAME_RESULT, true, target);
+            return;
+        }
+
+        PlayerBase player = GetPlayerByUID(target.GetPlainId());
+        string groupID = GetPlayerGroupID(target.GetPlainId());
+        if (!player || groupID == "")
+            return;
+        rpc.Write(groupID);
+        rpc.Send(player, LFPG_RPC_S2C_PANEL_NAME_RESULT, true, target);
     }
 
     // FIX AUDIT: Helper para enviar error via PlayerBase (siempre disponible)

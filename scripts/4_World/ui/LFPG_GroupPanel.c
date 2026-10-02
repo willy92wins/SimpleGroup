@@ -69,6 +69,14 @@ class LFPG_GroupPanelController extends ViewController
         string propName = "GroupName";
         NotifyPropertyChanged(propName);
 
+        if (m_LayoutRoot)
+        {
+            Widget nameButton = m_LayoutRoot.FindAnyWidget("BtnNameGroup");
+            if (nameButton)
+                nameButton.Show(CanNameGroup());
+            m_LayoutRoot.Update();
+        }
+
         ApplyTerritoryStatus();
 
         // Refrescar member rows
@@ -275,6 +283,10 @@ class LFPG_GroupPanelController extends ViewController
         {
             PaintCloseButton(true);
         }
+        else if (enteredName == "BtnNameGroup")
+        {
+            PaintNameButton(true);
+        }
         return false;
     }
 
@@ -293,7 +305,41 @@ class LFPG_GroupPanelController extends ViewController
         {
             PaintCloseButton(false);
         }
+        else if (leftName == "BtnNameGroup")
+        {
+            PaintNameButton(false);
+        }
         return false;
+    }
+
+    bool CanNameGroup()
+    {
+        return LFPG_ClientGroupCache.HasGroup() && LFPG_ClientGroupCache.IsLeader() && LFPG_ClientGroupCache.s_GroupName.IndexOf("#TEMP#") == 0;
+    }
+
+    protected void PaintNameButton(bool hot)
+    {
+        if (!m_LayoutRoot)
+            return;
+        Widget fill = m_LayoutRoot.FindAnyWidget("BtnNameGroupPanel");
+        if (!fill)
+            return;
+        if (hot)
+            fill.SetColor(BTN_HOT);
+        else
+            fill.SetColor(BTN_IDLE);
+    }
+
+    bool OnNameGroupExecute(ButtonCommandArgs args)
+    {
+        if (!GetGame() || !CanNameGroup())
+            return false;
+        string groupID = LFPG_ClientGroupCache.s_GroupID;
+        LFPG_GroupPanel.DestroyInstance();
+        // Dabs Close deletes on the GUI queue. Open after that deletion so the
+        // dialog never keeps a destroyed panel as its UI parent.
+        GetGame().GetCallQueue(CALL_CATEGORY_GUI).CallLater(LFPG_OpenPendingGroupName, 1, false, groupID);
+        return true;
     }
 
     // Relay_Command: header close. One request per instance.
@@ -363,6 +409,20 @@ class LFPG_GroupPanelController extends ViewController
         return true;
     }
 };
+
+void LFPG_OpenPendingGroupName(string groupID)
+{
+    if (!GetGame() || LFPG_GroupPanel.GetInstance())
+        return;
+    PlayerBase player = PlayerBase.Cast(GetGame().GetPlayer());
+    if (!player || !player.IsAlive() || player.IsUnconscious())
+        return;
+    if (!LFPG_ClientGroupCache.HasGroup() || !LFPG_ClientGroupCache.IsLeader())
+        return;
+    if (groupID != LFPG_ClientGroupCache.s_GroupID || LFPG_ClientGroupCache.s_GroupName.IndexOf("#TEMP#") != 0)
+        return;
+    LFPG_GroupNameDialog.Open(groupID, null);
+}
 
 // ============================================================================
 // LFPG_GroupPanel - ScriptViewMenu (FIX C2)
