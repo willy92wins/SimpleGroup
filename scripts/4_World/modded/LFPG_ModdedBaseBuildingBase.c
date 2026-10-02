@@ -40,6 +40,10 @@ modded class BaseBuildingBase
 
             // v3+: Lista B sin restriccion (prio sobre A)
             LFPG_TerritoryConfig cfgSrv = mgr.GetConfig();
+            if (LFPG_IsListedDropBlocked(this, pb, position))
+                return false;
+            if (cfgSrv && LFPG_IsFurniturePlacementExempt(this, cfgSrv.m_FurnitureExcludedTypes))
+                return true;
             if (cfgSrv && cfgSrv.IsUnrestricted(this))
                 return true;
 
@@ -68,6 +72,10 @@ modded class BaseBuildingBase
         }
         else
         {
+            if (!LFPG_ClientGroupCache.s_PlacementRulesReceived)
+                return true;
+            if (LFPG_ClientGroupCache.IsFurniturePlacementExemptCached(this))
+                return true;
             // Client side: usar cache O(1). Alineado con Hologram.EvaluateCollision.
             // v3+: Lista B sin restriccion (prio sobre A)
             if (LFPG_ClientGroupCache.IsUnrestrictedCached(this))
@@ -107,6 +115,8 @@ modded class BaseBuildingBase
         if (mgrBbbCfg)
         {
             LFPG_TerritoryConfig cfgBbbEarly = mgrBbbCfg.GetConfig();
+            if (cfgBbbEarly && LFPG_IsFurniturePlacementExempt(this, cfgBbbEarly.m_FurnitureExcludedTypes))
+                return;
             if (cfgBbbEarly && (cfgBbbEarly.IsNoBaseRequired(this) || cfgBbbEarly.IsUnrestricted(this)))
                 return;
         }

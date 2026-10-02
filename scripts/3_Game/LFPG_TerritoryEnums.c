@@ -26,6 +26,7 @@ const int LFPG_RPC_S2C_OPEN_NAME_DIALOG   = 74521624;
 const int LFPG_RPC_S2C_DEPLOY_DENIED      = 74521625;
 const int LFPG_RPC_S2C_ERROR_MSG          = 74521626;
 const int LFPG_RPC_S2C_LIGHTWEIGHT_SYNC   = 74521627;
+const int LFPG_RPC_S2C_PLACEMENT_RULES    = 74521628;
 
 // Resultado de validacion de nombre
 const int LFPG_NAME_OK            = 0;

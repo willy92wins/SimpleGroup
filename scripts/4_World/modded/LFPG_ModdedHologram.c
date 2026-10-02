@@ -53,6 +53,17 @@ modded class Hologram
 
         vector projPos = GetProjectionPosition();
 
+        if (!LFPG_ClientGroupCache.s_PlacementRulesReceived)
+        {
+            LFPG_RequestResyncIfNeeded();
+            return;
+        }
+        if (LFPG_ClientGroupCache.IsFurniturePlacementExemptCached(m_Parent))
+        {
+            LFPG_ClientGroupCache.NotifyPlacementBlocked(LFPG_BLOCK_NONE);
+            return;
+        }
+
         // v3+: Lista B (Unrestricted) — prio total, no tocar colision
         if (LFPG_ClientGroupCache.IsUnrestrictedCached(m_Parent))
         {

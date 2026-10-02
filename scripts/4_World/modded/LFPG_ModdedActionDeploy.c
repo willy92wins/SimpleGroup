@@ -127,6 +127,12 @@ bool LFPG_IsDeployBlockedClient(ItemBase item, vector pos)
     if (!item)
         return false;
 
+    // The server is authoritative while its configurable exclusions are unknown.
+    if (!LFPG_ClientGroupCache.s_PlacementRulesReceived)
+        return false;
+    if (LFPG_ClientGroupCache.IsFurniturePlacementExemptCached(item))
+        return false;
+
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
     if (LFPG_ClientGroupCache.IsUnrestrictedCached(item))
         return false;
@@ -174,6 +180,9 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
     // No-drop blacklist wins over list B and list A, including a type on both lists.
     if (LFPG_IsListedDropBlocked(item, player, pos))
         return true;
+
+    if (LFPG_IsFurniturePlacementExempt(item, cfg.m_FurnitureExcludedTypes))
+        return false;
 
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
     if (cfg.IsUnrestricted(item))

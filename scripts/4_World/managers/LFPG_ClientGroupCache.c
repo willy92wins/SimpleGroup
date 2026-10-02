@@ -55,6 +55,8 @@ class LFPG_ClientGroupCache
     // v3+: whitelists de placement con reglas especiales (mirror de LFPG_TerritoryConfig)
     static ref array<string> s_NoBaseRequiredTypes;  // lista A: sin grupo/zona propia OK, pero bloquea en ajena
     static ref array<string> s_UnrestrictedTypes;    // lista B: sin restriccion alguna
+    static bool s_PlacementRulesReceived;
+    static ref array<string> s_FurnitureExcludedTypes;
 
     // Item names para tooltip UI (solo desde full sync)
     static ref array<string> s_DeployedItemNames;
@@ -65,6 +67,10 @@ class LFPG_ClientGroupCache
     // ========================================================================
     static void Init()
     {
+        s_PlacementRulesReceived = false;
+        s_FurnitureExcludedTypes = new array<string>;
+        s_NoBaseRequiredTypes = new array<string>;
+        s_UnrestrictedTypes = new array<string>;
         Clear();
     }
 
@@ -108,12 +114,10 @@ class LFPG_ClientGroupCache
         {
             s_NoBaseRequiredTypes = new array<string>;
         }
-        s_NoBaseRequiredTypes.Clear();
         if (!s_UnrestrictedTypes)
         {
             s_UnrestrictedTypes = new array<string>;
         }
-        s_UnrestrictedTypes.Clear();
         if (!s_DeployedItemNames)
         {
             s_DeployedItemNames = new array<string>;
@@ -132,6 +136,11 @@ class LFPG_ClientGroupCache
     static bool HasGroup()
     {
         return s_HasGroup;
+    }
+
+    static bool IsFurniturePlacementExemptCached(EntityAI item)
+    {
+        return LFPG_IsFurniturePlacementExempt(item, s_FurnitureExcludedTypes);
     }
 
     // Helper centralizado para obtener el UID del jugador local
@@ -422,7 +431,11 @@ class LFPG_ClientGroupCache
     // ========================================================================
     static void HandleClientRPC(int rpc_type, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
-        if (rpc_type == LFPG_RPC_S2C_GROUP_SYNC_FULL)
+        if (rpc_type == LFPG_RPC_S2C_PLACEMENT_RULES)
+        {
+            HandlePlacementRules(ctx);
+        }
+        else if (rpc_type == LFPG_RPC_S2C_GROUP_SYNC_FULL)
         {
             HandleGroupSyncFull(ctx, flag);
         }
@@ -446,6 +459,47 @@ class LFPG_ClientGroupCache
         {
             HandleErrorMsg(ctx);
         }
+    }
+
+    protected static void HandlePlacementRules(ParamsReadContext ctx)
+    {
+        int count = 0;
+        if (!ctx.Read(count) || count < 0 || count > 4096)
+            return;
+        array<string> received = new array<string>;
+        for (int i = 0; i < count; i = i + 1)
+        {
+            string typeName = "";
+            if (!ctx.Read(typeName))
+                return;
+            received.Insert(typeName);
+        }
+        int noBaseCount = 0;
+        if (!ctx.Read(noBaseCount) || noBaseCount < 0 || noBaseCount > 4096)
+            return;
+        array<string> noBaseTypes = new array<string>;
+        for (int n = 0; n < noBaseCount; n = n + 1)
+        {
+            string noBaseType = "";
+            if (!ctx.Read(noBaseType))
+                return;
+            noBaseTypes.Insert(noBaseType);
+        }
+        int unrestrictedCount = 0;
+        if (!ctx.Read(unrestrictedCount) || unrestrictedCount < 0 || unrestrictedCount > 4096)
+            return;
+        array<string> unrestrictedTypes = new array<string>;
+        for (int u = 0; u < unrestrictedCount; u = u + 1)
+        {
+            string unrestrictedType = "";
+            if (!ctx.Read(unrestrictedType))
+                return;
+            unrestrictedTypes.Insert(unrestrictedType);
+        }
+        s_FurnitureExcludedTypes = received;
+        s_NoBaseRequiredTypes = noBaseTypes;
+        s_UnrestrictedTypes = unrestrictedTypes;
+        s_PlacementRulesReceived = true;
     }
 
     protected static void HandleGroupSyncFull(ParamsReadContext ctx, LFPG_FlagBase flag)

@@ -2427,6 +2427,7 @@ class LFPG_GroupManager
     protected void HandleRequestGroupData(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
         string senderUID = sender.GetPlainId();
+        SendPlacementRules(GetPlayerByUID(senderUID));
         string groupID = GetPlayerGroupID(senderUID);
         if (groupID == "")
             return;
@@ -2459,6 +2460,7 @@ class LFPG_GroupManager
     // ========================================================================
     void OnPlayerJoined(string playerUID, PlayerBase player)
     {
+        SendPlacementRules(player);
         if (m_GroupsLoadFailed)
             SendGroupsUnavailable(player);
         if (!HasGroup(playerUID))
@@ -2506,6 +2508,34 @@ class LFPG_GroupManager
     // ========================================================================
     // SEND RPC HELPERS - Server -> Client
     // ========================================================================
+
+    // Independent policy sync also reaches players without a group. Existing
+    // group payloads and saved files keep their original wire/storage format.
+    void SendPlacementRules(PlayerBase player)
+    {
+        if (!m_Config || !player || !player.GetIdentity())
+            return;
+        ScriptRPC rules = new ScriptRPC();
+        int count = 0;
+        if (m_Config.m_FurnitureExcludedTypes)
+            count = m_Config.m_FurnitureExcludedTypes.Count();
+        rules.Write(count);
+        for (int i = 0; i < count; i = i + 1)
+            rules.Write(m_Config.m_FurnitureExcludedTypes[i]);
+        int noBaseCount = 0;
+        if (m_Config.m_NoBaseRequiredTypes)
+            noBaseCount = m_Config.m_NoBaseRequiredTypes.Count();
+        rules.Write(noBaseCount);
+        for (int n = 0; n < noBaseCount; n = n + 1)
+            rules.Write(m_Config.m_NoBaseRequiredTypes[n]);
+        int unrestrictedCount = 0;
+        if (m_Config.m_UnrestrictedTypes)
+            unrestrictedCount = m_Config.m_UnrestrictedTypes.Count();
+        rules.Write(unrestrictedCount);
+        for (int u = 0; u < unrestrictedCount; u = u + 1)
+            rules.Write(m_Config.m_UnrestrictedTypes[u]);
+        rules.Send(player, LFPG_RPC_S2C_PLACEMENT_RULES, true, player.GetIdentity());
+    }
 
     // rpcTarget: entidad via la que se envia el RPC al cliente.
     // Normalmente es flag (cuando el jugador esta cerca y la flag esta en su network bubble).

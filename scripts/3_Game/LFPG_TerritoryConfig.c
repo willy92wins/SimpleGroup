@@ -62,6 +62,7 @@ class LFPG_TerritoryConfig
     // --- Whitelist: tipos excluidos del conteo de muebles ---
     // Items deployables vanilla/mods que NO deben contar (BatteryCharger, Fireplace,
     // ExpansionMarket, Traders, etc.). Usa IsKindOf para cubrir herencia.
+    // Tambien exentos de grupo/zona/cupo al colocar; la blacklist sigue prevaleciendo.
     ref array<string> m_FurnitureExcludedTypes;
 
     // --- Garden Plots ---

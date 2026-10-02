@@ -76,8 +76,5 @@ void LFPG_DelayedPlayerSync(PlayerBase player)
     if (!mgr)
         return;
 
-    if (!mgr.HasGroup(playerUID))
-        return;
-
     mgr.OnPlayerJoined(playerUID, player);
 }
