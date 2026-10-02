@@ -1,0 +1,102 @@
+# Estado de las issues de producto — 2026-10-02
+
+Referencia de entrada: main `85e2ce0`, con #1, #5–#9 y #16 fusionados.
+Esta matriz usa exclusivamente F01–F33 de la lane L6 publicada en [#10](https://github.com/willy92wins/SimpleGroup/issues/10).
+Las decisiones del dueño están en [PRODUCT-DECISIONS.md](PRODUCT-DECISIONS.md);
+las ejecuciones y sus límites, en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
+Una corrección de código no equivale a aceptación completa en producción.
+
+## #10: resolución de la auditoría
+
+| Claim | Disposición actual | Ancla de producto / pendiente |
+|---|---|---|
+| F01 | Regla resuelta en #15; revalidación corregida | `LFPG_ActionRaiseFlag` / `LFPG_ActionLowerFlag`: cualquiera puede actuar, con distancia, estado, tier y energía aplicables. |
+| F02 | Corregido | `LoadGroups` / `SaveGroups`: carga fallida entra en solo lectura; no sobrescribe el perfil. |
+| F03 | Corregido | `Init` / `RunBootAudit`: las banderas restauradas conservan su identidad cuando falta/falla el perfil. |
+| F04 | Corregido | `SaveGroups`: valida el final antes de rotar backup; recuperación e I/O denegado ejercitados. |
+| F05 | Corregida la resurrección desde tmp vacío; límite documentado | Cero grupos es válido. CopyFile/DeleteFile siguen sin promesa de atomicidad ante interrupción física. |
+| F06 | Transporte corregido; aceptación parcial | Full/lightweight sync a miembros usa PlayerBase. Entrega fuera de burbuja, invitaciones y transferencia con dos clientes siguen pendientes. El diálogo de nombre sigue ligado a bandera cercana. |
+| F07 | Refresco implementado; aceptación CE pendiente | `ApplyGroupLifetime` / `RefreshRaisedBases`: comprobar types.xml, reinicios y vida efectiva del servidor de destino. |
+| F08 | Guards de carga/shutdown/identidad corregidos | `LFPG_FlagBase.EEDelete`: borrar la bandera real sigue disolviendo el grupo; no se promete supervivencia ante wipe administrativo. |
+| F09 | Corregido | `LFPG_FlagKit_T1.OnPlacementComplete`: revalida y conserva el kit cuando falla la creación. |
+| F10 | Corregido | Consultas de territorio leen progreso vivo; ya no dependen de un progreso congelado al registrar. |
+| F11 | Corregido | Reaplica configuración a banderas restauradas tras cargar config. |
+| F12 | Corregido | `LFPG_CountsAsFurniture`: colocación, drop y recuento comparten filtros de muebles y listas A/B. |
+| F13 | Corregido | `RegisterFlag` recupera el tier de la entidad restaurada. |
+| F14 | Salida/kick/transfer tienen confirmación; mejora Destroy propuesta | Destroy sigue siendo acción inmediata con herramienta. Una confirmación adicional requiere decidir UX; no se declara implementada. |
+| F15 | Corregido | Los RPC RESERVED no mutan; se retiraron sus handlers inseguros. |
+| F16 | Mitigado; mejora de acceso propuesta | Se muestra Unnamed y se repite el diálogo al reconectar. Abrirlo de nuevo desde el panel para un grupo aún temporal sería un PR de UX; no habilita renombrar nombres definitivos. |
+| F17 | Decisión implementada | Exclusiones eximen grupo/zona/cupo; blacklist prevalece. Excepciones sin actor documentadas. |
+| F18 | Corregido | `CanBePlaced` no disuelve grupos ni guarda datos. |
+| F19 | Corrección aplicada; aceptación de inventario en curso | Retorno SERVER diferido fuera del callback; no es veto atómico y puede fallar si desaparece el destino. El caso de último cupo se sigue por separado en la misma aceptación. |
+| F20 | Corregido | Límites de nombre coherentes 1..48 y compartidos con cliente. |
+| F21 | Corregido | Config inválida se conserva; defaults solo en memoria. Valores de lifetime legacy probados antes/después del fix. |
+| F22 | Identidad validada; resto de unicidad corregido en este PR | Valida IDs/UIDs/líder antes de instalar índices. Conserva perfiles legacy; disolver un duplicado ya no libera el nombre de otro grupo superviviente. No expulsa miembros por reducir maxMembers ni renombra datos antiguos. |
+| F23 | Corregido | Retira timer anterior al activar/desactivar invitación. |
+| F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
+| F25 | Guard corregido; aceptación de doble finalización pendiente | `UpgradeFlag` exige que oldFlag sea la entidad registrada. No se afirma una prueba de concurrencia del motor. |
+| F26 | Corregido | Trim y clave sin distinción de mayúsculas para nombres nuevos. |
+| F27 | Coste no medido; propuesta de medición | Medir guardado, recuento y consultas con población/objetos representativos antes de proponer optimización. |
+| F28 | Riesgo de handlers retirado; deuda cosmética no bloqueante | No se eliminan constantes/contratos públicos solo por no tener consumidores internos. |
+| F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
+| F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
+| F31 | Propuesta de producto, no bug de lógica cerrado | Sucesión por inactividad requiere política de plazo, elegibilidad, avisos y recuperación. Se mantiene sucesión al salir/expulsar. |
+| F32 | Refutado en la ruta descrita | La ventana de config durante restauración se trata en F11. |
+| F33 | Corregido | Throttle por tipo y feedback; Leave conserva caché hasta confirmación del servidor. |
+
+La #10 permanece abierta como lista de aceptación y decisiones residuales;
+no debe seguir presentando los defectos corregidos como trabajo por implementar.
+PRs de continuación propuestos, sin cambiar reglas de juego por inferencia:
+
+1. Aceptación con un cliente: acciones, inventario, último cupo y UI; corregir solo
+   defectos reproducidos. Adjuntar resultados y separar fallos de fixture.
+2. Aceptación multicliente, CE y rendimiento: cada dimensión requiere su evidencia
+   propia. Multicliente está aplazado expresamente por falta de segundo cliente.
+3. UX/política F14/F16/F31: definir cada comportamiento antes de implementarlo;
+   no condicionar la resolución de los bugs de datos a estas ampliaciones.
+
+## #14: propuesta para un PR futuro de groups.json v2
+
+Estado: **aplazado**, tal como exige [#14](https://github.com/willy92wins/SimpleGroup/issues/14),
+hasta observar estabilidad de #11/#12/#13 en producción. Una suite local verde
+no satisface esa condición. Este documento no activa una migración.
+
+La premisa original necesita precisión: el constructor actual de
+`LFPG_GroupsFileData` usa versión 0 y grupos null como centinelas;
+`ValidateGroupsData` rechaza campos obligatorios ausentes. Un archivo v1 con
+versión explícita y array vacío es válido. V1 todavía carece de un contador
+esperado y digest que permitan detectar una alteración que siga siendo un
+payload válido pero haya perdido registros. No se promete que v2 resuelva
+atomicidad, cortes de energía o edición maliciosa.
+
+Propuesta [DESIGN], previa a elegir y verificar las APIs de implementación:
+
+- Lectura de v1 sin reescritura durante el arranque; validación integral antes
+  de instalar grupos. La primera escritura v2 sucede solo por una mutación
+  legítima después de aceptar la migración.
+- Versionado explícito, número esperado de grupos y digest sobre una
+  representación canónica especificada. Orden de grupos/miembros, cadenas,
+  números, codificación y exclusión del propio digest deben quedar definidos
+  con vectores de prueba independientes antes de escribir código. Elegir el
+  algoritmo solo tras verificar su disponibilidad real en DayZ.
+- Política final/tmp/bak explícita y compatible con la actual «gana final
+  válido»; no introducir una supuesta secuencia de commits dentro del digest.
+- Fallo de parseo, contador, digest o versión futura: conservar todos los
+  candidatos y prohibir mutaciones; nunca reemplazar por estado vacío.
+- Backup v1 verificable antes de la primera escritura v2. Para volver a una
+  versión antigua después de nuevas mutaciones, conservar el v2 completo y
+  disponer de una exportación v2→v1 validada con los datos más recientes.
+  Restaurar solo el backup inicial puede perder cambios: no es rollback sin
+  pérdida y requiere una decisión explícita del administrador.
+
+Criterios del futuro PR: cero grupos legítimos; campos obligatorios ausentes;
+registro omitido con JSON aún válido; digest incorrecto; reordenación según
+la canonización; v1 sin cambios al leer; primer guardado v2; versión futura;
+I/O denegado en cada candidato; reinicio entre pasos de escritura; exportación
+de rollback que conserve grupos, líderes, miembros y nombres actuales.
+
+Para levantar el aplazamiento se necesitan build/config identificados,
+observaciones del servidor de destino sobre carga/guardado y reinicios, y
+decisión del dueño sobre suficiencia de esa observación. No se inventa un
+plazo ni un volumen de producción ya cumplidos. #14 solo se cerrará al
+implementar y validar el formato o al descartarlo explícitamente.
