@@ -134,6 +134,10 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
     if (!cfg)
         return false;
 
+    // No-drop blacklist wins over list B and list A, including a type on both lists.
+    if (LFPG_IsListedDropBlocked(item, player, pos))
+        return true;
+
     // Lista B: sin restriccion alguna (prioridad sobre lista A)
     if (cfg.IsUnrestricted(item))
         return false;
@@ -168,4 +172,26 @@ bool LFPG_IsDeployBlockedServer(PlayerBase player, ItemBase item, vector pos)
         return true;
 
     return false;
+}
+
+// Hunting traps do not use ActionDeployObject. ActionDeployBase places them at
+// the player position plus direction times POSITION_OFFSET when the action has
+// no hologram. Only the no-drop blacklist applies here.
+modded class ActionDeployHuntingTrap
+{
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (g_Game.IsDedicatedServer())
+        {
+            if (action_data && action_data.m_Player && action_data.m_MainItem)
+            {
+                vector trapPos = action_data.m_Player.GetPosition();
+                vector trapDir = action_data.m_Player.GetDirection();
+                trapPos = trapPos + (trapDir * POSITION_OFFSET);
+                if (LFPG_IsListedDropBlocked(action_data.m_MainItem, action_data.m_Player, trapPos))
+                    return false;
+            }
+        }
+        return super.ActionConditionContinue(action_data);
+    }
 }
