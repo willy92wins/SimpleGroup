@@ -1701,10 +1701,22 @@ class LFPG_GroupManager
             }
         }
 
-        // Limpiar nombre (solo si no es temporal — los temp nunca entraron al set)
+        // Legacy v1 profiles may contain names that normalize to the same key.
+        // Keep the reservation until the last group using that name dissolves.
         if (!IsTempGroupName(group.m_GroupName) && m_GroupNames.Contains(GroupNameKey(group.m_GroupName)))
         {
-            m_GroupNames.Remove(GroupNameKey(group.m_GroupName));
+            string releasedNameKey = GroupNameKey(group.m_GroupName);
+            bool nameStillUsed = false;
+            foreach (string otherGroupID, LFPG_GroupData otherGroup: m_Groups)
+            {
+                if (otherGroup && otherGroupID != groupID && !IsTempGroupName(otherGroup.m_GroupName) && GroupNameKey(otherGroup.m_GroupName) == releasedNameKey)
+                {
+                    nameStillUsed = true;
+                    break;
+                }
+            }
+            if (!nameStillUsed)
+                m_GroupNames.Remove(releasedNameKey);
         }
 
         // Destruir objetos desplegados si la config lo indica
