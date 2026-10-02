@@ -1592,6 +1592,11 @@ class LFPG_GroupManager
 
         // Crear ID
         string groupID = LFPG_GroupData.GenerateGroupID(playerUID);
+        if (m_Groups.Contains(groupID))
+        {
+            LFPG_Log.Error("CreateGroup: generated group ID already exists; creation rejected");
+            return "";
+        }
 
         // Crear datos del grupo
         LFPG_GroupData group = new LFPG_GroupData();
