@@ -41,3 +41,12 @@ nativa. Se usan únicamente los callbacks que el motor admite.
 
 Se conserva groups.json v1. El formato v2 sigue aplazado según la decisión
 registrada en #14; estas correcciones no migran datos.
+
+## Refresco de lifetime en configuraciones existentes
+
+`m_MinRefreshLifetime` controla el mínimo de lifetime máximo para refrescar
+objetos alrededor de una bandera izada. Por defecto vale `86400` segundos;
+un valor negativo, por ejemplo `-1`, desactiva ese refresco. Se puede añadir
+o editar esta clave en config.json sin cambiar manualmente `m_ConfigVersion`.
+Los valores explícitos se respetan también en archivos v4 o anteriores.
+El arranque aplica defaults en memoria y conserva el archivo del administrador.

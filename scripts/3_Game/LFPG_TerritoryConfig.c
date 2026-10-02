@@ -385,13 +385,9 @@ class LFPG_TerritoryConfig
             m_NoDropInForeignTerritoryTypes = tmpNoDrop.m_NoDropInForeignTerritoryTypes;
         }
 
-        // v5: one new scalar. Older files do not carry it; do not rewrite other fields.
-        // A stored negative value on v5 means "disabled" and is left alone (Load skips
-        // this method once the file is already v5).
-        if (m_ConfigVersion < 5)
-        {
-            m_MinRefreshLifetime = 86400;
-        }
+        // The constructor supplies m_MinRefreshLifetime when the key is absent.
+        // Keep an explicit admin value even when the file still declares v4 or older.
+        // Load deliberately leaves existing config files unchanged on disk.
 
         m_ConfigVersion = LFPG_CONFIG_VERSION;
     }
