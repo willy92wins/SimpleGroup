@@ -122,6 +122,11 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (!mgr)
             return;
+        if (!mgr.CanMutateGroups())
+        {
+            mgr.SendGroupsUnavailable(player);
+            return;
+        }
 
         string groupID = mgr.GetPlayerGroupID(playerUID);
         if (groupID == "")

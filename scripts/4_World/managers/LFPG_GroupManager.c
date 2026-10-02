@@ -1750,7 +1750,7 @@ class LFPG_GroupManager
             return false;
 
         // FIX G-16: Double-check que el grupo sigue existiendo tras los guards anteriores
-        // (race entre HandleRequestJoin y DissolveGroup)
+        // (grupo disuelto mientras terminaba la accion de unirse)
         if (!m_Groups.Contains(groupID))
             return false;
 
@@ -2323,15 +2323,6 @@ class LFPG_GroupManager
     // RPC HANDLERS - Individual operations
     // ========================================================================
 
-    // FIX G-14: Marcado como DEPRECATED — no se dispara desde cliente.
-    // La creacion de grupo ocurre via LFPG_FlagKit_T1.OnPlacementComplete o
-    // LFPG_ActionRegisterTerritory.OnStartServer. Este handler se rechaza
-    // para evitar doble-register race.
-    protected void HandleCreateGroup(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        LFPG_Log.Error("HandleCreateGroup called - rejected (use ActionRegisterTerritory or FlagKit placement instead)");
-    }
-
     protected void HandleSetGroupName(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
         string senderUID = sender.GetPlainId();
@@ -2382,34 +2373,6 @@ class LFPG_GroupManager
         SendGroupSyncUpdateToMembers(group, LFPG_SYNC_COUNT_CHANGED);
     }
 
-    protected void HandleRequestJoin(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        string senderUID = sender.GetPlainId();
-        string senderName = sender.GetName();
-
-        // No debe tener grupo
-        if (HasGroup(senderUID))
-            return;
-
-        // La bandera debe estar en invite mode
-        if (!flag || !flag.IsInviteModeActive())
-            return;
-
-        // FIX C-7: Distance check (proximidad requerida para unirse)
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        string groupID = flag.GetGroupID();
-        if (groupID == "")
-            return;
-
-        bool added = AddMember(groupID, senderUID, senderName);
-        if (added)
-        {
-            SendGroupSyncFull(sender, groupID, flag, flag);
-        }
-    }
-
     protected void HandleRequestLeave(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
     {
         string senderUID = sender.GetPlainId();
@@ -2454,59 +2417,6 @@ class LFPG_GroupManager
             return;
 
         TransferLeadership(groupID, senderUID, targetUID);
-    }
-
-    protected void HandleStartInvite(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        if (!flag)
-            return;
-
-        // FIX C-7, G-15: Validar ownership + proximidad (10m)
-        if (!ValidateSenderOwnsFlag(sender, flag))
-            return;
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        // Activar invite mode
-        int durationMs = m_Config.m_InviteDurationSeconds * 1000;
-        flag.ActivateInviteMode(durationMs);
-    }
-
-    protected void HandleDestroyFlag(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)
-    {
-        if (!flag)
-            return;
-
-        // FIX C-7, G-15: Validar ownership + proximidad (10m)
-        if (!ValidateSenderOwnsFlag(sender, flag))
-            return;
-        if (!IsSenderNearFlag(sender, flag, 10.0))
-            return;
-
-        string senderUID = sender.GetPlainId();
-        string groupID = flag.GetGroupID();
-
-        LFPG_GroupData group = m_Groups.Get(groupID);
-        if (!group || !group.IsLeader(senderUID))
-            return;
-
-        // Verificar que el jugador tiene hatchet en manos (LFPG_ToolMatcher en Fase F)
-        PlayerBase player = PlayerBase.Cast(sender.GetPlayer());
-        if (!player)
-            return;
-
-        EntityAI itemInHands = player.GetHumanInventory().GetEntityInHands();
-        if (!itemInHands)
-            return;
-
-        if (!LFPG_IsHatchet(itemInHands))
-            return;
-
-        // Disolver grupo y destruir bandera
-        DissolveGroup(groupID);
-
-        // Borrar la entidad de la bandera del mundo
-        GetGame().ObjectDelete(flag);
     }
 
     protected void HandleRequestGroupData(PlayerIdentity sender, ParamsReadContext ctx, LFPG_FlagBase flag)

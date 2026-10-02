@@ -50,7 +50,12 @@ modded class ActionDeployObject
                 placement.m_AlreadyPlaced = false;
                 LFPG_GroupManager kitMgr = LFPG_GroupManager.Get();
                 if (kitMgr)
-                    kitMgr.SendErrorToPlayer(action_data.m_Player.GetIdentity(), action_data.m_Player, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+                {
+                    if (!kitMgr.CanMutateGroups())
+                        kitMgr.SendGroupsUnavailable(action_data.m_Player);
+                    else
+                        kitMgr.SendErrorToPlayer(action_data.m_Player.GetIdentity(), action_data.m_Player, "#STR_LFPG_ERR_TERRITORY_BLOCKED");
+                }
                 return;
             }
         }
@@ -92,6 +97,12 @@ modded class ActionDeployObject
         {
             if (action_data && action_data.m_Player && action_data.m_Player.IsPlacingServer() && action_data.m_MainItem)
             {
+                LFPG_GroupManager kitMgr = LFPG_GroupManager.Get();
+                if (LFPG_FlagKit_T1.Cast(action_data.m_MainItem) && kitMgr && !kitMgr.CanMutateGroups())
+                {
+                    kitMgr.SendGroupsUnavailable(action_data.m_Player);
+                    return false;
+                }
                 Hologram holoServer = action_data.m_Player.GetHologramServer();
                 if (holoServer)
                 {

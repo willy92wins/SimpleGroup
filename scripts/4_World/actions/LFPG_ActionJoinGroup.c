@@ -111,8 +111,13 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
         string playerName = identity.GetName();
 
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
-        if (!mgr || !mgr.CanMutateGroups())
+        if (!mgr)
             return;
+        if (!mgr.CanMutateGroups())
+        {
+            mgr.SendGroupsUnavailable(player);
+            return;
+        }
         if (!mgr.IsOwnedRegisteredFlag(flag))
             return;
 
