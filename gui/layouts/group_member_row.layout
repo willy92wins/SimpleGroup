@@ -1,148 +1,144 @@
 FrameWidgetClass LFPG_MemberRow {
- size 260 30
+ position 0 0
+ size 368 34
  hexactpos 1
  vexactpos 1
  hexactsize 1
  vexactsize 1
  {
-  ImageWidgetClass RowBg {
-   position 0 0
-   size 260 28
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.15 0.15 0.18 0.5
-   stretch 1
-   ignorepointer 1
-   {
-   }
-  }
-
-  ImageWidgetClass OnlineIndicator {
-   position 2 10
-   size 8 8
-   hexactpos 1
-   vexactpos 1
-   hexactsize 1
-   vexactsize 1
-   color 0.4 0.4 0.4 1.0
-   stretch 1
-   ignorepointer 1
-   {
-   }
-  }
-
-  TextWidgetClass LeaderIcon {
+  TextWidgetClass MemberNameText {
    scriptclass "ViewBinding"
-   position 14 2
-   size 20 24
+   ignorepointer 1
+   color 1 1 1 1
+   position 10 0
+   size 250 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/Metron"
-   color 1.0 0.85 0.2 1.0
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 18
    "text valign" center
-   ignorepointer 1
    {
     ScriptParamsClass {
-     Binding_Name "LeaderStar"
-     {
-     }
+     Binding_Name "MemberName"
     }
    }
   }
 
-  TextWidgetClass MemberNameText {
+  TextWidgetClass LeaderTagText {
    scriptclass "ViewBinding"
-   position 30 2
-   size 94 24
+   ignorepointer 1
+   color 0.627 0.627 0.627 1
+   position 268 0
+   size 90 34
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   font "gui/fonts/MetronBook"
-   color 0.85 0.85 0.85 1.0
+   font "gui/fonts/sdf_MetronLight24"
+   "exact text" 1
+   "exact text size" 16
+   "text halign" right
    "text valign" center
-   ignorepointer 1
    {
     ScriptParamsClass {
-     Binding_Name "MemberName"
-     {
-     }
+     Binding_Name "LeaderTag"
     }
    }
   }
 
   ButtonWidgetClass BtnTransfer {
    scriptclass "ViewBinding"
-   position 128 3
-   size 60 22
+   visible 0
+   position 178 4
+   size 104 26
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   visible 0
-   color 0.25 0.45 0.7 0.8
+   style Empty
    {
-    ScriptParamsClass {
-     Relay_Command "OnTransferExecute"
-     {
-     }
-    }
-
-    TextWidgetClass BtnTransferLabel {
+    PanelWidgetClass BtnTransferPanel {
+     ignorepointer 1
+     color 0 0 0 0
      position 0 0
-     size 60 22
+     size 104 26
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnTransferLabel {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 104 26
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
      text "#STR_LFPG_UI_TRANSFER"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 16
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
-     ignorepointer 1
-     {
-     }
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnTransferExecute"
     }
    }
   }
 
   ButtonWidgetClass BtnKick {
    scriptclass "ViewBinding"
-   position 192 3
-   size 50 22
+   visible 0
+   position 286 4
+   size 82 26
    hexactpos 1
    vexactpos 1
    hexactsize 1
    vexactsize 1
-   visible 0
-   color 0.6 0.2 0.2 0.8
+   style Empty
    {
-    ScriptParamsClass {
-     Relay_Command "OnKickExecute"
-     {
-     }
-    }
-
-    TextWidgetClass BtnKickLabel {
+    PanelWidgetClass BtnKickPanel {
+     ignorepointer 1
+     color 0 0 0 0
      position 0 0
-     size 50 22
+     size 82 26
      hexactpos 1
      vexactpos 1
      hexactsize 1
      vexactsize 1
-     font "gui/fonts/MetronBook"
+     style rover_sim_colorable
+    }
+
+    TextWidgetClass BtnKickLabel {
+     ignorepointer 1
+     color 1 1 1 1
+     position 0 0
+     size 82 26
+     hexactpos 1
+     vexactpos 1
+     hexactsize 1
+     vexactsize 1
      text "#STR_LFPG_UI_KICK"
+     font "gui/fonts/sdf_MetronBook24"
+     "exact text" 1
+     "exact text size" 16
      "text halign" center
      "text valign" center
-     color 0.9 0.9 0.9 1.0
-     ignorepointer 1
-     {
-     }
+    }
+   }
+   {
+    ScriptParamsClass {
+     Relay_Command "OnKickExecute"
     }
    }
   }

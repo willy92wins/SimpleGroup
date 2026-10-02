@@ -14,15 +14,23 @@ class LFPG_GroupNameDialogController extends ViewController
     string EditGroupName;
     string ErrorMessage;
 
+    static const int BTN_IDLE = ARGB(0, 0, 0, 0);
+    static const int BTN_HOT = ARGB(255, 255, 0, 0);
+
     // Datos internos
     string m_GroupID;
     LFPG_FlagBase m_TargetFlag;
+
+    protected bool m_CancelHover;
+    protected bool m_ConfirmHover;
 
     void LFPG_GroupNameDialogController()
     {
         EditGroupName = "";
         ErrorMessage = "";
         m_GroupID = "";
+        m_CancelHover = false;
+        m_ConfirmHover = false;
     }
 
     // FIX I-19: Destructor limpia m_TargetFlag para evitar ref colgando
@@ -87,6 +95,79 @@ class LFPG_GroupNameDialogController extends ViewController
             dialog.CloseDialog();
         }
         return true;
+    }
+
+    // Cancel and Confirm have no confirm-arm. The pointer alone fills the panel.
+    protected void PaintDialogButtons()
+    {
+        if (!m_LayoutRoot)
+            return;
+
+        string cancelPanelName = "BtnCancelPanel";
+        Widget cancelPanel = m_LayoutRoot.FindAnyWidget(cancelPanelName);
+        if (cancelPanel)
+        {
+            if (m_CancelHover)
+            {
+                cancelPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                cancelPanel.SetColor(BTN_IDLE);
+            }
+        }
+
+        string confirmPanelName = "BtnConfirmPanel";
+        Widget confirmPanel = m_LayoutRoot.FindAnyWidget(confirmPanelName);
+        if (confirmPanel)
+        {
+            if (m_ConfirmHover)
+            {
+                confirmPanel.SetColor(BTN_HOT);
+            }
+            else
+            {
+                confirmPanel.SetColor(BTN_IDLE);
+            }
+        }
+    }
+
+    override bool OnMouseEnter(Widget w, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string enteredName = w.GetName();
+        if (enteredName == "BtnCancel")
+        {
+            m_CancelHover = true;
+            PaintDialogButtons();
+        }
+        else if (enteredName == "BtnConfirm")
+        {
+            m_ConfirmHover = true;
+            PaintDialogButtons();
+        }
+        return false;
+    }
+
+    override bool OnMouseLeave(Widget w, Widget enterW, int x, int y)
+    {
+        if (!w)
+            return false;
+
+        string leftName = w.GetName();
+        if (leftName == "BtnCancel")
+        {
+            m_CancelHover = false;
+            PaintDialogButtons();
+        }
+        else if (leftName == "BtnConfirm")
+        {
+            m_ConfirmHover = false;
+            PaintDialogButtons();
+        }
+        return false;
     }
 
     // Llamado cuando el server responde con NAME_RESULT
@@ -233,9 +314,7 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
             return;
         }
 
-        // FIX AUDIT: Forzar visibilidad y carga de backgrounds procedurales
         dialog.GetLayoutRoot().Show(true);
-        dialog.InitBackgrounds();
 
         LFPG_GroupNameDialogController ctrl = LFPG_GroupNameDialogController.Cast(dialog.GetController());
         if (ctrl)
@@ -247,35 +326,6 @@ class LFPG_GroupNameDialog extends ScriptViewMenu
     void CloseDialog()
     {
         RequestCloseOnce();
-    }
-
-    // FIX AUDIT: Forzar carga de imagen procedural en backgrounds
-    // ImageWidget necesita LoadImageFile() + SetColor() para renderizar colores procedurales
-    void InitBackgrounds()
-    {
-        Widget root = GetLayoutRoot();
-        if (!root)
-            return;
-
-        string colorTex = "#(argb,8,8,3)color(1,1,1,1,CO)";
-
-        // DialogBg: layout color 0.1 0.1 0.12 0.96 → ARGB(245, 26, 26, 31)
-        string nameBg = "DialogBg";
-        ImageWidget dialogBg = ImageWidget.Cast(root.FindAnyWidget(nameBg));
-        if (dialogBg)
-        {
-            dialogBg.LoadImageFile(0, colorTex);
-            dialogBg.SetColor(ARGB(245, 26, 26, 31));
-        }
-
-        // DialogHeaderBg: layout color 0.16 0.18 0.22 1.0 → ARGB(255, 41, 46, 56)
-        string nameHeader = "DialogHeaderBg";
-        ImageWidget headerBg = ImageWidget.Cast(root.FindAnyWidget(nameHeader));
-        if (headerBg)
-        {
-            headerBg.LoadImageFile(0, colorTex);
-            headerBg.SetColor(ARGB(255, 41, 46, 56));
-        }
     }
 
     // Llamado por el ClientGroupCache cuando llega NAME_RESULT
