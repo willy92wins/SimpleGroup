@@ -58,6 +58,9 @@ class LFPG_ActionInvite extends ActionInteractBase
         }
 
         // Server-side
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
         if (!flag.HasGroup())
             return false;
 

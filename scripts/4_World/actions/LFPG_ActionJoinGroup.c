@@ -136,4 +136,25 @@ class LFPG_ActionJoinGroup extends ActionContinuousBase
             return;
         }
     }
+
+    override bool ActionConditionContinue(ActionData action_data)
+    {
+        if (!super.ActionConditionContinue(action_data))
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+            return true;
+
+        PlayerBase player = action_data.m_Player;
+        if (!player)
+            return false;
+        if (!action_data.m_Target)
+            return false;
+
+        Object targetObj = action_data.m_Target.GetObject();
+        if (!LFPG_ActionGuards.IsPlayerNearTarget(player, targetObj))
+            return false;
+
+        return true;
+    }
 };
