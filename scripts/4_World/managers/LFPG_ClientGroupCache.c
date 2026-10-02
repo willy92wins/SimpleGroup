@@ -464,7 +464,9 @@ class LFPG_ClientGroupCache
     protected static void HandlePlacementRules(ParamsReadContext ctx)
     {
         int count = 0;
-        if (!ctx.Read(count) || count < 0 || count > 4096)
+        if (!ctx.Read(count))
+            return;
+        if (count < 0 || count > 4096)
             return;
         array<string> received = new array<string>;
         for (int i = 0; i < count; i = i + 1)
@@ -475,7 +477,9 @@ class LFPG_ClientGroupCache
             received.Insert(typeName);
         }
         int noBaseCount = 0;
-        if (!ctx.Read(noBaseCount) || noBaseCount < 0 || noBaseCount > 4096)
+        if (!ctx.Read(noBaseCount))
+            return;
+        if (noBaseCount < 0 || noBaseCount > 4096)
             return;
         array<string> noBaseTypes = new array<string>;
         for (int n = 0; n < noBaseCount; n = n + 1)
@@ -486,7 +490,9 @@ class LFPG_ClientGroupCache
             noBaseTypes.Insert(noBaseType);
         }
         int unrestrictedCount = 0;
-        if (!ctx.Read(unrestrictedCount) || unrestrictedCount < 0 || unrestrictedCount > 4096)
+        if (!ctx.Read(unrestrictedCount))
+            return;
+        if (unrestrictedCount < 0 || unrestrictedCount > 4096)
             return;
         array<string> unrestrictedTypes = new array<string>;
         for (int u = 0; u < unrestrictedCount; u = u + 1)
