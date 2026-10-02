@@ -502,6 +502,13 @@ class LFPG_ClientGroupCache
                 return;
             unrestrictedTypes.Insert(unrestrictedType);
         }
+        // Read() alone does not reliably detect EOF in native serializers.
+        // Install the three lists only after receiving the complete message.
+        int endMarker = 0;
+        if (!ctx.Read(endMarker))
+            return;
+        if (endMarker != LFPG_PLACEMENT_RULES_END)
+            return;
         s_FurnitureExcludedTypes = received;
         s_NoBaseRequiredTypes = noBaseTypes;
         s_UnrestrictedTypes = unrestrictedTypes;

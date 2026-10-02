@@ -2534,6 +2534,7 @@ class LFPG_GroupManager
         rules.Write(unrestrictedCount);
         for (int u = 0; u < unrestrictedCount; u = u + 1)
             rules.Write(m_Config.m_UnrestrictedTypes[u]);
+        rules.Write(LFPG_PLACEMENT_RULES_END);
         rules.Send(player, LFPG_RPC_S2C_PLACEMENT_RULES, true, player.GetIdentity());
     }
 
