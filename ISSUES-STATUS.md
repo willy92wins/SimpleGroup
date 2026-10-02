@@ -31,7 +31,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F19 | Corrección aplicada; aceptación de inventario en curso | Retorno SERVER diferido fuera del callback; no es veto atómico y puede fallar si desaparece el destino. El caso de último cupo se sigue por separado en la misma aceptación. |
 | F20 | Corregido | Límites de nombre coherentes 1..48 y compartidos con cliente. |
 | F21 | Corregido | Config inválida se conserva; defaults solo en memoria. Valores de lifetime legacy probados antes/después del fix. |
-| F22 | Identidad validada; fix de reserva legacy en este PR, pendiente de prueba nativa | IDs/UIDs/líder cubiertos por el run bb7408de. El delta de nombres 3c3d85b tiene MERGE_OK estático; falta la regresión en motor. Conserva grupos legacy, sin expulsar miembros por reducir maxMembers ni renombrar datos antiguos. |
+| F22 | Corregido y validado en motor | Misma fixture: 26 checks/3 fallos antes y 26/0 después. Tres JSON supervivientes idénticos por bytes y registros completos esperados. IDs/UIDs/líder cubiertos también por bb7408de. Conserva grupos legacy, sin expulsar miembros por reducir maxMembers ni renombrar datos antiguos. |
 | F23 | Corregido | Retira timer anterior al activar/desactivar invitación. |
 | F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
 | F25 | Guard corregido; aceptación de doble finalización pendiente | `UpgradeFlag` exige que oldFlag sea la entidad registrada. No se afirma una prueba de concurrencia del motor. |

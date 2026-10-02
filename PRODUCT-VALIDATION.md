@@ -111,3 +111,25 @@ para simular mantener la entrada; observa inicio/cancelación/fin en servidor.
 Esto no simula una pulsación física de teclado. El probe de UI cancela el nombre
 inicial, lo reabre sin referencia a bandera y comprueba respuestas reales del
 servidor, además de peticiones obsoletas/truncadas. No se presenta como ejecutado.
+
+### F22: regresión nativa completada
+
+Misma fixture y SHA-256 `2488234911310ac65e7d1f2bb6b5bd5e503265ffe26e7e218aaa3c5d78fa2f9c`:
+
+- Base a8d4a01, run `2005712b-f93d-4775-babb-b9c9319e9af6`: 26 checks,
+  tres fallos exactos en la reserva del nombre superviviente.
+- Candidato e0111d3, run `7beae077-dfa0-4246-adc7-d6c26547ad86`: 26 checks,
+  cero fallos. Son 22 aserciones de producto y cuatro escrituras de preparación.
+- Tres archivos JSON completos coinciden byte a byte antes/después y con los
+  registros esperados, incluidos ID, nombre original, líder, miembro, tier,
+  contadores y posición. El formato sigue siendo v1.
+- Ambos runs terminaron mediante cierre ordenado; tras cada uno se restauraron
+  por hash el PBO original y los nueve archivos del perfil. Después se preparó
+  un entorno aislado para la prueba pendiente de acciones/UI.
+
+Existe en ambos runs la misma traza de inicialización de diagnóstico
+`PluginConfigDebugProfile`/`mcp_diagplugins.c`, previa a la misión. Se conserva
+en la evidencia y no se presenta como ausencia total de errores del entorno.
+No hubo error de compilación ni traza nueva en el candidato. Las 26 aserciones
+de la misión sí se ejecutaron; la evidencia independiente está en
+`acceptance/names-verification.json` del expediente local.
