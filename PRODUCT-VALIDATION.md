@@ -1,7 +1,7 @@
 # Validación del candidato — 2026-10-02
 
 Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
-Último código: `a8d4a01404b5deb20d77a5db4e388e3fedd2727e` (fix de config descrito abajo).
+Último código: `e0111d3c38ebbaaa255bd01ea13a36b232341c02` (F22 y decisiones F14/F16).
 Estado: integración revisada y fusión autorizada; aceptación de producción pendiente.
 
 ## Revisión de producto
@@ -63,8 +63,9 @@ ancestros reales de la integración; se conserva su historial al fusionar.
 
 El parser cliente se ejercitó con serializadores nativos en el proceso servidor;
 eso no prueba el transporte RPC a varios clientes. La reconciliación de layouts
-no prueba interacción visual. Quedan por ejercitar con jugadores las acciones,
-inventario y UI, además de interrupciones del proceso o disco físico.
+no prueba interacción visual. Las acciones, inventario y callbacks/UI se
+ejercitaron con un cliente real como se detalla abajo; quedan interacción
+física/inspección visual e interrupciones del proceso o disco físico.
 El dueño deja expresamente pendiente multicliente por no disponer de un segundo
 cliente. No se sustituye esa aceptación por miembros ficticios en una misión.
 No se ha medido rendimiento con carga ni longevidad CE de un servidor real.
@@ -79,7 +80,7 @@ mantiene aplazada la migración v2. La decisión de #15 está resuelta.
 
 Código 3c3d85b: al disolver un grupo conserva la reserva de un nombre legacy
 si otro grupo sigue usándolo. Opus 5.5 r1 MERGE_OK estático; regresión nativa
-antes/después pendiente. Validador: 0 errores/17 avisos iguales a la base;
+antes/después completada, descrita abajo. Validador: 0 errores/17 avisos iguales a la base;
 PBO 41 scripts/62 recursos exactos, SHA-256
 `2ab9492757d1bff8878b76caaef9348b8be9316d5b7647dca36669a9c0b141de`.
 
@@ -87,8 +88,8 @@ Sobre a8d4a01, run `02b4654c-320c-466a-85c4-9b1dc1ac4763`:
 cliente real, **28 comprobaciones UI/0 fallos** (callbacks reales de apertura,
 Escape/cierre, confirmación/timeout de salida, caché conservada hasta respuesta,
 diálogo de nombre/validación/ACK mediante RPC). No son clics humanos ni
-inspección visual. Acciones/inventario: **38 checks/3 fallos** de fixture aún
-en discriminación; no equivalen a 35 casos de producto aprobados porque hay
+inspección visual. Acciones/inventario: **38 checks/3 fallos** de fixture que entonces
+requerían discriminación; no equivalen a 35 casos de producto aprobados porque hay
 preparaciones y movimientos asíncronos que necesitan confirmación independiente.
 Se conserva el log completo, se cerró el run ordenadamente y se restauraron
 PBO y nueve archivos originales por hash. No hay despliegue productivo.
@@ -105,12 +106,10 @@ Validador: 0 errores/17 avisos; UI reconcile: 0 FAIL/0 WARN. PBO extraído con
 41 scripts y 62 recursos exactos, SHA-256
 `2d819410c99c638b36d06c1d9ceba0a36a67916e03a6ed5ecc2a0d46ad8a0a9c`.
 
-La prueba nativa sigue pendiente de banco libre. La misión preparada inicia
-la acción a través del gestor cliente original y usa su API de automatización
-para simular mantener la entrada; observa inicio/cancelación/fin en servidor.
-Esto no simula una pulsación física de teclado. El probe de UI cancela el nombre
-inicial, lo reabre sin referencia a bandera y comprueba respuestas reales del
-servidor, además de peticiones obsoletas/truncadas. No se presenta como ejecutado.
+La aceptación nativa final se completó en el run descrito a continuación.
+La misión usa el gestor cliente original y su API de input; no simula una
+pulsación física de teclado ni sustituye la lógica de las acciones. Los
+observadores llaman a super y solo registran movimiento y callbacks.
 
 ### F22: regresión nativa completada
 
@@ -133,3 +132,56 @@ en la evidencia y no se presenta como ausencia total de errores del entorno.
 No hubo error de compilación ni traza nueva en el candidato. Las 26 aserciones
 de la misión sí se ejecutaron; la evidencia independiente está en
 `acceptance/names-verification.json` del expediente local.
+
+### Acciones, inventario y UI: aceptación final
+
+Run `de49e59c-7d94-4205-9610-8bd183e0f32b`, código e0111d3, DayZDiag 1.29,
+cliente y servidor reales, PBO sin file patching: **57 comprobaciones de
+acciones y 44 de UI, cero aserciones fallidas**. El conteo incluye preparación;
+no equivale a 101 escenarios independientes. F22 también repite 26/0.
+
+- Territorio: un no miembro puede subir/bajar; el servidor rechaza ejecución
+  remota. Inventario: blacklist, excepción de colocación, drop sin marca y
+  territorio bajado, observando callbacks reales y asentamiento del movimiento.
+- Cupo: zona previamente sin cajas; siete objetos reales y recuento de siete
+  para límite ocho. El octavo queda en suelo y cuenta una vez; el sobrante
+  vuelve al jugador y el contador permanece en ocho.
+- Destroy: sin herramienta o fuera de distancia se rechaza; iniciar no
+  destruye. Cancelar mediante EndActionInput conserva grupo y bandera.
+  Secuencia servidor START/END/START/FINISH/END; una sola finalización,
+  **5447 ms**, componente completo y grupo disuelto.
+- Upgrade: primera llamada llega a T2; segunda llamada en el mismo tick con
+  la referencia anterior se rechaza y conserva la entidad registrada. Esto
+  verifica el guard; no es una prueba de concurrencia con dos clientes.
+- UI: apertura/cierre/Escape, timeout y confirmación de salida, caché hasta
+  ACK, cancelación del diálogo inicial y reapertura desde el panel sin bandera.
+  Se rechazan grupo obsoleto y payload truncado. Con el jugador a más de
+  1,5 km llegan error y éxito por PlayerBase; nombre definitivo sincronizado,
+  diálogo cerrado y botón oculto. El JSON v1 guarda AcceptanceRenamed con
+  un miembro líder válido. La etiqueta del test sobre doble clic solo prueba
+  envío de nombre válido; no mide cuántos RPC se enviaron.
+
+La primera prueba sobre main tenía tres resultados inconclusos por preparación
+y espera insuficiente de movimientos. Los intentos ux-r1/r2 tuvieron errores
+de compilación solo del addon de prueba; r3 usó cancelación local; r4 conservaba
+el hacha del personaje anterior; r5 saltó el cupo por preparación inválida.
+Se conservan sus logs, sin convertirlos en PASS. El run final comprueba sitio
+limpio, manos vacías y recuento real antes de afirmar resultados.
+
+Opus 5.5 revisó la ruta de input de la fixture: READY_TO_RUN. En r2 de F16,
+limitado al hallazgo nativo nuevo, emitió **MERGE_OK_WITH_LIMIT**: inyectar un
+RPC 609 truncado registra una excepción de lectura de string en el motor.
+El grupo no cambia y las peticiones posteriores válidas se procesan y guardan.
+No hubo caída del proceso ni corrupción observada del JSON. No se verificó
+el diagnóstico en un ejecutable no-DIAG. El throttle precede a la lectura.
+
+También se conservan la traza de inicialización PluginConfigDebugProfile y
+los avisos de callbacks MCP al cerrar, iguales a los del primer run sobre main.
+No se presenta el log como libre de errores del entorno ni se modifica infra.
+
+Cierre ordenado de ambos procesos; addon de prueba archivado, PBO original y
+nueve archivos originales del perfil restaurados por SHA-256. Lease liberado
+y banco libre al terminar. No es despliegue en el servidor de producción.
+Evidencia local: acceptance/actions-ux-r6 (logs, fixture, JSON, launch/close,
+restoration y verification.json), dentro del expediente production-20261002.
+Resumen portable: [validation/2026-10-02-acceptance.json](validation/2026-10-02-acceptance.json).
