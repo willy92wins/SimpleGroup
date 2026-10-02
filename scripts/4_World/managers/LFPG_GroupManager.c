@@ -3167,7 +3167,8 @@ class LFPG_GroupManager
         }
 
         int diskCount;
-        if (FileExist(finalPath) && !ReadGroupsFile(finalPath, diskCount) && !m_HasVerifiedGroupsTmp)
+        bool finalInvalid = FileExist(finalPath) && !ReadGroupsFile(finalPath, diskCount);
+        if (finalInvalid && !m_HasVerifiedGroupsTmp)
         {
             LFPG_Log.Error("SaveGroups: final unreadable/invalid. Save paused; dirty state retained.");
             return false;
@@ -3175,7 +3176,9 @@ class LFPG_GroupManager
         string legacySource = finalPath;
         if (!FileExist(legacySource))
             legacySource = bakPath;
-        if (!LFPG_GroupsStorage.PreserveLegacy(legacySource, finalPath + ".pre-v2"))
+        // A verified pending write already preserved its legacy source before
+        // creating tmp. Its own partial final must not prevent completing it.
+        if (!finalInvalid && !LFPG_GroupsStorage.PreserveLegacy(legacySource, finalPath + ".pre-v2"))
         {
             LFPG_Log.Error("SaveGroups: cannot preserve v1 migration backup. Save refused.");
             return false;
