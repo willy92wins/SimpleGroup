@@ -8,12 +8,12 @@
 //  - m_FlagPositions: array para territory overlap (no GetObjectsAtPosition)
 //  - Sin m_FlagToGroup (redundante: flag.m_GroupID es suficiente)
 //  - Timer class para tick periodico (inmune al bug CallLater 4.5h)
-//  - JSON save atomico (tmp -> bak -> final)
+//  - Recoverable JSON save (tmp -> bak -> final), not atomic
 //  - RPC rate limiting por jugador
 //  - Deploy/Garden counters O(1) (no proximity scan en runtime)
 // ============================================================================
 
-// Version del formato de groups.json. Un fichero con version mayor no se carga.
+// Logical payload version. Disk envelope versions belong to LFPG_GroupsStorage.
 const int LFPG_GROUPS_FILE_VERSION = 1;
 
 class LFPG_GroupManager
@@ -97,6 +97,8 @@ class LFPG_GroupManager
 
     // FIX M2: Dirty flag para saves diferidos (counters)
     protected bool m_IsDirty;
+    // Only this live session may finish its own verified pending promotion.
+    protected bool m_HasVerifiedGroupsTmp;
 
     // One-shot boot audit after initial restoration. Pending registration also
     // handles entities restored before Init; do not assume one engine order.
@@ -167,65 +169,12 @@ class LFPG_GroupManager
     // ========================================================================
     void Init()
     {
-        // Un tmp residual NO se tira a ciegas: si el proceso murio despues de que
-        // el final desapareciera, ese tmp es la unica copia buena que queda.
-        string staleTmp = LFPG_TerritoryConfig.GetGroupsTmpPath();
-        if (FileExist(staleTmp))
+        // Validate the winner before touching recovery files. Future formats
+        // and an invalid existing final always require administrator recovery.
+        if (!PrepareGroupsFiles())
         {
-            string tmpFinal = LFPG_TerritoryConfig.GetGroupsPath();
-            int tmpCount = 0;
-            int finalCount = 0;
-            bool finalValid = ReadGroupsFile(tmpFinal, finalCount);
-            bool tmpValid = ReadGroupsFile(staleTmp, tmpCount);
-            if (IsFutureGroupsFile(tmpFinal) || IsFutureGroupsFile(staleTmp))
-            {
-                m_GroupsLoadFailed = true;
-            }
-            else if (finalValid)
-            {
-                // The verified final wins. Preserve unused candidates for the admin.
-                if (!MoveAside(staleTmp, ".discarded"))
-                    m_GroupsLoadFailed = true;
-            }
-            else if (!tmpValid)
-            {
-                // Both candidates are unusable: read-only also means no moving
-                // or rewriting the corrupt input. The admin chooses recovery.
-                m_GroupsLoadFailed = true;
-            }
-            else
-            {
-                LFPG_GroupsFileData oldFinal = new LFPG_GroupsFileData();
-                string recoveryError = "";
-                if (FileExist(tmpFinal))
-                {
-                    if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpFinal, oldFinal, recoveryError))
-                    {
-                        // A newer file belongs to another reader, not to recovery.
-                        if (oldFinal.m_Version > LFPG_GROUPS_FILE_VERSION)
-                            m_GroupsLoadFailed = true;
-                    }
-                    if (!m_GroupsLoadFailed && !MoveAside(tmpFinal, ".corrupt"))
-                        m_GroupsLoadFailed = true;
-                }
-                LFPG_GroupsFileData recoveredData = new LFPG_GroupsFileData();
-                if (!m_GroupsLoadFailed)
-                {
-                    if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(staleTmp, recoveredData, recoveryError))
-                        m_GroupsLoadFailed = true;
-                    else if (!CopyFile(staleTmp, tmpFinal))
-                        m_GroupsLoadFailed = true;
-                    else if (!GroupsFileMatches(tmpFinal, recoveredData))
-                        m_GroupsLoadFailed = true;
-                    else
-                    {
-                        DeleteFile(staleTmp);
-                        LFPG_Log.Info("Init: verified groups.json recovered from tmp.");
-                    }
-                }
-            }
-            if (m_GroupsLoadFailed)
-                LFPG_Log.Error("Init: recovery incomplete. READ ONLY; recovery files retained. Restore profile and restart.");
+            m_GroupsLoadFailed = true;
+            LFPG_Log.Error("Init: groups recovery refused. READ ONLY; candidates retained.");
         }
 
         // Cargar config
@@ -3072,7 +3021,7 @@ class LFPG_GroupManager
         groupCount = 0;
         LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
         string probeErr = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, probeErr))
+        if (!LFPG_GroupsStorage.LoadFile(path, probe, probeErr))
             return false;
         if (!ValidateGroupsData(probe))
             return false;
@@ -3082,13 +3031,48 @@ class LFPG_GroupManager
 
     protected bool IsFutureGroupsFile(string path)
     {
-        if (!FileExist(path))
+        return LFPG_GroupsStorage.ReadVersion(path) > LFPG_GroupsStorage.FILE_VERSION;
+    }
+
+    protected bool PrepareGroupsFiles()
+    {
+        string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
+        string tmpPath = LFPG_TerritoryConfig.GetGroupsTmpPath();
+        string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
+        if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath) || IsFutureGroupsFile(bakPath))
             return false;
-        LFPG_GroupsFileData probe = new LFPG_GroupsFileData();
-        string error = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, probe, error))
-            return false;
-        return probe.m_Version > LFPG_GROUPS_FILE_VERSION;
+        int count;
+        if (FileExist(finalPath))
+        {
+            if (!ReadGroupsFile(finalPath, count))
+                return false;
+            // Final wins; preserve an interrupted/unused tmp, even if truncated.
+            if (FileExist(tmpPath) && !MoveAside(tmpPath, ".discarded"))
+                return false;
+            if (FileExist(bakPath) && !ReadGroupsFile(bakPath, count))
+            {
+                if (!MoveAside(bakPath, ".corrupt"))
+                    return false;
+            }
+            return true;
+        }
+        if (FileExist(tmpPath))
+        {
+            if (!ReadGroupsFile(tmpPath, count))
+                return false;
+            LFPG_GroupsFileData recovered;
+            string error;
+            if (!LFPG_GroupsStorage.LoadFile(tmpPath, recovered, error))
+                return false;
+            if (!CopyFile(tmpPath, finalPath) || !GroupsFileMatches(finalPath, recovered))
+                return false;
+            // Failure to remove tmp is recoverable: next boot final still wins.
+            DeleteFile(tmpPath);
+            return true;
+        }
+        if (FileExist(bakPath))
+            return ReadGroupsFile(bakPath, count);
+        return true;
     }
 
     // Compare the complete persisted payload, including member identities.
@@ -3096,7 +3080,7 @@ class LFPG_GroupManager
     {
         LFPG_GroupsFileData actual = new LFPG_GroupsFileData();
         string error = "";
-        if (!JsonFileLoader<LFPG_GroupsFileData>.LoadFile(path, actual, error))
+        if (!LFPG_GroupsStorage.LoadFile(path, actual, error))
             return false;
         if (!ValidateGroupsData(actual))
             return false;
@@ -3130,7 +3114,16 @@ class LFPG_GroupManager
             LFPG_Log.Error(mvErr);
             return false;
         }
+        if (!LFPG_GroupsStorage.FilesEqual(path, aside))
+            return false;
         return DeleteFile(path);
+    }
+
+    bool SaveGroupsIfDirty()
+    {
+        if (!m_IsDirty)
+            return true;
+        return SaveGroups();
     }
 
     bool SaveGroups()
@@ -3167,10 +3160,26 @@ class LFPG_GroupManager
         string bakPath = LFPG_TerritoryConfig.GetGroupsBackupPath();
         string finalPath = LFPG_TerritoryConfig.GetGroupsPath();
 
-        if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath))
+        if (IsFutureGroupsFile(finalPath) || IsFutureGroupsFile(tmpPath) || IsFutureGroupsFile(bakPath))
         {
             m_GroupsLoadFailed = true;
             LFPG_Log.Error("SaveGroups: newer groups format found. READ ONLY; files retained.");
+            return false;
+        }
+
+        int diskCount;
+        if (FileExist(finalPath) && !ReadGroupsFile(finalPath, diskCount) && !m_HasVerifiedGroupsTmp)
+        {
+            m_GroupsLoadFailed = true;
+            LFPG_Log.Error("SaveGroups: final invalid. READ ONLY; candidates retained.");
+            return false;
+        }
+        string legacySource = finalPath;
+        if (!FileExist(legacySource))
+            legacySource = bakPath;
+        if (!LFPG_GroupsStorage.PreserveLegacy(legacySource, finalPath + ".pre-v2"))
+        {
+            LFPG_Log.Error("SaveGroups: cannot preserve v1 migration backup. Save refused.");
             return false;
         }
 
@@ -3181,7 +3190,7 @@ class LFPG_GroupManager
         string pendingError = "";
         if (FileExist(tmpPath))
         {
-            if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(tmpPath, pendingData, pendingError))
+            if (LFPG_GroupsStorage.LoadFile(tmpPath, pendingData, pendingError))
             {
                 if (ValidateGroupsData(pendingData) && !GroupsFileMatches(finalPath, pendingData))
                 {
@@ -3193,7 +3202,7 @@ class LFPG_GroupManager
 
         // 1. Serializar a tmp. Si falla, no se toca ni el final ni el bak.
         string saveError = "";
-        if (!retryPending && !JsonFileLoader<LFPG_GroupsFileData>.SaveFile(tmpPath, fileData, saveError))
+        if (!retryPending && !LFPG_GroupsStorage.SaveFile(tmpPath, fileData, saveError))
         {
             string err1 = "SaveGroups: SaveFile to tmp failed: ";
             err1 = err1 + saveError;
@@ -3207,6 +3216,7 @@ class LFPG_GroupManager
             LFPG_Log.Error("SaveGroups: tmp payload mismatch. Rotation aborted.");
             return false;
         }
+        m_HasVerifiedGroupsTmp = true;
 
         // 3. Backup del actual. Cualquier fallo aborta antes de tocar el final.
         //    AUDIT #10 L6-F04: el final se verifica ANTES de copiarlo sobre el
@@ -3216,9 +3226,14 @@ class LFPG_GroupManager
         {
             LFPG_GroupsFileData previousData = new LFPG_GroupsFileData();
             string previousError = "";
-            bool previousLoaded = JsonFileLoader<LFPG_GroupsFileData>.LoadFile(finalPath, previousData, previousError);
+            bool previousLoaded = LFPG_GroupsStorage.LoadFile(finalPath, previousData, previousError);
             if (previousLoaded && ValidateGroupsData(previousData))
             {
+                if (FileExist(bakPath) && !ReadGroupsFile(bakPath, diskCount))
+                {
+                    if (!MoveAside(bakPath, ".corrupt"))
+                        return false;
+                }
                 if (FileExist(bakPath))
                 {
                     if (!DeleteFile(bakPath))
@@ -3275,6 +3290,7 @@ class LFPG_GroupManager
             return false;
         }
 
+        m_HasVerifiedGroupsTmp = false;
         // 5. Limpiar tmp solo tras una rotacion completa.
         if (FileExist(tmpPath))
         {
@@ -3312,7 +3328,7 @@ class LFPG_GroupManager
         // Carga primaria.
         if (FileExist(filePath))
         {
-            if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(filePath, fileData, loadError))
+            if (LFPG_GroupsStorage.LoadFile(filePath, fileData, loadError))
             {
                 if (fileData.m_Version > LFPG_GROUPS_FILE_VERSION)
                 {
@@ -3328,6 +3344,13 @@ class LFPG_GroupManager
             }
         }
 
+        if (!loaded && FileExist(filePath))
+        {
+            m_GroupsLoadFailed = true;
+            LFPG_Log.Error("LoadGroups: existing final invalid. READ ONLY; no fallback.");
+            return;
+        }
+
         // FIX PERS-1: el backup se intenta TAMBIEN cuando el primario no existe.
         // Ese es justo el estado que deja un crash durante la rotacion de SaveGroups.
         if (!loaded)
@@ -3335,7 +3358,7 @@ class LFPG_GroupManager
             if (FileExist(bakPath))
             {
                 fileData = new LFPG_GroupsFileData();
-                if (JsonFileLoader<LFPG_GroupsFileData>.LoadFile(bakPath, fileData, loadError))
+                if (LFPG_GroupsStorage.LoadFile(bakPath, fileData, loadError))
                 {
                     if (ValidateGroupsData(fileData))
                     {
