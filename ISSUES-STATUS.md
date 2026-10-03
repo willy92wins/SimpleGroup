@@ -16,7 +16,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F04 | Corregido | `SaveGroups`: valida el final antes de rotar backup; recuperación e I/O denegado ejercitados. |
 | F05 | Corregida la resurrección desde tmp vacío; límite documentado | Cero grupos es válido. CopyFile/DeleteFile siguen sin promesa de atomicidad ante interrupción física. |
 | F06 | Transporte corregido; aceptación parcial | Full/lightweight sync a miembros usa PlayerBase. Invitaciones, transferencia y sync con dos clientes siguen pendientes. El diálogo automático sigue ligado a bandera cercana; la recuperación desde panel por PlayerBase pasó en motor a más de 1,5 km. |
-| F07 | Refresco implementado; aceptación CE pendiente | `ApplyGroupLifetime` / `RefreshRaisedBases`: comprobar types.xml, reinicios y vida efectiva del servidor de destino. |
+| F07 | CE y reinicio validados en dos mapas | Plantilla types.xml incluida. En Chernarus y Enoch: 24 banderas T1/T2/T3, lifetime inicial 604800/registrado 3888000, identidad y progreso conservados tras reinicio; 1200 cajas restauradas y contadas. Instalar la plantilla en cada misión del destino. |
 | F08 | Guards de carga/shutdown/identidad corregidos | `LFPG_FlagBase.EEDelete`: borrar la bandera real sigue disolviendo el grupo; no se promete supervivencia ante wipe administrativo. |
 | F09 | Corregido | `LFPG_FlagKit_T1.OnPlacementComplete`: revalida y conserva el kit cuando falla la creación. |
 | F10 | Corregido | Consultas de territorio leen progreso vivo; ya no dependen de un progreso congelado al registrar. |
@@ -36,7 +36,7 @@ Una corrección de código no equivale a aceptación completa en producción.
 | F24 | Corregido | Iteración de destinatarios con buffer separado del usado al construir sync. |
 | F25 | Guard corregido y probado en motor | `UpgradeFlag` rechaza la segunda llamada en el mismo tick con la referencia anterior y conserva T2 registrada. No se afirma concurrencia de dos clientes. |
 | F26 | Corregido | Trim y clave sin distinción de mayúsculas para nombres nuevos. |
-| F27 | Guardado medido y optimizado; aceptación de carga parcial | 120 identidades: cinco guardados pasan de 3842–4604 ms a 125–191 ms en DayZDiag. Recuento con objetos reales en aceptación; no equivale a 120 clientes conectados. |
+| F27 | Medido y optimizado en banco; carga real pendiente | 120 identidades: guardados de 125–191 ms. Recuento de 24 bases/1200 cajas en Chernarus: 483 ms; 20000 consultas de zona: 67 ms. No equivale a 120 clientes conectados. |
 | F28 | Inventario cerrado; contratos conservados por compatibilidad | Ver [F28-COMPATIBILITY.md](F28-COMPATIBILITY.md). Handlers inseguros retirados; campos persistidos, símbolos públicos y firmas se conservan conscientemente. |
 | F29 | Corregido | Delta de reloj unsigned y sincronización terminal a cero. No se simulan 49 días de uptime como prueba ejecutada. |
 | F30 | Refutado por la auditoría | Manager creado antes de restaurar entidades; no se parchea una ruta que no se ha demostrado. |
@@ -50,8 +50,9 @@ PRs de continuación propuestos, sin cambiar reglas de juego por inferencia:
 
 1. Aceptación multicliente: invitación, transferencia, permisos y sync fuera de
    burbuja. Aplazada expresamente por falta de segundo cliente.
-2. Aceptación CE y rendimiento en el servidor de destino, más interacción
-   física/inspección visual; cada dimensión requiere su evidencia propia.
+2. Carga real de 100–120 conexiones en el hardware/conjunto de mods de destino,
+   más interacción física/inspección visual. CE y reinicios están probados en
+   Chernarus y Enoch; los tiempos sintéticos no certifican esa población real.
 3. F28 resuelta por inventario y conservación explícita de compatibilidad; no
    retirar JoinTimestamp ni contratos públicos solo por no tener lectores internos.
 
@@ -86,3 +87,13 @@ Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados,100–120play
 Se incluye plantilla CE en [server/README.md](server/README.md). La medición de
 120 identidades sintéticas no acredita120 clientes ni un servidor destino que
 todavía no se ha identificado.
+
+## #10: listas de configuración antiguas — PR #19
+
+La aceptación descubrió que el lector nativo convierte tanto una lista omitida
+como `[]` en un array vacío. La migración perdía los defaults de muebles,
+blacklist y excepción del kit. El PR #19 distingue presencia en el mismo JSON
+validado, conserva las listas explícitas y no reescribe el archivo.
+Opus 5.5 r2 aprobó el delta tras dos correcciones de r1. Matriz de quince casos,
+valores del administrador conservados, recuento de 1200 cajas y reinicios en
+ambos mapas sin fallos. La #10 conserva únicamente la aceptación externa citada.
