@@ -569,9 +569,19 @@ class LFPG_TerritoryConfig
         bool escaped = false;
         bool expectKey = false;
         int start = 0;
-        for (int i = 0; i < raw.Length(); i++)
+        int length = raw.Length();
+        string block;
+        for (int i = 0; i < length; i++)
         {
-            string character = raw.Get(i);
+            int inBlock = i % 512;
+            if (inBlock == 0)
+            {
+                int blockLength = length - i;
+                if (blockLength > 512)
+                    blockLength = 512;
+                block = raw.Substring(i, blockLength);
+            }
+            string character = block.Get(inBlock);
             if (inString)
             {
                 if (escaped)
@@ -653,10 +663,12 @@ class LFPG_TerritoryConfig
                 bool hasNoDrop;
                 if (!FindListKeys(raw, hasNoBase, hasCounted, hasNoDrop))
                 {
-                    LFPG_Log.Error("Cannot inspect legacy config keys; using defaults without rewriting the file.");
-                    config = new LFPG_TerritoryConfig();
-                    config.ComputeDerivedValues();
-                    return config;
+                    LFPG_Log.Error("Cannot inspect legacy config keys; keeping the parsed admin values.");
+                    // A scanner/parser disagreement must not discard a config
+                    // that the engine has already loaded successfully.
+                    hasNoBase = true;
+                    hasCounted = true;
+                    hasNoDrop = true;
                 }
                 if (!hasNoBase)
                     config.m_NoBaseRequiredTypes = null;
