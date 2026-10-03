@@ -48,9 +48,9 @@ modded class ActionDropItem
                 if (dropMgr && dropIdentity)
                     dropMgr.SendErrorToPlayer(dropIdentity, dropPlayer, "#STR_LFPG_ERR_DROP_RESTRICTED");
 
-                string dropActLog = "[SimpleGroup] ActionDropItem blocked ";
+                string dropActLog = "ActionDropItem blocked ";
                 dropActLog = dropActLog + heldItem.GetType();
-                PrintToRPT(dropActLog);
+                LFPG_Log.Debug(dropActLog);
                 return;
             }
         }

@@ -6,6 +6,25 @@ Las decisiones del dueño están en [PRODUCT-DECISIONS.md](PRODUCT-DECISIONS.md)
 las ejecuciones y sus límites, en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 Una corrección de código no equivale a aceptación completa en producción.
 
+## Endurecimiento de release — SG
+
+Cambios sobre `13d7b80`. Verificación offline y escenarios en `FIX-NOTES.md`;
+la aceptación nativa de este conjunto sigue pendiente.
+
+| ID | Corrección | Límite conservado |
+|---|---|---|
+| SG-01 | Un fallo de rotación del backup no impide promover un tmp verificado si el final anterior era válido. | Al arrancar sigue ganando el final; un tmp más reciente se aparta. La sustitución no es atómica. |
+| SG-03 | v1 y payload v2 requieren `m_Groups` superior explícito. | `[]` es válido; un fallo del escáner invalida grupos. |
+| SG-04 | Sin final, se aparta el tmp inválido antes de intentar el backup. | Si no se puede apartar, solo lectura; se conserva la protección de perfil ausente. |
+| SG-11 | Las bajas conservan el orden de miembros para la sucesión. | No se añade sucesión por inactividad. |
+| SG-12 | T1/T2/T3 no reciben daño, también tras mejora o restauración. | La acción del líder y la expiración del CE conservan su comportamiento. |
+| SG-16 | La ausencia del manager al borrar banderas se registra en Debug. | Sin cambios de disolución. |
+| SG-17 | Listas omitidas recuperan defaults en cualquier versión, incluidos tiers. | Listas explícitas conservadas, sin reescritura; fallo de escáner conserva valores parseados. |
+| SG-18 | Radios limitados a 10.000 m e invitaciones a 3.600 s antes de multiplicar. | Se conservan mínimos y defaults; se registra cada ajuste. |
+| SG-20 | C4, IED y claymore excluidos por defecto de grupo/zona/cupo. | Configuraciones explícitas requieren actualización del administrador; blacklist prevalece. |
+| SG-23 | El servidor rechaza colocar el kit a más de 8 m del jugador. | Rango vanilla de 6 m más 2 m de margen. |
+| SG-27 | Once escrituras directas al RPT pasan al logger del mod. | Diez trazas Debug y un Error de retorno fallido; sin cambio de lógica. |
+
 ## #10: resolución de la auditoría
 
 | Claim | Disposición actual | Ancla de producto / pendiente |

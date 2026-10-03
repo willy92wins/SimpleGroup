@@ -153,11 +153,11 @@ modded class ItemBase
             if (LFPG_DeployTracker.IsGardenTracked(this))
                 return;
 
-            string ghMsg = "[SimpleGroup] Greenhouse counted as plot: ";
+            string ghMsg = "Greenhouse counted as plot: ";
             ghMsg = ghMsg + GetType();
             ghMsg = ghMsg + " for group ";
             ghMsg = ghMsg + groupID;
-            PrintToRPT(ghMsg);
+            LFPG_Log.Debug(ghMsg);
             mgr.IncrementGardenCount(groupID);
             LFPG_DeployTracker.TrackGarden(this, groupID);
         }
@@ -175,11 +175,11 @@ modded class ItemBase
             if (LFPG_DeployTracker.IsTracked(this))
                 return;
 
-            string deployMsg = "[SimpleGroup] Deploy counted: ";
+            string deployMsg = "Deploy counted: ";
             deployMsg = deployMsg + GetType();
             deployMsg = deployMsg + " for group ";
             deployMsg = deployMsg + groupID;
-            PrintToRPT(deployMsg);
+            LFPG_Log.Debug(deployMsg);
             mgr.IncrementDeployCount(groupID);
             LFPG_DeployTracker.Track(this, groupID);
         }
@@ -256,11 +256,11 @@ modded class ItemBase
                     LFPG_GroupManager mgrPG = LFPG_GroupManager.Get();
                     if (mgrPG)
                     {
-                        string pickupGMsg = "[SimpleGroup] Pickup garden decremented: ";
+                        string pickupGMsg = "Pickup garden decremented: ";
                         pickupGMsg = pickupGMsg + GetType();
                         pickupGMsg = pickupGMsg + " from group ";
                         pickupGMsg = pickupGMsg + pickupGardenID;
-                        PrintToRPT(pickupGMsg);
+                        LFPG_Log.Debug(pickupGMsg);
                         mgrPG.DecrementGardenCount(pickupGardenID);
                     }
                 }
@@ -272,11 +272,11 @@ modded class ItemBase
                         LFPG_GroupManager mgrPickup = LFPG_GroupManager.Get();
                         if (mgrPickup)
                         {
-                            string pickupMsg = "[SimpleGroup] Pickup decremented: ";
+                            string pickupMsg = "Pickup decremented: ";
                             pickupMsg = pickupMsg + GetType();
                             pickupMsg = pickupMsg + " from group ";
                             pickupMsg = pickupMsg + pickupGroupID;
-                            PrintToRPT(pickupMsg);
+                            LFPG_Log.Debug(pickupMsg);
                             mgrPickup.DecrementDeployCount(pickupGroupID);
                         }
                     }
@@ -364,13 +364,13 @@ modded class ItemBase
                     {
                         GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(LFPG_ReturnBlockedDrop, 250, false, this, pb);
                         mgrListed.SendErrorToPlayer(listedIdentity, pb, "#STR_LFPG_ERR_DROP_RESTRICTED");
-                        string listedLog = "[SimpleGroup] Listed drop blocked for ";
+                        string listedLog = "Listed drop blocked for ";
                         listedLog = listedLog + listedUID;
                         listedLog = listedLog + " (";
                         listedLog = listedLog + GetType();
                         listedLog = listedLog + ") foreign=";
                         listedLog = listedLog + foreignOwner;
-                        PrintToRPT(listedLog);
+                        LFPG_Log.Debug(listedLog);
                         return;
                     }
                 }
@@ -467,13 +467,13 @@ modded class ItemBase
                 errKey = "#STR_LFPG_ERR_DROP_RESTRICTED";
             mgr.SendErrorToPlayer(identity, pb, errKey);
 
-            string dropLog = "[SimpleGroup] Drop blocked for ";
+            string dropLog = "Drop blocked for ";
             dropLog = dropLog + playerUID;
             dropLog = dropLog + " (";
             dropLog = dropLog + GetType();
             dropLog = dropLog + ") reason=";
             dropLog = dropLog + blockReason.ToString();
-            PrintToRPT(dropLog);
+            LFPG_Log.Debug(dropLog);
             return;
         }
 
@@ -484,11 +484,11 @@ modded class ItemBase
                 // FIX C-3: Idempotencia
                 if (!LFPG_DeployTracker.IsGardenTracked(this))
                 {
-                    string dropGHMsg = "[SimpleGroup] Drop greenhouse counted as plot: ";
+                    string dropGHMsg = "Drop greenhouse counted as plot: ";
                     dropGHMsg = dropGHMsg + GetType();
                     dropGHMsg = dropGHMsg + " for group ";
                     dropGHMsg = dropGHMsg + groupID;
-                    PrintToRPT(dropGHMsg);
+                    LFPG_Log.Debug(dropGHMsg);
                     mgr.IncrementGardenCount(groupID);
                     LFPG_DeployTracker.TrackGarden(this, groupID);
                 }
@@ -498,11 +498,11 @@ modded class ItemBase
                 // FIX C-3: Idempotencia
                 if (!LFPG_DeployTracker.IsTracked(this))
                 {
-                    string dropCountMsg = "[SimpleGroup] Drop counted: ";
+                    string dropCountMsg = "Drop counted: ";
                     dropCountMsg = dropCountMsg + GetType();
                     dropCountMsg = dropCountMsg + " for group ";
                     dropCountMsg = dropCountMsg + groupID;
-                    PrintToRPT(dropCountMsg);
+                    LFPG_Log.Debug(dropCountMsg);
                     mgr.IncrementDeployCount(groupID);
                     LFPG_DeployTracker.Track(this, groupID);
                 }
@@ -593,8 +593,8 @@ void LFPG_LogDropReturnIfStillGround(EntityAI item)
     if (laterLoc.GetType() != InventoryLocationType.GROUND)
         return;
 
-    string leftMsg = "[SimpleGroup] Could not return dropped item ";
+    string leftMsg = "Could not return dropped item ";
     leftMsg = leftMsg + item.GetType();
     leftMsg = leftMsg + "; left on the ground.";
-    PrintToRPT(leftMsg);
+    LFPG_Log.Error(leftMsg);
 }

@@ -193,12 +193,14 @@ class LFPG_GroupData
     // Obtiene el deploy limit para el tier actual
     int GetDeployLimit(LFPG_TerritoryConfig config)
     {
-        if (!config || !config.m_TierDeployLimits)
+        if (!config || !config.m_TierDeployLimits || config.m_TierDeployLimits.Count() == 0)
             return 8;
 
         int idx = m_Tier - 1;
         if (idx < 0)
             idx = 0;
+        if (idx >= config.m_TierDeployLimits.Count() && config.m_TierDeployLimits.Count() < 3)
+            return 8;
         if (idx >= config.m_TierDeployLimits.Count())
             idx = config.m_TierDeployLimits.Count() - 1;
 

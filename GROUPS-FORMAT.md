@@ -36,6 +36,10 @@ criptográfica, no autentica al administrador y admite colisiones.
 El contador debe coincidir con los grupos del payload. A continuación se
 validan las identidades, unicidad de miembros y pertenencia del líder antes
 de instalar ningún grupo. Versión lógica interior debe ser1.
+El objeto lógico debe incluir la clave superior `m_Groups`, tanto en v1 como
+en el payload v2. Una clave dentro de otro objeto o de un string no cuenta;
+se reconocen nombres de clave escapados. Un fallo al inspeccionar las claves
+invalida el archivo. `"m_Groups":[]` explícito sigue siendo válido.
 
 ## Migración y recuperación
 
@@ -43,6 +47,11 @@ La primera escritura v2 conserva el archivo v1 en `groups.json.pre-v2` y verific
 la copia byte a byte. Tras un rollback y nueva migración usa `.pre-v2.1`, etc.
 No sobrescribe esas copias; un reintento reutiliza solo la copia idéntica.
 La rotación normal usa `.tmp` y `.bak`, releyendo antes y después de copiar.
+Si el final anterior está verificado, un fallo al apartar un backup inválido,
+borrar el backup anterior, copiarlo o verificarlo se registra como error y
+se continúa promoviendo el tmp verificado. No se siguen ejecutando pasos de
+rotación sobre un backup que no se pudo apartar o borrar. Puede faltar una
+copia anterior válida; el tmp se conserva hasta verificar el nuevo final.
 DeleteFile+CopyFile es recuperable, **no atómico** ante pérdida de energía.
 
 - Una versión futura en final/tmp/bak impide cargar/mutar los datos.
@@ -50,11 +59,23 @@ DeleteFile+CopyFile es recuperable, **no atómico** ante pérdida de energía.
   No se sustituye silenciosamente por un backup más viejo.
 - Un final válido gana. Un tmp sobrante y un backup inválido se apartan con
   sufijo numerado y copia verificada; no se descartan sus bytes.
-- Sin final, se recupera un tmp válido; sin ambos, se carga el backup válido.
-  Sin ganador válido, solo lectura. Cero grupos con integridad correcta es válido.
+  Esto incluye un tmp válido más reciente tras una interrupción: pasa a
+  `.tmp.discarded` y esa última mutación no se carga automáticamente.
+- Sin final, se recupera un tmp válido. Un tmp inválido se aparta a
+  `.tmp.discarded` y se intenta el backup; si no se puede apartar, solo lectura.
+  Sin tmp activo, se carga el backup válido. Un backup inválido impide cargar.
+  Cero grupos con integridad correcta es válido.
+- Si no queda final/tmp/bak, se aplica la protección de perfil ausente:
+  banderas restauradas con propietario implican solo lectura; sin ellas puede
+  iniciarse un mundo nuevo tras la auditoría de arranque. Los archivos apartados
+  no se consideran perfiles activos.
 - Un guardado de esta sesión que ya verificó su tmp puede terminar su promoción
   pendiente y después guardar el estado nuevo. Un reinicio con final inválido
   requiere recuperación administrativa.
+
+La tolerancia a fallos del backup durante el guardado no cambia las reglas de
+arranque. Un backup inválido que siga sin poder apartarse puede bloquear la
+carga incluso con un final válido; requiere intervención administrativa.
 
 Estas reglas endurecen intencionadamente la recuperación de un final corrupto
 respecto a v1. No prometen que el checksum permita elegir el archivo más reciente:

@@ -99,6 +99,11 @@ class LFPG_GroupsStorage
         {
             if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(raw, staged, error))
                 return false;
+            if ((!staged.m_Groups || staged.m_Groups.Count() == 0) && !HasGroupsKey(raw))
+            {
+                error = "Missing top-level m_Groups key or failed key scan";
+                return false;
+            }
         }
         else if (header.m_Version == FILE_VERSION)
         {
@@ -113,6 +118,11 @@ class LFPG_GroupsStorage
             }
             if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(payload, staged, error))
                 return false;
+            if ((!staged.m_Groups || staged.m_Groups.Count() == 0) && !HasGroupsKey(payload))
+            {
+                error = "Missing top-level m_Groups key or failed key scan";
+                return false;
+            }
             if (!staged.m_Groups || staged.m_Groups.Count() != envelope.m_ExpectedGroups)
             {
                 error = "Groups envelope count mismatch";
@@ -131,6 +141,14 @@ class LFPG_GroupsStorage
         }
         data = staged;
         return true;
+    }
+
+    protected static bool HasGroupsKey(string raw)
+    {
+        array<string> keys;
+        if (!LFPG_TerritoryConfig.FindTopLevelKeys(raw, keys))
+            return false;
+        return keys.Find("m_Groups") >= 0;
     }
 
     static bool SaveFile(string path, LFPG_GroupsFileData data, out string error)

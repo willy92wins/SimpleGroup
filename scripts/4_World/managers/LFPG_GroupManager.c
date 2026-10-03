@@ -1312,7 +1312,7 @@ class LFPG_GroupManager
         if (group)
         {
             group.m_DeployedCount = group.m_DeployedCount + 1;
-            // FIX M-6: Debug log en vez de PrintToRPT para reducir spam
+            // Keep routine counter updates at debug level.
             string incMsg = "IncrementDeploy: group=";
             incMsg = incMsg + groupID;
             incMsg = incMsg + " newCount=";
@@ -1767,7 +1767,7 @@ class LFPG_GroupManager
         bool wasLeader = group.IsLeader(playerUID);
 
         // Quitar del array de miembros
-        group.m_Members.Remove(memberIdx);
+        group.m_Members.RemoveOrdered(memberIdx);
 
         // Quitar del lookup rapido
         if (m_PlayerToGroup.Contains(playerUID))
@@ -3059,16 +3059,22 @@ class LFPG_GroupManager
         if (FileExist(tmpPath))
         {
             if (!ReadGroupsFile(tmpPath, count))
-                return false;
-            LFPG_GroupsFileData recovered;
-            string error;
-            if (!LFPG_GroupsStorage.LoadFile(tmpPath, recovered, error))
-                return false;
-            if (!CopyFile(tmpPath, finalPath) || !GroupsFileMatches(finalPath, recovered))
-                return false;
-            // Failure to remove tmp is recoverable: next boot final still wins.
-            DeleteFile(tmpPath);
-            return true;
+            {
+                if (!MoveAside(tmpPath, ".discarded"))
+                    return false;
+            }
+            else
+            {
+                LFPG_GroupsFileData recovered;
+                string error;
+                if (!LFPG_GroupsStorage.LoadFile(tmpPath, recovered, error))
+                    return false;
+                if (!CopyFile(tmpPath, finalPath) || !GroupsFileMatches(finalPath, recovered))
+                    return false;
+                // Failure to remove tmp is recoverable: next boot final still wins.
+                DeleteFile(tmpPath);
+                return true;
+            }
         }
         if (FileExist(bakPath))
             return ReadGroupsFile(bakPath, count);
@@ -3096,7 +3102,7 @@ class LFPG_GroupManager
     // Aparta un fichero sin destruirlo: copia a path+suffix y solo borra el
     // original si la copia salio bien. Los apartados anteriores se preservan
     // con un sufijo numerico. false = el original sigue en su sitio.
-    protected bool MoveAside(string path, string suffix)
+    protected bool MoveAside(string path, string suffix, bool logFailure = true)
     {
         string aside = path + suffix;
         int asideIndex = 0;
@@ -3111,7 +3117,8 @@ class LFPG_GroupManager
             mvErr = mvErr + path;
             mvErr = mvErr + " to ";
             mvErr = mvErr + aside;
-            LFPG_Log.Error(mvErr);
+            if (logFailure)
+                LFPG_Log.Error(mvErr);
             return false;
         }
         if (!LFPG_GroupsStorage.FilesEqual(path, aside))
@@ -3219,10 +3226,8 @@ class LFPG_GroupManager
         }
         m_HasVerifiedGroupsTmp = true;
 
-        // 3. Backup del actual. Cualquier fallo aborta antes de tocar el final.
-        //    AUDIT #10 L6-F04: el final se verifica ANTES de copiarlo sobre el
-        //    .bak. Un final corrupto no rota el .bak (puede ser la unica copia
-        //    buena): se aparta a groups.json.corrupt y el .bak queda intacto.
+        // 3. Rotate only a verified final. Backup failure must not freeze saves.
+        // An invalid final is moved aside without rotating the backup.
         if (FileExist(finalPath))
         {
             LFPG_GroupsFileData previousData = new LFPG_GroupsFileData();
@@ -3230,29 +3235,27 @@ class LFPG_GroupManager
             bool previousLoaded = LFPG_GroupsStorage.LoadFile(finalPath, previousData, previousError);
             if (previousLoaded && ValidateGroupsData(previousData))
             {
+                string backupError = "";
                 if (FileExist(bakPath) && !ReadGroupsFile(bakPath, diskCount))
                 {
-                    if (!MoveAside(bakPath, ".corrupt"))
-                        return false;
+                    if (!MoveAside(bakPath, ".corrupt", false))
+                        backupError = "SaveGroups: cannot move invalid backup aside; continuing promotion.";
                 }
-                if (FileExist(bakPath))
+                if (backupError == "" && FileExist(bakPath))
                 {
                     if (!DeleteFile(bakPath))
-                    {
-                        LFPG_Log.Error("SaveGroups: cannot delete stale backup. Rotation aborted.");
-                        return false;
-                    }
+                        backupError = "SaveGroups: cannot delete stale backup; continuing promotion.";
                 }
-                if (!CopyFile(finalPath, bakPath))
+                if (backupError == "" && !CopyFile(finalPath, bakPath))
                 {
-                    LFPG_Log.Error("SaveGroups: cannot copy final to backup. Rotation aborted.");
-                    return false;
+                    backupError = "SaveGroups: cannot copy final to backup; continuing promotion.";
                 }
-                if (!GroupsFileMatches(bakPath, previousData))
+                if (backupError == "" && !GroupsFileMatches(bakPath, previousData))
                 {
-                    LFPG_Log.Error("SaveGroups: backup payload mismatch. Final and verified tmp retained.");
-                    return false;
+                    backupError = "SaveGroups: backup payload mismatch; continuing promotion.";
                 }
+                if (backupError != "")
+                    LFPG_Log.Error(backupError);
             }
             else
             {
@@ -3279,7 +3282,7 @@ class LFPG_GroupManager
             }
             if (!CopyFile(tmpPath, finalPath))
             {
-                LFPG_Log.Error("SaveGroups: cannot promote tmp to final. Backup still holds prior state.");
+                LFPG_Log.Error("SaveGroups: cannot promote tmp to final. Verified tmp retained.");
                 return false;
             }
         }
