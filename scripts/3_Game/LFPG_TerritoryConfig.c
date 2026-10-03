@@ -21,6 +21,12 @@
 // v4 -> v5: m_MinRefreshLifetime (seconds). Negative disables base refresh.
 const int LFPG_CONFIG_VERSION = 5;
 
+// Decode a quoted JSON key with the engine, including escaped key names.
+class LFPG_ConfigKeyToken
+{
+    string key;
+};
+
 class LFPG_TerritoryConfig
 {
     // --- Versionado ---
@@ -550,6 +556,78 @@ class LFPG_TerritoryConfig
 
     // Carga config desde JSON. Si no existe, crea con defaults y guarda.
     // FIX M-21: Mergea defaults nuevos si version cargada < actual.
+    // JsonSerializer turns omitted arrays into allocated empty arrays, even
+    // when the destination was null. Capture top-level key presence from the
+    // same validated JSON snapshot so an explicit [] remains an admin choice.
+    static bool FindListKeys(string raw, out bool hasNoBase, out bool hasCounted, out bool hasNoDrop)
+    {
+        hasNoBase = false;
+        hasCounted = false;
+        hasNoDrop = false;
+        int depth = 0;
+        bool inString = false;
+        bool escaped = false;
+        bool expectKey = false;
+        int start = 0;
+        int length = raw.Length();
+        string block;
+        for (int i = 0; i < length; i++)
+        {
+            int inBlock = i % 512;
+            if (inBlock == 0)
+            {
+                int blockLength = length - i;
+                if (blockLength > 512)
+                    blockLength = 512;
+                block = raw.Substring(i, blockLength);
+            }
+            string character = block.Get(inBlock);
+            if (inString)
+            {
+                if (escaped)
+                    escaped = false;
+                else if (character == "\\")
+                    escaped = true;
+                else if (character == "\"")
+                {
+                    inString = false;
+                    if (depth == 1 && expectKey)
+                    {
+                        LFPG_ConfigKeyToken token = new LFPG_ConfigKeyToken();
+                        string error;
+                        string keyJSON = "{\"key\":" + raw.Substring(start, i - start + 1) + "}";
+                        if (!JsonFileLoader<LFPG_ConfigKeyToken>.LoadData(keyJSON, token, error))
+                            return false;
+                        if (token.key == "m_NoBaseRequiredTypes")
+                            hasNoBase = true;
+                        if (token.key == "m_FurnitureCountedTypes")
+                            hasCounted = true;
+                        if (token.key == "m_NoDropInForeignTerritoryTypes")
+                            hasNoDrop = true;
+                        expectKey = false;
+                    }
+                }
+                continue;
+            }
+            if (character == "\"")
+            {
+                inString = true;
+                start = i;
+            }
+            else if (character == "{" || character == "[")
+            {
+                depth++;
+                if (depth == 1)
+                    expectKey = true;
+            }
+            else if (character == "}" || character == "]")
+                depth--;
+            else if (character == "," && depth == 1)
+                expectKey = true;
+        }
+        return depth == 0 && !inString;
+    }
+
     static LFPG_TerritoryConfig Load()
     {
         LFPG_TerritoryConfig config;
@@ -566,7 +644,8 @@ class LFPG_TerritoryConfig
         {
             config = new LFPG_TerritoryConfig();
             string loadError = "";
-            if (!JsonFileLoader<LFPG_TerritoryConfig>.LoadFile(filePath, config, loadError))
+            string raw;
+            if (!LFPG_GroupsStorage.ReadText(filePath, raw) || !JsonFileLoader<LFPG_TerritoryConfig>.LoadData(raw, config, loadError))
             {
                 // Deserialization may have changed a prefix of the object.
                 // Discard that partial state and preserve the admin's file.
@@ -579,6 +658,24 @@ class LFPG_TerritoryConfig
             // FIX M-21: Mergear defaults si el config es de version previa
             if (config.m_ConfigVersion < LFPG_CONFIG_VERSION)
             {
+                bool hasNoBase;
+                bool hasCounted;
+                bool hasNoDrop;
+                if (!FindListKeys(raw, hasNoBase, hasCounted, hasNoDrop))
+                {
+                    LFPG_Log.Error("Cannot inspect legacy config keys; keeping the parsed admin values.");
+                    // A scanner/parser disagreement must not discard a config
+                    // that the engine has already loaded successfully.
+                    hasNoBase = true;
+                    hasCounted = true;
+                    hasNoDrop = true;
+                }
+                if (!hasNoBase)
+                    config.m_NoBaseRequiredTypes = null;
+                if (!hasCounted)
+                    config.m_FurnitureCountedTypes = null;
+                if (!hasNoDrop)
+                    config.m_NoDropInForeignTerritoryTypes = null;
                 string migMsg = "Config version outdated (";
                 migMsg = migMsg + config.m_ConfigVersion.ToString();
                 migMsg = migMsg + " -> ";

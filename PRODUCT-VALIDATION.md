@@ -1,5 +1,48 @@
 # Validación del candidato
 
+## Configuración y CE — PR #19
+
+Código `740215c`, PBO SHA256
+`f3988e61d30a4f9f6957858685f564babbca55bc844739b095423a0e360f51cb`.
+42 scripts/64 recursos extraídos idénticos; lint cero errores y 17 avisos de la
+base. Opus 5.5 r1 pidió conservar los valores cargados ante fallo del inspector
+de claves y acotar el coste de lectura. Ambos ajustes aplicados; r2 revisó solo
+el delta y emitió `MERGE_OK_STATIC`, sin hallazgos nuevos.
+
+La corrección diferencia listas omitidas y listas vacías en configuraciones
+antiguas. La prueba aislada confirmó que el motor convierte ambas en arrays
+vacíos, incluso inicializando el destino a null; por eso se inspeccionan las
+claves de primer nivel del mismo JSON validado. No se reescribe el archivo.
+
+- Chernarus, run `a35e3cb2-1e02-4cee-8c0a-74248f1f1f08`: 253 comprobaciones,
+  cero fallos. Quince configuraciones: v2/v3/v4 omitidas/vacías/custom, v5
+  vacías/custom, claves escapadas y señuelos anidados/en strings, más un archivo
+  formateado con 450 tipos. Se conservan maxGroup=7, radio=45, lifetime=1234,
+  listas personalizadas y los bytes del archivo.
+- Las 24 banderas T1/T2/T3 conservan identidad, tier, progreso y lifetime tras
+  reinicio. Recuento exacto de 50 cajas por base, 1200 en total: 483 ms para las
+  24 búsquedas. 20000 consultas positivas/negativas de zona: 67 ms.
+- Enoch, run `5c4c651c-daba-4edc-992d-077990184c86`: 326 comprobaciones, cero
+  fallos al crear las mismas 24 banderas/1200 cajas con perfil y CE independientes.
+  Recuento: 390 ms; 20000 consultas de zona: 67 ms. Tras cierre ordenado,
+  run `aba643d1-2188-48cd-91df-1f762e37b520`: 253 comprobaciones, cero fallos,
+  las mismas 24 banderas y 1200 cajas restauradas. Recuento: 798 ms; 20000
+  consultas: 106 ms. La variación entre runs queda registrada, sin extrapolar FPS.
+
+Los ensayos previos contaban cero con los mismos objetos y la configuración
+antigua; se conservan como fallidos. La repetición previa al ajuste de revisión
+dio 231/0. Tres inputs lenientes no reprodujeron una aceptación del parser con
+rechazo del inspector: esa rama defensiva está revisada estáticamente y no se
+declara ejercitada en motor. Los tiempos corresponden a estrés sintético en
+DayZDiag; no acreditan 120 clientes conectados ni rendimiento del destino.
+El recuento global medido es síncrono y todavía puede producir una pausa; medir
+el hardware/configuración de destino antes de certificar esa carga.
+
+Evidencia local en `acceptance/native-config-final-chernarus`,
+`acceptance/native-enoch-create` y `acceptance/final-enoch`, bajo el directorio
+de trabajo indicado abajo. PBO y nueve archivos originales del perfil se
+restauran por hash al terminar; no se despliega esta fixture en producción.
+
 ## Aceptación de v2 — 2026-10-03
 
 Código probado: `d2f8b8c`, basado en main `c8e803c`. PBO SHA256
@@ -58,13 +101,13 @@ por mapa incluidas. Chernarus: 24 banderas T1/T2/T3 creadas con lifetime inicial
 cierre ordenado y reinicio. Los tres vectores independientes con caracteres de
 2/3/4 bytes atravesando la frontera 512, longitud total 1024, dieron PASS.
 
-La aceptación de recuento sigue abierta: la búsqueda espacial encuentra las 50
+El ensayo anterior al PR #19 falló: la búsqueda espacial encontraba las 50
 cajas esperadas en la primera base, pero la configuración v3 cargada deja vacía
-la nueva lista de muebles que no existía en ese JSON. Las 24 bases cuentan cero.
+la nueva lista de muebles que no existía en ese JSON. Las 24 bases contaban cero.
 Runs `c7936dcc-9886-4b0b-954e-7f63b98050da` y
 `159cf678-3ed1-4ca0-8a26-49631ab3b9ca`; archivos originales intactos. Este hallazgo
-de migración de configuración requiere corrección propia en #10; no invalida
-las pruebas de v2 ni convierte el recuento fallido en aceptación de carga.
+de migración de configuración originó la corrección del PR #19. No invalida
+las pruebas de v2 ni convierte aquel recuento fallido en aceptación de carga.
 
 Evidencia local: `C:/Users/guill/sgwork/jobs/completion-20261003/acceptance/`,
 directorios `native-v2-optimized`, `native-rollback-old-reader`,
