@@ -82,6 +82,7 @@ class CfgPatches
             "DZ_Gear_Camping",
             "DZ_Gear_Consumables",
             "DZ_Gear_Crafting",
+            "DZ_Vehicles_Parts",
             "DF_Scripts"
         };
     };
@@ -324,6 +325,20 @@ class CfgVehicles
         inventorySlot[] += {"LFPG_FlagStones"};
     };
     class CarBattery: Inventory_Base
+    {
+        inventorySlot[] += {"LFPG_FlagBattery"};
+    };
+};
+
+// ============================================================================
+// CfgNonAIVehicles — draw an attached car battery at the T3 battery proxy
+// (same proxy the vanilla vehicles use, DZ\vehicles\parts\config.cpp ProxyBattery_Car)
+// ============================================================================
+
+class CfgNonAIVehicles
+{
+    class ProxyPart;
+    class ProxyBattery_Car: ProxyPart
     {
         inventorySlot[] += {"LFPG_FlagBattery"};
     };
