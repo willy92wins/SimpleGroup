@@ -12,7 +12,9 @@ Primera versión candidata para el Steam Workshop.
 - Configuración: las listas omitidas recuperan sus valores por defecto en cualquier versión de `config.json`; radios
   hasta 10000 m e invitaciones hasta 3600 s.
 - Banderas T1/T2/T3 indestructibles.
-- C4, IED y claymore se pueden colocar en cualquier sitio, sin contar como muebles del territorio.
+- C4, IED y claymore se pueden colocar en cualquier sitio, sin contar como muebles del territorio. Es el valor
+  por defecto de un `config.json` nuevo; en uno existente hay que añadir las tres clases a
+  `m_FurnitureExcludedTypes` (ver PRODUCT-DECISIONS.md).
 - El servidor rechaza colocar el kit de bandera a más de 8 m del jugador.
 - Logs: el apagado ya no registra un error por banderas borradas; los mensajes del mod pasan por su propio logger.
 

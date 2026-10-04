@@ -116,7 +116,7 @@ Los primeros ensayos fallidos no se presentan como PASS. El diagnóstico del
 plugin vanilla `PluginItemDiagnostic` al iniciar DayZDiag sigue siendo visible;
 no se afirma ausencia absoluta de errores del entorno.
 
-## Histórico2026-10-02 (código anterior a v2)
+## Histórico 2026-10-02 (código anterior a v2)
 
 Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
 Último código: `e0111d3c38ebbaaa255bd01ea13a36b232341c02` (F22 y decisiones F14/F16).

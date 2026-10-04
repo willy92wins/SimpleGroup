@@ -87,12 +87,12 @@ limitación y los fallos de fixture previos están en PRODUCT-VALIDATION.md.
 
 ## #14: v2 implementada y validada
 
-El dueño levantó expresamente el aplazamiento el2026-10-03: implementar v2 ahora.
+El dueño levantó expresamente el aplazamiento el 2026-10-03: implementar v2 ahora.
 Se implementa envelope con contador y checksum del payload UTF-8 exacto, lectura
 legacy sin reescritura, copias pre-v2 numeradas y exportador v1 que conserva los
 datos posteriores a la migración. Contrato y rollback en [GROUPS-FORMAT.md](GROUPS-FORMAT.md).
 
-Gauntlet Opus5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
+Gauntlet Opus 5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
 r2 detectó bloqueo del reintento tras copia parcial. Ambos corregidos; r3
 MERGE_OK_STATIC. Los límites nativos de strings se aislaron y corrigieron con
 conciliación de Codex posterior a r3, autorizada por el dueño. Opus revisó también
@@ -102,9 +102,9 @@ recuperación, copia parcial y denegación real de lectura. El binario anterior
 cargó los 120 grupos exportados y conservó los cambios posteriores a v2.
 Evidencia y límites en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 
-Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados,100–120players.
+Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados, 100–120 jugadores.
 Se incluye plantilla CE en [server/README.md](server/README.md). La medición de
-120 identidades sintéticas no acredita120 clientes ni un servidor destino que
+120 identidades sintéticas no acredita 120 clientes ni un servidor destino que
 todavía no se ha identificado.
 
 ## #10: listas de configuración antiguas — PR #19

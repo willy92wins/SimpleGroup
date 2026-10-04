@@ -19,7 +19,7 @@ El lector acepta v1 sin reescribirlo al cargar ni al apagar sin cambios.
 El digest del ejemplo es un marcador, no un vector válido. El contenido
 protegido son exactamente los bytes UTF-8 de concatenar `m_PayloadParts` en
 orden tras decodificar los escapes del JSON exterior. El escritor usa el JSON compacto de DayZ.
-Cada parte contiene1–128 caracteres Unicode y como máximo512bytes UTF-8;
+Cada parte contiene 1–128 caracteres Unicode y como máximo 512 bytes UTF-8;
 `m_PayloadBytes` declara la longitud total. El lector nativo recorta strings JSON
 largos a1023bytes: dividir sin cortar caracteres evita esa pérdida silenciosa.
 No se ordenan arrays ni se vuelve a serializar el payload para verificarlo.
@@ -35,7 +35,7 @@ criptográfica, no autentica al administrador y admite colisiones.
 
 El contador debe coincidir con los grupos del payload. A continuación se
 validan las identidades, unicidad de miembros y pertenencia del líder antes
-de instalar ningún grupo. Versión lógica interior debe ser1.
+de instalar ningún grupo. Versión lógica interior debe ser 1.
 El objeto lógico debe incluir la clave superior `m_Groups`, tanto en v1 como
 en el payload v2. Una clave dentro de otro objeto o de un string no cuenta;
 se reconocen nombres de clave escapados. Un fallo al inspeccionar las claves
@@ -102,6 +102,6 @@ ese rollback destructivo ni promueve archivos automáticamente.
 
 Un perfil SimpleGroup y un almacenamiento CE **separados por mundo/instancia**.
 El formato no fija mapa ni coordenadas; no transfiere territorios entre mapas
-ni comparte grupos entre servidores. El objetivo del dueño es100–120 jugadores.
-Fixtures de120 identidades miden el coste de datos; no sustituyen120 conexiones
+ni comparte grupos entre servidores. El objetivo del dueño es 100–120 jugadores.
+Fixtures de 120 identidades miden el coste de datos; no sustituyen 120 conexiones
 ni el rendimiento del conjunto de mods del servidor destino.
