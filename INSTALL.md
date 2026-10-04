@@ -15,6 +15,8 @@
 3. Carga los dos mods con `-mod`, no con `-serverMod`, porque el cliente también los necesita. Por ejemplo:
    `"-mod=@Dabs Framework;@SimpleGroup"`.
 4. Recomendado: `verifySignatures = 2;` en `serverDZ.cfg`.
+5. Economía central: copia la carpeta `SimpleGroup` de `server/` (en el paquete, `ServerFiles/`) a la misión de
+   cada instancia y regístrala en su `cfgeconomycore.xml` como indica el `README.md` de esa misma carpeta.
 
 ## Ficheros del mod
 
