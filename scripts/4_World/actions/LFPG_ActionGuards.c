@@ -21,6 +21,36 @@ class LFPG_ActionGuards
         return true;
     }
 
+    // The player belongs to the flag's group: the client reads its group cache (as the invite
+    // action does), the server the group manager. Upgrades are offered only to members, so a
+    // player of another group holding the upgrade tool keeps Raise/Lower on a stocked flag.
+    static bool IsPlayerInFlagGroup(PlayerBase player, LFPG_FlagBase flag)
+    {
+        if (!player || !flag)
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+        {
+            if (!LFPG_ClientGroupCache.HasGroup())
+                return false;
+            return LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition());
+        }
+
+        PlayerIdentity identity = player.GetIdentity();
+        if (!identity)
+            return false;
+
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (!mgr)
+            return false;
+
+        string groupID = mgr.GetPlayerGroupID(identity.GetPlainId());
+        if (groupID == "")
+            return false;
+
+        return groupID == flag.GetGroupID();
+    }
+
     // T2 -> T3 upgrade materials attached to the flag: 6 Firewood, 60 Nails, 10 Stones and a
     // vanilla flag that is not ruined. Shared by the upgrade action and by Raise/Lower, which
     // yield to the upgrade only when it would pass.

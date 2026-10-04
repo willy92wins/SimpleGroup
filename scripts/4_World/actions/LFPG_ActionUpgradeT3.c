@@ -69,6 +69,9 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
         if (flag.GetTier() != 2)
             return false;
 
+        if (!LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
+            return false;
+
         // Materiales en slots con cantidades minimas + bandera vanilla
         if (!LFPG_ActionGuards.HasT3UpgradeMaterials(flag))
             return false;

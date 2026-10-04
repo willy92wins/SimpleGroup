@@ -80,6 +80,9 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
         if (flag.GetTier() != 1)
             return false;
 
+        if (!LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
+            return false;
+
         string slotLog = "LFPG_FlagLog";
         EntityAI logAtt = flag.FindAttachmentBySlotName(slotLog);
         if (!logAtt)

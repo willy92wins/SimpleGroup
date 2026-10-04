@@ -68,14 +68,14 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
         if (handsEntity)
         {
             // FIX I-8: via ToolMatcher para aceptar variantes mod
-            if (LFPG_IsSledgeHammer(handsEntity) && flag.GetTier() == 1)
+            if (LFPG_IsSledgeHammer(handsEntity) && flag.GetTier() == 1 && LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             {
                 string slotLog = "LFPG_FlagLog";
                 string slotRope = "LFPG_FlagRope";
                 if (flag.FindAttachmentBySlotName(slotLog) && flag.FindAttachmentBySlotName(slotRope))
                     return false;
             }
-            if (LFPG_IsPickaxe(handsEntity) && flag.GetTier() == 2)
+            if (LFPG_IsPickaxe(handsEntity) && flag.GetTier() == 2 && LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             {
                 if (LFPG_ActionGuards.HasT3UpgradeMaterials(flag))
                     return false;
