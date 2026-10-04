@@ -19,6 +19,8 @@ Primera versión candidata para el Steam Workshop.
 - Logs: el apagado ya no registra un error por banderas borradas; los mensajes del mod pasan por su propio logger,
   y los objetos bloqueados al soltarlos o colocarlos en territorio ajeno quedan registrados en el log del servidor.
 - Guardado: un `groups.json.bak` que no se pudo rotar ya no bloquea los guardados siguientes de la sesión.
+- Arranque: un `groups.json.tmp` o `.bak` lleno de bytes NUL tras un corte de energía ya no deja el servidor en solo
+  lectura; se aparta conservando sus bytes y se carga el fichero válido.
 
 ### Empaquetado
 

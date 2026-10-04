@@ -63,7 +63,9 @@ a la vez el final y el backup. Conserva copias externas periódicas del perfil.
 - Un final existente inválido implica solo lectura y conserva los candidatos.
   No se sustituye silenciosamente por un backup más viejo.
 - Un final válido gana. Un tmp sobrante y un backup inválido se apartan con
-  sufijo numerado y copia verificada; no se descartan sus bytes.
+  sufijo numerado y copia verificada; no se descartan sus bytes. Un fichero
+  que no se puede leer como texto (bytes NUL tras un corte de energía) se
+  aparta igual, verificando la copia por su número de bytes.
   Esto incluye un tmp válido más reciente tras una interrupción: pasa a
   `.tmp.discarded` y esa última mutación no se carga automáticamente.
 - Sin final, se recupera un tmp válido. Un tmp inválido se aparta a

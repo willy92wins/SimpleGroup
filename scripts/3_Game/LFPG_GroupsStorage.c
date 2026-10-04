@@ -61,6 +61,20 @@ class LFPG_GroupsStorage
         return read >= 0 && read < MAX_BYTES && read == text.Length();
     }
 
+    // Byte count reported by ReadFile, or -1 when the file cannot be opened.
+    // A file the text reader rejects (NUL bytes after a power loss) still
+    // reports how many bytes it holds.
+    static int ReadByteCount(string path)
+    {
+        FileHandle handle = OpenFile(path, FileMode.READ);
+        if (!handle)
+            return -1;
+        string buffer;
+        int read = ReadFile(handle, buffer, MAX_BYTES);
+        CloseFile(handle);
+        return read;
+    }
+
     static bool FilesEqual(string first, string second)
     {
         string left;

@@ -3121,8 +3121,23 @@ class LFPG_GroupManager
                 LFPG_Log.Error(mvErr);
             return false;
         }
-        if (!LFPG_GroupsStorage.FilesEqual(path, aside))
-            return false;
+        // A source the text reader cannot read (NUL bytes after a power loss)
+        // is verified by its byte count instead, so its bytes are preserved and
+        // a valid final or backup can still load.
+        string sourceText;
+        if (LFPG_GroupsStorage.ReadText(path, sourceText))
+        {
+            if (!LFPG_GroupsStorage.FilesEqual(path, aside))
+                return false;
+        }
+        else
+        {
+            int sourceBytes = LFPG_GroupsStorage.ReadByteCount(path);
+            if (sourceBytes <= 0 || sourceBytes >= LFPG_GroupsStorage.MAX_BYTES)
+                return false;
+            if (LFPG_GroupsStorage.ReadByteCount(aside) != sourceBytes)
+                return false;
+        }
         return DeleteFile(path);
     }
 
