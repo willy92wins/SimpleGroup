@@ -15,8 +15,10 @@ Primera versión candidata para el Steam Workshop.
 - C4, IED y claymore se pueden colocar en cualquier sitio, sin contar como muebles del territorio. Es el valor
   por defecto de un `config.json` nuevo; en uno existente hay que añadir las tres clases a
   `m_FurnitureExcludedTypes` (ver PRODUCT-DECISIONS.md).
-- El servidor rechaza colocar el kit de bandera a más de 8 m del jugador.
-- Logs: el apagado ya no registra un error por banderas borradas; los mensajes del mod pasan por su propio logger.
+- El servidor rechaza colocar el kit de bandera a más de 4 m del jugador (el juego lo coloca a 1-2 m).
+- Logs: el apagado ya no registra un error por banderas borradas; los mensajes del mod pasan por su propio logger,
+  y los objetos bloqueados al soltarlos o colocarlos en territorio ajeno quedan registrados en el log del servidor.
+- Guardado: un `groups.json.bak` que no se pudo rotar ya no bloquea los guardados siguientes de la sesión.
 
 ### Empaquetado
 

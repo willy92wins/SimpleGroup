@@ -12,19 +12,21 @@ tecla `P` abre el panel de grupo. Los textos del juego van como «inglés / espa
 - [ ] Entras al servidor sin que te expulse por firma.
 - [ ] La tecla `P` abre el panel de grupo.
 
-## 2. Kit y colocación
+## 2. Kit y territorio
 
 - [ ] Fabricas el kit con un palo largo (Long Wooden Stick) y un trapo (Rag): sale «Territory Flag Kit».
-- [ ] Al colocarlo ves el holograma del mástil T1 y la bandera queda donde la pusiste.
-- [ ] A menos de 500 m de otra bandera no se puede colocar: «Too close to another territory / Demasiado cerca de
-  otro territorio».
-
-## 3. Registrar el territorio
-
-- [ ] Sin grupo, mantén F sobre la bandera: «Register Territory / Registrar territorio». Se abre el diálogo de
-  nombre (letras sin tildes ni ñ, números, espacios, - y _).
+- [ ] Solo lo puede colocar un jugador sin grupo. Ves el holograma del mástil T1 a 1-2 m delante de ti y la
+  bandera queda donde la pusiste.
+- [ ] Al colocarlo se crea tu grupo con esa bandera, apareces como líder en el panel y se abre el diálogo de nombre
+  (letras sin tildes ni ñ, números, espacios, - y _).
 - [ ] Si cancelas el nombre, puedes reabrirlo desde el panel con «Name group / Nombrar grupo» mientras sea temporal.
-- [ ] En el panel apareces como líder.
+- [ ] A menos de 500 m de otra bandera no se puede colocar: puede aparecer «Too close to another territory /
+  Demasiado cerca de otro territorio» o la acción se cancela sin mensaje.
+
+## 3. Bandera sin grupo
+
+- [ ] Si encuentras una bandera que no pertenece a ningún grupo, un jugador sin grupo puede registrarla manteniendo
+  F: «Register Territory / Registrar territorio». Se crea su grupo y queda como líder.
 
 ## 4. Subir y bajar la bandera
 
@@ -54,10 +56,12 @@ tecla `P` abre el panel de grupo. Los textos del juego van como «inglés / espa
 
 ## 7. Construir
 
-- [ ] Sin bandera no puedes construir: «You need a territory flag to build / Necesitas una bandera de territorio para
-  construir».
-- [ ] Solo se construye a 30 m o menos de tu bandera y con ella izada. Fuera: «You must build within your territory
-  / Debes construir dentro de tu territorio».
+- [ ] Para colocar objetos desplegables (kits de construcción, muebles, contenedores) hace falta un grupo con bandera:
+  sin grupo, «You need a territory flag to build / Necesitas una bandera de territorio para construir».
+- [ ] Se colocan a menos de 30 m (en horizontal) de tu bandera y con ella izada. Fuera: «You must build within your
+  territory / Debes construir dentro de tu territorio».
+- [ ] Construir o desmontar partes de una base que ya existe: fuera de cualquier territorio es libre; dentro de un
+  territorio, solo pueden los miembros de su grupo. Destruir partes (raid) es libre en todas partes.
 - [ ] Límite de muebles por tier: 8, 12 y 16. Al pasarlo: «Furniture limit reached in your territory / Límite de
   muebles alcanzado en tu territorio».
 - [ ] Como máximo 3 huertos por bandera: «Garden plot limit reached for your territory / Límite de huertos alcanzado
