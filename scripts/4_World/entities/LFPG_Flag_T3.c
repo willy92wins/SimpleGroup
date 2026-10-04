@@ -234,7 +234,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         }
 
         ItemBase battery = ItemBase.Cast(batteryEnt);
-        if (!battery)
+        if (!battery || battery.IsRuined())
         {
             m_HasBatteryPower = false;
             StopBatteryDrainTimer();

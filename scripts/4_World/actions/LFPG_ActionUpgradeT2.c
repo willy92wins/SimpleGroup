@@ -45,6 +45,21 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
         return true;
     }
 
+    override bool SetupAction(PlayerBase player, ActionTarget target, ItemBase item, out ActionData action_data, Param extra_data = NULL)
+    {
+        if (!super.SetupAction(player, target, item, action_data, extra_data))
+            return false;
+
+        // Mine rock only fits the sledgehammer; other accepted hammers (mod mallets) keep the generic animation.
+        string kSledge = "SledgeHammer";
+        if (item && item.IsKindOf(kSledge))
+            m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_MINEROCK;
+        else
+            m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+
+        return true;
+    }
+
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
         if (!player || !target || !item)
