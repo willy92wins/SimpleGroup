@@ -114,6 +114,9 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
     {
         super.EEItemAttached(item, slot_name);
 
+        if (slot_name == "LFPG_FlagBattery")
+            LFPG_SetBatteryCablesVisible(true);
+
         #ifdef SERVER
         if (slot_name == "LFPG_FlagBattery")
         {
@@ -131,6 +134,9 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
     {
         super.EEItemDetached(item, slot_name);
 
+        if (slot_name == "LFPG_FlagBattery")
+            LFPG_SetBatteryCablesVisible(false);
+
         #ifdef SERVER
         if (slot_name == "LFPG_FlagBattery")
         {
@@ -139,6 +145,24 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
             UpdatePowerState();
         }
         #endif
+    }
+
+    // Battery cables: simpleHiddenSelections[0] in config.cpp, shown only while a battery is attached.
+    // Called on server and client; the client renders it.
+    protected void LFPG_SetBatteryCablesVisible(bool visible)
+    {
+        SetSimpleHiddenSelectionState(0, visible);
+    }
+
+    protected void LFPG_RefreshBatteryCables()
+    {
+        string slotName = "LFPG_FlagBattery";
+        EntityAI batteryEnt = FindAttachmentBySlotName(slotName);
+        bool hasBattery = false;
+        if (batteryEnt)
+            hasBattery = true;
+
+        LFPG_SetBatteryCablesVisible(hasBattery);
     }
 
     protected void CheckBatteryPower()
@@ -308,6 +332,8 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
     {
         super.AfterStoreLoad();
 
+        LFPG_RefreshBatteryCables();
+
         #ifdef SERVER
         CheckBatteryPower();
         if (m_HasBatteryPower)
@@ -319,16 +345,15 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
     }
 
     // ========================================================================
-    // LFPOWERGRID — Device interface via duck-typing
-    // Todo el bloque se compila SOLO si el mod LFPowerGrid esta cargado.
+    // LIFECYCLE
     // ========================================================================
-    #ifdef LFPowerGrid
-
-    // --- Lifecycle ---
     override void EEInit()
     {
         super.EEInit();
 
+        LFPG_RefreshBatteryCables();
+
+        #ifdef LFPowerGrid
         #ifdef SERVER
         if (m_DeviceIdLow == 0 && m_DeviceIdHigh == 0)
         {
@@ -342,8 +367,16 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         #endif
 
         LFPG_TryRegister();
+        #endif
     }
 
+    // ========================================================================
+    // LFPOWERGRID — Device interface via duck-typing
+    // Todo el bloque se compila SOLO si el mod LFPowerGrid esta cargado.
+    // ========================================================================
+    #ifdef LFPowerGrid
+
+    // --- Lifecycle ---
     override void EEDelete(EntityAI parent)
     {
         m_LFPG_Deleting = true;

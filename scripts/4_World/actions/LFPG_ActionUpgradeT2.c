@@ -17,10 +17,10 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
     void LFPG_ActionUpgradeT2()
     {
         m_CallbackClass = LFPG_ActionUpgradeT2CB;
-        // CMD_ACTIONFB_INTERACT: universal, compatible con cualquier modelo custom.
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        // Same animation vanilla plays when building with a sledgehammer (ActionBuildPart); it has no crouched variant.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_MINEROCK;
         m_FullBody = true;
-        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
         m_Text = "#STR_LFPG_ACTION_UPGRADE_T2";
     }
 

@@ -18,10 +18,10 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
     void LFPG_ActionUpgradeT3()
     {
         m_CallbackClass = LFPG_ActionUpgradeT3CB;
-        // CMD_ACTIONFB_INTERACT: universal, compatible con cualquier modelo custom.
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        // Same animation vanilla plays when building with a pickaxe (ActionBuildPart); it has no crouched variant.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_DIG;
         m_FullBody = true;
-        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
 
         string text = "#STR_LFPG_ACTION_UPGRADE_T3";
         m_Text = text;

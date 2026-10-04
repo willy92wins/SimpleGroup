@@ -105,10 +105,10 @@ class CfgVehicles
         descriptionShort = "$STR_LFPG_FLAGKIT_T1_DESC";
         model = "\SimpleGroup\data\T1\T1_FlagKit.p3d";
         projectionTypename = "LFPG_Flag_T1_Placing";
-        rotationFlags = 16;
+        rotationFlags = 17;
         weight = 800;
         itemSize[] = { 1, 5 };
-        itemBehaviour = 2;
+        itemBehaviour = 1;
         canBeSplit = 0;
         varQuantityInit = 0;
         varQuantityMin = 0;
@@ -137,7 +137,8 @@ class CfgVehicles
     {
         scope = 1;
         autocenter = 0;
-        model = "\SimpleGroup\data\T1\T1_Flagpole.p3d";
+        // Own copy of the T1 model: a .p3d shared with LFPG_Flag_T1 (physLayer item_large) gets two physics layers.
+        model = "\SimpleGroup\data\T1\T1_Flagpole_Placing.p3d";
         storageCategory = 10;
         alignHologramToTerain = 0;
         hiddenSelections[] = {"T1_Rag"};
@@ -281,6 +282,8 @@ class CfgVehicles
         model = "\SimpleGroup\data\T3\T3_Flagpole.p3d";
         weight = 15000;
         itemSize[] = { 10, 10 };
+        // Index 0: the battery cables, shown only while a battery is attached (LFPG_Flag_T3.c)
+        simpleHiddenSelections[] = { "battery_cables" };
 
         attachments[] = { "LFPG_FlagBattery" };
         class GUIInventoryAttachmentsProps
