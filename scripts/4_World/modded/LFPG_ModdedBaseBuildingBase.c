@@ -174,11 +174,11 @@ modded class BaseBuildingBase
         if (LFPG_DeployTracker.IsTracked(this))
             return;
 
-        string bbbMsg = "[SimpleGroup] BBB Deploy counted: ";
+        string bbbMsg = "BBB Deploy counted: ";
         bbbMsg = bbbMsg + GetType();
         bbbMsg = bbbMsg + " for group ";
         bbbMsg = bbbMsg + groupID;
-        PrintToRPT(bbbMsg);
+        LFPG_Log.Debug(bbbMsg);
         mgr.IncrementDeployCount(groupID);
         LFPG_DeployTracker.Track(this, groupID);
         #endif

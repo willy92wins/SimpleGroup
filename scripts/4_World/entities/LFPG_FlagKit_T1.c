@@ -13,6 +13,10 @@
 
 class LFPG_FlagKit_T1 extends ItemBase
 {
+    // Vanilla keeps this small projection 1-2 m from the player and within
+    // 1.5 m of height; 4 m leaves a margin and stays inside the 5 m reach
+    // of every flag action.
+    protected static const float LFPG_MAX_PLACEMENT_DISTANCE = 4.0;
     protected bool m_PlacementSucceeded;
 
     bool DidPlaceSuccessfully()
@@ -69,6 +73,9 @@ class LFPG_FlagKit_T1 extends ItemBase
         if (!pb)
             return false;
         #ifdef SERVER
+        float placementDistanceSq = vector.DistanceSq(pb.GetPosition(), position);
+        if (!(placementDistanceSq <= LFPG_MAX_PLACEMENT_DISTANCE * LFPG_MAX_PLACEMENT_DISTANCE))
+            return false;
         PlayerIdentity identity = pb.GetIdentity();
         LFPG_GroupManager mgr = LFPG_GroupManager.Get();
         if (!identity || !mgr || !mgr.CanMutateGroups())

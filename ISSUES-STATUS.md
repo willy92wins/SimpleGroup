@@ -6,6 +6,25 @@ Las decisiones del dueño están en [PRODUCT-DECISIONS.md](PRODUCT-DECISIONS.md)
 las ejecuciones y sus límites, en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 Una corrección de código no equivale a aceptación completa en producción.
 
+## Endurecimiento de release — SG
+
+Cambios sobre `13d7b80`. Verificación offline y escenarios en `FIX-NOTES.md`;
+la aceptación nativa de este conjunto sigue pendiente.
+
+| ID | Corrección | Límite conservado |
+|---|---|---|
+| SG-01 | Un fallo de rotación del backup no impide promover un tmp verificado si el final anterior era válido. | Al arrancar sigue ganando el final; un tmp más reciente se aparta. La sustitución no es atómica. |
+| SG-03 | v1 y payload v2 requieren `m_Groups` superior explícito. | `[]` es válido; un fallo del escáner invalida grupos. |
+| SG-04 | Sin final, se aparta el tmp inválido antes de intentar el backup. | Si no se puede apartar, solo lectura; se conserva la protección de perfil ausente. |
+| SG-11 | Las bajas conservan el orden de miembros para la sucesión. | No se añade sucesión por inactividad. |
+| SG-12 | T1/T2/T3 no reciben daño, también tras mejora o restauración. | La acción del líder y la expiración del CE conservan su comportamiento. |
+| SG-16 | La ausencia del manager al borrar banderas se registra en Debug. | Sin cambios de disolución. |
+| SG-17 | Listas omitidas recuperan defaults en cualquier versión, incluidos tiers. | Listas explícitas conservadas, sin reescritura; fallo de escáner conserva valores parseados. |
+| SG-18 | Radios limitados a 10.000 m e invitaciones a 3.600 s antes de multiplicar. | Se conservan mínimos y defaults; se registra cada ajuste. |
+| SG-20 | C4, IED y claymore excluidos por defecto de grupo/zona/cupo. | Configuraciones explícitas requieren actualización del administrador; blacklist prevalece. |
+| SG-23 | El servidor rechaza colocar el kit a más de 8 m del jugador. | Rango vanilla de 6 m más 2 m de margen. |
+| SG-27 | Once escrituras directas al RPT pasan al logger del mod. | Diez trazas Debug y un Error de retorno fallido; sin cambio de lógica. |
+
 ## #10: resolución de la auditoría
 
 | Claim | Disposición actual | Ancla de producto / pendiente |
@@ -68,12 +87,12 @@ limitación y los fallos de fixture previos están en PRODUCT-VALIDATION.md.
 
 ## #14: v2 implementada y validada
 
-El dueño levantó expresamente el aplazamiento el2026-10-03: implementar v2 ahora.
+El dueño levantó expresamente el aplazamiento el 2026-10-03: implementar v2 ahora.
 Se implementa envelope con contador y checksum del payload UTF-8 exacto, lectura
 legacy sin reescritura, copias pre-v2 numeradas y exportador v1 que conserva los
 datos posteriores a la migración. Contrato y rollback en [GROUPS-FORMAT.md](GROUPS-FORMAT.md).
 
-Gauntlet Opus5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
+Gauntlet Opus 5.5: r1 detectó bloqueo permanente tras fallo transitorio de lectura;
 r2 detectó bloqueo del reintento tras copia parcial. Ambos corregidos; r3
 MERGE_OK_STATIC. Los límites nativos de strings se aislaron y corrigieron con
 conciliación de Codex posterior a r3, autorizada por el dueño. Opus revisó también
@@ -83,9 +102,9 @@ recuperación, copia parcial y denegación real de lectura. El binario anterior
 cargó los 120 grupos exportados y conservó los cambios posteriores a v2.
 Evidencia y límites en [PRODUCT-VALIDATION.md](PRODUCT-VALIDATION.md).
 
-Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados,100–120players.
+Objetivo nuevo de #10: soporte multimapa con perfiles/CE separados, 100–120 jugadores.
 Se incluye plantilla CE en [server/README.md](server/README.md). La medición de
-120 identidades sintéticas no acredita120 clientes ni un servidor destino que
+120 identidades sintéticas no acredita 120 clientes ni un servidor destino que
 todavía no se ha identificado.
 
 ## #10: listas de configuración antiguas — PR #19

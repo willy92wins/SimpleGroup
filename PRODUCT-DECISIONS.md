@@ -19,6 +19,16 @@ genera una estructura contable no queda exento por el mero hecho de que el kit
 no cuente como mueble. Las exclusiones configuradas y las listas A/B se envían
 también a jugadores sin grupo.
 
+Los explosivos desplegables vanilla `Plastic_Explosive`, `ImprovisedExplosive`
+y `ClaymoreMine` están excluidos por defecto: pueden desplegarse sin grupo y
+en territorio ajeno, sin consumir cupo. Se mantienen las condiciones vanilla.
+Los archivos de configuración existentes conservan sus listas explícitas.
+Para adoptar esta regla, el administrador debe añadir esas tres cadenas al
+array `m_FurnitureExcludedTypes` de `config.json`, conservando las entradas
+anteriores, y reiniciar el servidor. No hace falta cambiar `m_ConfigVersion`.
+La blacklist sigue teniendo prioridad: si se personalizó, retirar de
+`m_NoDropInForeignTerritoryTypes` esas clases o una base que las abarque.
+
 ## Cobertura de la blacklist
 
 El dueño acepta como excepción los movimientos para los que el servidor no
@@ -39,16 +49,16 @@ nativa. Se usan únicamente los callbacks que el motor admite.
 
 ## Persistencia (#14)
 
-El2026-10-03 el dueño levantó el aplazamiento y pidió implementar v2 ahora.
+El 2026-10-03 el dueño levantó el aplazamiento y pidió implementar v2 ahora.
 El lector conserva v1; las escrituras nuevas usan el envelope v2 con contador,
 checksum y copia previa verificada. El retorno a v1 exporta el estado actual,
 incluidos cambios posteriores a la migración. Ver GROUPS-FORMAT.md.
 
 ## Mapas y capacidad (2026-10-03)
 
-Soporte multimapa, con perfiles/CE independientes por mundo. Objetivo100–120
+Soporte multimapa, con perfiles/CE independientes por mundo. Objetivo 100–120
 jugadores. No se interpreta como compartir territorios entre mundos ni como
-capacidad ya medida con120 clientes. El segundo cliente sigue aplazado por
+capacidad ya medida con 120 clientes. El segundo cliente sigue aplazado por
 decisión del dueño; las pruebas sintéticas se identifican como tales.
 
 ## Refresco de lifetime en configuraciones existentes
@@ -65,6 +75,11 @@ El arranque aplica defaults en memoria y conserva el archivo del administrador.
 El dueño exige mantener la acción durante 5 segundos. Iniciar o cancelar no
 destruye. Al completar se vuelven a comprobar herramienta válida en manos,
 liderazgo, grupo y distancia. Destruir la bandera registrada disuelve el grupo.
+
+Las banderas T1, T2 y T3 no reciben daño, incluidas las creadas por mejora y
+las restauradas del almacenamiento. La protección no impide la eliminación
+por la acción del líder ni cambia las reglas de expiración del CE. El daño
+de terceros no es una vía alternativa para disolver el grupo.
 
 ## Recuperar el nombre inicial (#10, F16)
 

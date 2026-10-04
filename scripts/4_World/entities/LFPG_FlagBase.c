@@ -95,6 +95,10 @@ class LFPG_FlagBase extends ItemBase
 
         string varActions = "m_FlagActionsEnabledNet";
         RegisterNetSyncVariableBool(varActions);
+
+        #ifdef SERVER
+        SetAllowDamage(false);
+        #endif
     }
 
     void ~LFPG_FlagBase()
@@ -163,7 +167,7 @@ class LFPG_FlagBase extends ItemBase
             }
             else
             {
-                LFPG_Log.Error("EEDelete: GroupManager null, cannot dissolve!");
+                LFPG_Log.Debug("EEDelete: GroupManager null, cannot dissolve!");
             }
         }
         else
