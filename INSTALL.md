@@ -28,7 +28,8 @@ Viven en la carpeta de perfil del servidor (`-profiles=`), dentro de `SimpleGrou
 - `groups.json`: grupos y territorios. `groups.json.bak` es la copia anterior y `groups.json.tmp` una escritura en
   curso. El formato y la recuperación están en [GROUPS-FORMAT.md](GROUPS-FORMAT.md).
 
-Antes de actualizar el mod, guarda una copia de la carpeta `SimpleGroup/` del perfil.
+Guarda copias periódicas de la carpeta `SimpleGroup/` del perfil, y siempre antes de actualizar el mod: un corte
+de energía poco después de un guardado puede dejar ilegibles a la vez `groups.json` y su `.bak`.
 
 Límites que el servidor aplica al cargar `config.json`:
 

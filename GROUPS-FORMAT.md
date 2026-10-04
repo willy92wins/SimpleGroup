@@ -52,7 +52,12 @@ borrar el backup anterior, copiarlo o verificarlo se registra como error y
 se continúa promoviendo el tmp verificado. No se siguen ejecutando pasos de
 rotación sobre un backup que no se pudo apartar o borrar. Puede faltar una
 copia anterior válida; el tmp se conserva hasta verificar el nuevo final.
-DeleteFile+CopyFile es recuperable, **no atómico** ante pérdida de energía.
+Tras una rotación fallida, el backup puede ser mucho más viejo que el final:
+conserva el estado del último guardado cuya rotación sí terminó. El arranque
+solo lo carga si no hay final ni tmp, y no avisa de su antigüedad.
+DeleteFile+CopyFile **no es atómico** y el mod no puede forzar la escritura a
+disco: un corte de energía poco después de un guardado puede dejar ilegibles
+a la vez el final y el backup. Conserva copias externas periódicas del perfil.
 
 - Una versión futura en final/tmp/bak impide cargar/mutar los datos.
 - Un final existente inválido implica solo lectura y conserva los candidatos.
