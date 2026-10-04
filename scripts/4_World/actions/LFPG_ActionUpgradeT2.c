@@ -17,10 +17,10 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
     void LFPG_ActionUpgradeT2()
     {
         m_CallbackClass = LFPG_ActionUpgradeT2CB;
-        // CMD_ACTIONFB_INTERACT: universal, compatible con cualquier modelo custom.
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        // Same animation vanilla plays when building with a sledgehammer (ActionBuildPart); it has no crouched variant.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_MINEROCK;
         m_FullBody = true;
-        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
         m_Text = "#STR_LFPG_ACTION_UPGRADE_T2";
     }
 
@@ -45,6 +45,21 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
         return true;
     }
 
+    override bool SetupAction(PlayerBase player, ActionTarget target, ItemBase item, out ActionData action_data, Param extra_data = NULL)
+    {
+        if (!super.SetupAction(player, target, item, action_data, extra_data))
+            return false;
+
+        // Mine rock only fits the sledgehammer; other accepted hammers (mod mallets) keep the generic animation.
+        string kSledge = "SledgeHammer";
+        if (item && item.IsKindOf(kSledge))
+            m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_MINEROCK;
+        else
+            m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+
+        return true;
+    }
+
     override bool ActionCondition(PlayerBase player, ActionTarget target, ItemBase item)
     {
         if (!player || !target || !item)
@@ -63,6 +78,9 @@ class LFPG_ActionUpgradeT2 extends ActionContinuousBase
             return false;
 
         if (flag.GetTier() != 1)
+            return false;
+
+        if (!LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             return false;
 
         string slotLog = "LFPG_FlagLog";

@@ -161,6 +161,24 @@ class LFPG_ActionDestroyFlag extends ActionContinuousBase
             mgr.DissolveGroup(groupID);
         else
             mgr.ReleaseUnregisteredFlag(flag);
+
+        // The vanilla flag (Material_FPole_Flag) drops next to the pole instead of being deleted
+        // with it; battery and upgrade materials still go with the pole. The T3 locks that slot
+        // while the flag is raised, so the lock is lifted for the drop.
+        string bannerSlotName = "Material_FPole_Flag";
+        int bannerSlot = InventorySlots.GetSlotIdFromString(bannerSlotName);
+        EntityAI banner = flag.GetInventory().FindAttachment(bannerSlot);
+        if (banner)
+        {
+            flag.GetInventory().SetSlotLock(bannerSlot, false);
+            if (!flag.GetInventory().DropEntity(InventoryMode.SERVER, flag, banner))
+            {
+                string dropErr = "DestroyFlag: could not drop the flag, deleted with the pole, group=";
+                dropErr = dropErr + groupID;
+                LFPG_Log.Error(dropErr);
+            }
+        }
+
         flag.SetSkipDissolveOnDelete();
         GetGame().ObjectDelete(flag);
     }

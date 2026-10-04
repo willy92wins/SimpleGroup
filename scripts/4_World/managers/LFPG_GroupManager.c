@@ -2013,6 +2013,25 @@ class LFPG_GroupManager
             return false;
         }
 
+        // The vanilla flag (Material_FPole_Flag) moves to the new entity before anything else
+        // changes; if it cannot, the new entity is deleted and the old one keeps its flag and
+        // materials. Runs before TransferDataFrom, which raises the new flag and locks the T3 slot.
+        string bannerSlotName = "Material_FPole_Flag";
+        int bannerSlot = InventorySlots.GetSlotIdFromString(bannerSlotName);
+        EntityAI banner = oldFlag.GetInventory().FindAttachment(bannerSlot);
+        if (banner)
+        {
+            if (!newFlag.ServerTakeEntityAsAttachmentEx(banner, bannerSlot))
+            {
+                string bannerErr = "UpgradeFlag: cannot move the flag to ";
+                bannerErr = bannerErr + newClassName;
+                LFPG_Log.Error(bannerErr);
+                newFlag.SetSkipDissolveOnDelete();
+                GetGame().ObjectDelete(newFlag);
+                return false;
+            }
+        }
+
         // Configurar nueva bandera - posicion y orientacion EXACTAS
         newFlag.SetPosition(pos);
         newFlag.SetOrientation(ori);

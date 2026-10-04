@@ -68,29 +68,17 @@ class LFPG_ActionLowerFlag extends ActionContinuousBase
         if (handsEntity)
         {
             // FIX I-8: via ToolMatcher para aceptar variantes mod
-            if (LFPG_IsSledgeHammer(handsEntity) && flag.GetTier() == 1)
+            if (LFPG_IsSledgeHammer(handsEntity) && flag.GetTier() == 1 && LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             {
                 string slotLog = "LFPG_FlagLog";
                 string slotRope = "LFPG_FlagRope";
                 if (flag.FindAttachmentBySlotName(slotLog) && flag.FindAttachmentBySlotName(slotRope))
                     return false;
             }
-            if (LFPG_IsPickaxe(handsEntity) && flag.GetTier() == 2)
+            if (LFPG_IsPickaxe(handsEntity) && flag.GetTier() == 2 && LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             {
-                string slotFW = "LFPG_FlagFirewood";
-                string slotNails = "LFPG_FlagNails";
-                string slotStones = "LFPG_FlagStones";
-                EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
-                EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
-                EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
-                if (fwAtt && nailsAtt && stonesAtt)
-                {
-                    ItemBase fwItem = ItemBase.Cast(fwAtt);
-                    ItemBase nailsItem = ItemBase.Cast(nailsAtt);
-                    ItemBase stonesItem = ItemBase.Cast(stonesAtt);
-                    if (fwItem && fwItem.GetQuantity() >= 6 && nailsItem && nailsItem.GetQuantity() >= 60 && stonesItem && stonesItem.GetQuantity() >= 10)
-                        return false;
-                }
+                if (LFPG_ActionGuards.HasT3UpgradeMaterials(flag))
+                    return false;
             }
         }
 

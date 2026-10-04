@@ -20,4 +20,68 @@ class LFPG_ActionGuards
 
         return true;
     }
+
+    // The player belongs to the flag's group: the client reads its group cache (as the invite
+    // action does), the server the group manager. Upgrades are offered only to members, so a
+    // player of another group holding the upgrade tool keeps Raise/Lower on a stocked flag.
+    static bool IsPlayerInFlagGroup(PlayerBase player, LFPG_FlagBase flag)
+    {
+        if (!player || !flag)
+            return false;
+
+        if (!GetGame().IsDedicatedServer())
+        {
+            if (!LFPG_ClientGroupCache.HasGroup())
+                return false;
+            return LFPG_ClientGroupCache.IsFlagAtPosition(flag.GetPosition());
+        }
+
+        PlayerIdentity identity = player.GetIdentity();
+        if (!identity)
+            return false;
+
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (!mgr)
+            return false;
+
+        string groupID = mgr.GetPlayerGroupID(identity.GetPlainId());
+        if (groupID == "")
+            return false;
+        if (groupID != flag.GetGroupID())
+            return false;
+
+        // Only the group's registered flag can be upgraded (UpgradeFlag), so a duplicate keeps Raise/Lower.
+        return mgr.IsOwnedRegisteredFlag(flag);
+    }
+
+    // T2 -> T3 upgrade materials attached to the flag: 6 Firewood, 60 Nails, 10 Stones and a
+    // vanilla flag that is not ruined. Shared by the upgrade action and by Raise/Lower, which
+    // yield to the upgrade only when it would pass.
+    static bool HasT3UpgradeMaterials(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return false;
+
+        string slotFW = "LFPG_FlagFirewood";
+        ItemBase fwItem = ItemBase.Cast(flag.FindAttachmentBySlotName(slotFW));
+        if (!fwItem || fwItem.GetQuantity() < 6)
+            return false;
+
+        string slotNails = "LFPG_FlagNails";
+        ItemBase nailsItem = ItemBase.Cast(flag.FindAttachmentBySlotName(slotNails));
+        if (!nailsItem || nailsItem.GetQuantity() < 60)
+            return false;
+
+        string slotStones = "LFPG_FlagStones";
+        ItemBase stonesItem = ItemBase.Cast(flag.FindAttachmentBySlotName(slotStones));
+        if (!stonesItem || stonesItem.GetQuantity() < 10)
+            return false;
+
+        string slotBanner = "Material_FPole_Flag";
+        EntityAI banner = flag.FindAttachmentBySlotName(slotBanner);
+        if (!banner || banner.IsRuined())
+            return false;
+
+        return true;
+    }
 };

@@ -51,7 +51,7 @@ class CfgSlots
         ghostIcon = "stones";
         stackMax = 10;
     };
-    // T3 power slot
+    // T3 power slot (drawn by ProxyLFPG_FlagBattery, CfgNonAIVehicles below)
     class Slot_LFPG_FlagBattery
     {
         name = "LFPG_FlagBattery";
@@ -82,6 +82,7 @@ class CfgPatches
             "DZ_Gear_Camping",
             "DZ_Gear_Consumables",
             "DZ_Gear_Crafting",
+            "DZ_Vehicles_Parts",
             "DF_Scripts"
         };
     };
@@ -105,10 +106,10 @@ class CfgVehicles
         descriptionShort = "$STR_LFPG_FLAGKIT_T1_DESC";
         model = "\SimpleGroup\data\T1\T1_FlagKit.p3d";
         projectionTypename = "LFPG_Flag_T1_Placing";
-        rotationFlags = 16;
+        rotationFlags = 17;
         weight = 800;
         itemSize[] = { 1, 5 };
-        itemBehaviour = 2;
+        itemBehaviour = 1;
         canBeSplit = 0;
         varQuantityInit = 0;
         varQuantityMin = 0;
@@ -137,7 +138,8 @@ class CfgVehicles
     {
         scope = 1;
         autocenter = 0;
-        model = "\SimpleGroup\data\T1\T1_Flagpole.p3d";
+        // Own copy of the T1 model: a .p3d shared with LFPG_Flag_T1 (physLayer item_large) gets two physics layers.
+        model = "\SimpleGroup\data\T1\T1_Flagpole_Placing.p3d";
         storageCategory = 10;
         alignHologramToTerain = 0;
         hiddenSelections[] = {"T1_Rag"};
@@ -241,6 +243,8 @@ class CfgVehicles
     // ========================================================================
     // LFPG_Flag_T2 — Tier 2
     // Slots custom para upgrade a T3: Firewood + Nails + Stones
+    // Material_FPole_Flag: vanilla flag (any Flag_Base), required by the upgrade
+    // to T3 and moved to the T3 by it; not drawn on the T2 model.
     // ========================================================================
     class LFPG_Flag_T2: LFPG_FlagBase
     {
@@ -255,7 +259,8 @@ class CfgVehicles
         {
             "LFPG_FlagFirewood",
             "LFPG_FlagNails",
-            "LFPG_FlagStones"
+            "LFPG_FlagStones",
+            "Material_FPole_Flag"
         };
         class GUIInventoryAttachmentsProps
         {
@@ -263,7 +268,7 @@ class CfgVehicles
             {
                 name = "Upgrade to T3";
                 description = "";
-                attachmentSlots[] = {"LFPG_FlagFirewood", "LFPG_FlagNails", "LFPG_FlagStones"};
+                attachmentSlots[] = {"LFPG_FlagFirewood", "LFPG_FlagNails", "LFPG_FlagStones", "Material_FPole_Flag"};
                 icon = "set:dayz_inventory image:cat_common_cargo";
             };
         };
@@ -272,6 +277,8 @@ class CfgVehicles
     // ========================================================================
     // LFPG_Flag_T3 — Tier 3 (max, sin slots de upgrade)
     // Slot de bateria para sistema de energia
+    // Material_FPole_Flag: vanilla flag drawn by the vanilla DZ_Flag proxy on
+    // flag_mast; locked while the flag is not fully lowered (LFPG_Flag_T3.c)
     // ========================================================================
     class LFPG_Flag_T3: LFPG_FlagBase
     {
@@ -281,8 +288,10 @@ class CfgVehicles
         model = "\SimpleGroup\data\T3\T3_Flagpole.p3d";
         weight = 15000;
         itemSize[] = { 10, 10 };
+        // Index 0: the battery cables, shown only while a battery is attached (LFPG_Flag_T3.c)
+        simpleHiddenSelections[] = { "battery_cables" };
 
-        attachments[] = { "LFPG_FlagBattery" };
+        attachments[] = { "LFPG_FlagBattery", "Material_FPole_Flag" };
         class GUIInventoryAttachmentsProps
         {
             class PowerSupply
@@ -291,6 +300,14 @@ class CfgVehicles
                 description = "";
                 attachmentSlots[] = {"LFPG_FlagBattery"};
                 icon = "set:dayz_inventory image:cat_common_cargo";
+            };
+            // Same category as the vanilla TerritoryFlag (DZ\gear\camping\config.cpp)
+            class Flag
+            {
+                name = "$STR_CfgVehicles_TerritoryFlag_Att_Category_Flag";
+                description = "";
+                attachmentSlots[] = {"Material_FPole_Flag"};
+                icon = "set:dayz_inventory image:tf_flag";
             };
         };
     };
@@ -323,6 +340,25 @@ class CfgVehicles
     class CarBattery: Inventory_Base
     {
         inventorySlot[] += {"LFPG_FlagBattery"};
+    };
+};
+
+// ============================================================================
+// CfgNonAIVehicles — draw an attached car battery at the T3 battery proxy
+// Own single-slot attachment proxy, as the vanilla flag (ProxyDZ_Flag). The
+// vanilla vehicle part proxy ProxyBattery_Car, with this slot added to its
+// list, drew nothing on the T3. The class name is "Proxy" + the model basename
+// of proxy:\SimpleGroup\data\T3\LFPG_FlagBattery.001
+// ============================================================================
+
+class CfgNonAIVehicles
+{
+    class ProxyAttachment;
+    class ProxyLFPG_FlagBattery: ProxyAttachment
+    {
+        scope = 2;
+        inventorySlot[] = {"LFPG_FlagBattery"};
+        model = "\SimpleGroup\data\T3\LFPG_FlagBattery.p3d";
     };
 };
 

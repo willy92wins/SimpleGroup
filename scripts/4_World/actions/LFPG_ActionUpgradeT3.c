@@ -1,6 +1,7 @@
 // ============================================================================
 // LFPG_ActionUpgradeT3.c - 4_World/actions
-// Upgrade T2 -> T3: Pickaxe + 6 Firewood + 60 Nails + 10 Stones
+// Upgrade T2 -> T3: Pickaxe + 6 Firewood + 60 Nails + 10 Stones + vanilla flag
+// (LFPG_ActionGuards.HasT3UpgradeMaterials); the flag moves to the T3 (UpgradeFlag)
 // ActionContinuousBase: mantener F (patron vanilla ActionBuildPart)
 // Client usa Cache, server valida en OnFinishProgressServer
 // ============================================================================
@@ -18,10 +19,10 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
     void LFPG_ActionUpgradeT3()
     {
         m_CallbackClass = LFPG_ActionUpgradeT3CB;
-        // CMD_ACTIONFB_INTERACT: universal, compatible con cualquier modelo custom.
-        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_INTERACT;
+        // Same animation vanilla plays when building with a pickaxe (ActionBuildPart); it has no crouched variant.
+        m_CommandUID = DayZPlayerConstants.CMD_ACTIONFB_DIG;
         m_FullBody = true;
-        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT | DayZPlayerConstants.STANCEMASK_CROUCH;
+        m_StanceMask = DayZPlayerConstants.STANCEMASK_ERECT;
 
         string text = "#STR_LFPG_ACTION_UPGRADE_T3";
         m_Text = text;
@@ -68,29 +69,11 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
         if (flag.GetTier() != 2)
             return false;
 
-        // Materiales en slots custom con cantidades minimas
-        string slotFW = "LFPG_FlagFirewood";
-        EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
-        if (!fwAtt)
-            return false;
-        ItemBase fwItem = ItemBase.Cast(fwAtt);
-        if (!fwItem || fwItem.GetQuantity() < 6)
+        if (!LFPG_ActionGuards.IsPlayerInFlagGroup(player, flag))
             return false;
 
-        string slotNails = "LFPG_FlagNails";
-        EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
-        if (!nailsAtt)
-            return false;
-        ItemBase nailsItem = ItemBase.Cast(nailsAtt);
-        if (!nailsItem || nailsItem.GetQuantity() < 60)
-            return false;
-
-        string slotStones = "LFPG_FlagStones";
-        EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
-        if (!stonesAtt)
-            return false;
-        ItemBase stonesItem = ItemBase.Cast(stonesAtt);
-        if (!stonesItem || stonesItem.GetQuantity() < 10)
+        // Materiales en slots con cantidades minimas + bandera vanilla
+        if (!LFPG_ActionGuards.HasT3UpgradeMaterials(flag))
             return false;
 
         // Server valida grupo en OnFinishProgressServer (patron LFPowerGrid)
@@ -135,28 +118,7 @@ class LFPG_ActionUpgradeT3 extends ActionContinuousBase
             return;
 
         // Doble check materiales server-side
-        string slotFW = "LFPG_FlagFirewood";
-        EntityAI fwAtt = flag.FindAttachmentBySlotName(slotFW);
-        if (!fwAtt)
-            return;
-        ItemBase fwItem = ItemBase.Cast(fwAtt);
-        if (!fwItem || fwItem.GetQuantity() < 6)
-            return;
-
-        string slotNails = "LFPG_FlagNails";
-        EntityAI nailsAtt = flag.FindAttachmentBySlotName(slotNails);
-        if (!nailsAtt)
-            return;
-        ItemBase nailsItem = ItemBase.Cast(nailsAtt);
-        if (!nailsItem || nailsItem.GetQuantity() < 60)
-            return;
-
-        string slotStones = "LFPG_FlagStones";
-        EntityAI stonesAtt = flag.FindAttachmentBySlotName(slotStones);
-        if (!stonesAtt)
-            return;
-        ItemBase stonesItem = ItemBase.Cast(stonesAtt);
-        if (!stonesItem || stonesItem.GetQuantity() < 10)
+        if (!LFPG_ActionGuards.HasT3UpgradeMaterials(flag))
             return;
 
         string newClass = "LFPG_Flag_T3";
