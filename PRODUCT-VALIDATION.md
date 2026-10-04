@@ -1,5 +1,46 @@
 # Validación del candidato
 
+## Release 1.0.0-rc1 — matriz nativa y smoke retail (2026-10-04)
+
+Matriz de reproducción en servidor DayZDiag 1.29, resumen v2 por escenario: estado (fallos/comprobaciones).
+A = `main` `13d7b80`; B = `4a2f52c` (arreglos de la auditoría, correcciones de la re-auditoría y empaquetado);
+C = `c70237b` (B + SG-02), repetido solo en los escenarios de persistencia.
+
+| Escenario | Qué comprueba | A | B | C |
+|---|---|---|---|---|
+| S1 | SG-11 sucesión del líder | esperado (1/6) | esperado (0/6) | esperado (0/6) |
+| S2 | SG-03 groups.json sin la lista de grupos | esperado (2/2) | esperado (0/2) | esperado (0/2) |
+| S2c | control de S2 | esperado (0/2) | esperado (0/2) | esperado (0/2) |
+| S3 | SG-01 corte en la ventana de guardado (medida) | medido (0/0) | medido (0/0) | medido (0/0) |
+| S4 | SG-01 `.bak` bloqueado | esperado (1/5) | esperado (0/5) | esperado (0/5) |
+| S5 | SG-02 tmp lleno de NUL | medido (2/2) | inesperado (2/2) | esperado (0/2) |
+| S6 | SG-04 tmp inválido sin final | inconcluso (2/2) | inconcluso (0/2) | inconcluso (0/2) |
+| S7 | SG-17/SG-18 listas omitidas y límites | esperado (4/5) | esperado (0/5) | — |
+| S7c | control de S7 | esperado (0/2) | esperado (0/2) | — |
+| S8 | SG-12 banderas frente a explosiones y munición | esperado (2/6) | esperado (0/6) | — |
+| S11 | SG-20 explosivos excluidos | esperado (3/9) | esperado (0/9) | — |
+| S9-1 | SG-06 vida de una bandera bajada (medida) | medido (0/0) | medido (0/0) | — |
+| S9-2 | SG-06 tras reiniciar (medida) | medido (0/0) | medido (0/0) | — |
+
+- En A, «esperado» con fallos significa que el defecto se reproduce como predijo la auditoría; en B y C, que el
+  arreglo se comporta como se esperaba.
+- S5 en A mide el defecto: con el tmp lleno de NUL el servidor queda en solo lectura y no carga el grupo del
+  final. En B sale «inesperado» porque B no lleva el arreglo de SG-02; en C carga el grupo, queda escribible y el
+  tmp se aparta con sus 4096 bytes.
+- S6 sale «inconcluso» en todas las builds por un `JSON ERROR` que el motor escribe al leer el tmp inválido que
+  prepara el propio escenario; sus comprobaciones coinciden con lo esperado en cada build.
+- S9: la vida máxima de 45 días de una bandera bajada sobrevive al reinicio; SG-06 no se reproduce en motor.
+
+Smoke en DayZServer retail 1.29 (`verifySignatures = 2`, BattlEye, Dabs Framework y el paquete firmado con
+`Return0`; la misión crea el kit y las tres banderas, las borra y pide el cierre):
+
+- paquete de `4a2f52c`: PASS; `SCRIPT (E)` 0, errores del mod 0, `config.json` creado sí, `allowDamage` de las banderas Flag_T1 0, Flag_T2 0, Flag_T3 0, cierre pedido por la misión sí.
+- paquete de `c70237b`: PASS; `SCRIPT (E)` 0, errores del mod 0, `config.json` creado sí, `allowDamage` de las banderas Flag_T1 0, Flag_T2 0, Flag_T3 0, cierre pedido por la misión sí.
+
+No cubierto aquí: el aspecto en juego de los materiales de los mástiles y la conexión de un cliente retail
+(los cubre `TESTERS.md`).
+
+
 ## Configuración y CE — PR #19
 
 Código `740215c`, PBO SHA256
@@ -109,14 +150,14 @@ Runs `c7936dcc-9886-4b0b-954e-7f63b98050da` y
 de migración de configuración originó la corrección del PR #19. No invalida
 las pruebas de v2 ni convierte aquel recuento fallido en aceptación de carga.
 
-Evidencia local: `C:/Users/guill/sgwork/jobs/completion-20261003/acceptance/`,
-directorios `native-v2-optimized`, `native-rollback-old-reader`,
-`native-string-probe`, `native-perf-probe`; revisiones en el directorio padre.
+Evidencia: expediente local del dueño (no publicado), directorios
+`native-v2-optimized`, `native-rollback-old-reader`, `native-string-probe` y
+`native-perf-probe`, con sus revisiones.
 Los primeros ensayos fallidos no se presentan como PASS. El diagnóstico del
 plugin vanilla `PluginItemDiagnostic` al iniciar DayZDiag sigue siendo visible;
 no se afirma ausencia absoluta de errores del entorno.
 
-## Histórico2026-10-02 (código anterior a v2)
+## Histórico 2026-10-02 (código anterior a v2)
 
 Base de las suites de grupos/persistencia: `11ba729bd03c6f5eb26d2ef1e58b9f8d52672290`.
 Último código: `e0111d3c38ebbaaa255bd01ea13a36b232341c02` (F22 y decisiones F14/F16).

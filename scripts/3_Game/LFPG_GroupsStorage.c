@@ -61,6 +61,20 @@ class LFPG_GroupsStorage
         return read >= 0 && read < MAX_BYTES && read == text.Length();
     }
 
+    // Byte count reported by ReadFile, or -1 when the file cannot be opened.
+    // A file the text reader rejects (NUL bytes after a power loss) still
+    // reports how many bytes it holds.
+    static int ReadByteCount(string path)
+    {
+        FileHandle handle = OpenFile(path, FileMode.READ);
+        if (!handle)
+            return -1;
+        string buffer;
+        int read = ReadFile(handle, buffer, MAX_BYTES);
+        CloseFile(handle);
+        return read;
+    }
+
     static bool FilesEqual(string first, string second)
     {
         string left;
@@ -99,6 +113,11 @@ class LFPG_GroupsStorage
         {
             if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(raw, staged, error))
                 return false;
+            if ((!staged.m_Groups || staged.m_Groups.Count() == 0) && !HasGroupsKey(raw))
+            {
+                error = "Missing top-level m_Groups key or failed key scan";
+                return false;
+            }
         }
         else if (header.m_Version == FILE_VERSION)
         {
@@ -113,6 +132,11 @@ class LFPG_GroupsStorage
             }
             if (!JsonFileLoader<LFPG_GroupsFileData>.LoadData(payload, staged, error))
                 return false;
+            if ((!staged.m_Groups || staged.m_Groups.Count() == 0) && !HasGroupsKey(payload))
+            {
+                error = "Missing top-level m_Groups key or failed key scan";
+                return false;
+            }
             if (!staged.m_Groups || staged.m_Groups.Count() != envelope.m_ExpectedGroups)
             {
                 error = "Groups envelope count mismatch";
@@ -131,6 +155,14 @@ class LFPG_GroupsStorage
         }
         data = staged;
         return true;
+    }
+
+    protected static bool HasGroupsKey(string raw)
+    {
+        array<string> keys;
+        if (!LFPG_TerritoryConfig.FindTopLevelKeys(raw, keys))
+            return false;
+        return keys.Find("m_Groups") >= 0;
     }
 
     static bool SaveFile(string path, LFPG_GroupsFileData data, out string error)

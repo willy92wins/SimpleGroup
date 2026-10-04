@@ -14,7 +14,7 @@ reducir el número de declaraciones. Se cierra el inventario con esta disposici�
 | FlagPositionCache.m_Tier | Se escribe al construir/actualizar; sin lector interno | Conservar estructura pública y firma Set; no coste de red/persistencia |
 | IsTerritoryFlag | Contrato público explícito FIX M-13 | Conservar |
 | IsFullyRaised, IsPlayerInBuildZone, DebugPrintState | Sin llamador interno de producto | Conservar consultas/diagnóstico públicos; no ejecutan trabajo periódico por existir |
-| m_RPCThrottle | IsRPCThrottled; PruneRPCThrottle elimina caducados al superar512 | La claim histórica «nunca se poda» ya no describe la base actual |
+| m_RPCThrottle | IsRPCThrottled; PruneRPCThrottle elimina caducados al superar 512 | La claim histórica «nunca se poda» ya no describe la base actual |
 | LFPG_DeployTracker.ClearAll en cliente | Limpieza de MissionGameplay | Mantener limpieza idempotente; no eliminar por asumir para siempre que cliente estará vacío |
 
 Fuentes: `scripts/3_Game/LFPG_TerritoryEnums.c`, `LFPG_GroupData.c`,

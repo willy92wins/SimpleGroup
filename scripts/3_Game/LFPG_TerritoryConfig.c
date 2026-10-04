@@ -173,6 +173,9 @@ class LFPG_TerritoryConfig
         string e12 = "TraderBase";           m_FurnitureExcludedTypes.Insert(e12);
         string e13 = "CarScript";            m_FurnitureExcludedTypes.Insert(e13);
         string e14 = "Transport";            m_FurnitureExcludedTypes.Insert(e14);
+        m_FurnitureExcludedTypes.Insert("Plastic_Explosive");
+        m_FurnitureExcludedTypes.Insert("ImprovisedExplosive");
+        m_FurnitureExcludedTypes.Insert("ClaymoreMine");
 
         // FIX G-3: Recalibrate default 30min (antes 30s). Es fallback integrity check;
         // el flujo normal es on-demand por grupo.
@@ -218,18 +221,23 @@ class LFPG_TerritoryConfig
     // Calcula valores derivados tras cargar del JSON
     void ComputeDerivedValues()
     {
-        m_BuildRadiusSq = m_BuildRadiusMeters * m_BuildRadiusMeters;
-        m_TerritoryRadiusSq = m_TerritoryRadiusMeters * m_TerritoryRadiusMeters;
-
         // Sanity checks
         if (m_MaxGroupSize < 1)
             m_MaxGroupSize = 1;
         if (m_MaxGroupSize > 20)
             m_MaxGroupSize = 20;
+        int previousBuildRadius = m_BuildRadiusMeters;
+        int previousTerritoryRadius = m_TerritoryRadiusMeters;
+        int previousInviteDuration = m_InviteDurationSeconds;
+        // Keep integer products below int.MAX before computing derived values.
         if (m_BuildRadiusMeters < 5)
             m_BuildRadiusMeters = 5;
+        if (m_BuildRadiusMeters > 10000)
+            m_BuildRadiusMeters = 10000;
         if (m_TerritoryRadiusMeters < 50)
             m_TerritoryRadiusMeters = 50;
+        if (m_TerritoryRadiusMeters > 10000)
+            m_TerritoryRadiusMeters = 10000;
         if (m_GroupNameMinLength < 1)
             m_GroupNameMinLength = 1;
         if (m_GroupNameMaxLength > 48)
@@ -242,14 +250,18 @@ class LFPG_TerritoryConfig
             m_GroupNameMaxLength = m_GroupNameMinLength;
         if (m_InviteDurationSeconds < 5)
             m_InviteDurationSeconds = 5;
+        if (m_InviteDurationSeconds > 3600)
+            m_InviteDurationSeconds = 3600;
+        if (previousBuildRadius != m_BuildRadiusMeters)
+            LFPG_Log.Info("Config: m_BuildRadiusMeters clamped to " + m_BuildRadiusMeters.ToString());
+        if (previousTerritoryRadius != m_TerritoryRadiusMeters)
+            LFPG_Log.Info("Config: m_TerritoryRadiusMeters clamped to " + m_TerritoryRadiusMeters.ToString());
+        if (previousInviteDuration != m_InviteDurationSeconds)
+            LFPG_Log.Info("Config: m_InviteDurationSeconds clamped to " + m_InviteDurationSeconds.ToString());
 
-        // Asegurar que TierDeployLimits tiene 3 entries con sanity (FIX M-22)
+        // Keep explicit tier list lengths; consumers supply missing entries.
         if (!m_TierDeployLimits)
             m_TierDeployLimits = new array<int>;
-        while (m_TierDeployLimits.Count() < 3)
-        {
-            m_TierDeployLimits.Insert(8);
-        }
         int tdi;
         for (tdi = 0; tdi < m_TierDeployLimits.Count(); tdi = tdi + 1)
         {
@@ -257,13 +269,8 @@ class LFPG_TerritoryConfig
                 m_TierDeployLimits[tdi] = 0;
         }
 
-        // Asegurar que TierDurations tiene 3 entries
         if (!m_TierDurations)
             m_TierDurations = new array<int>;
-        while (m_TierDurations.Count() < 3)
-        {
-            m_TierDurations.Insert(172800);
-        }
         int tdu;
         for (tdu = 0; tdu < m_TierDurations.Count(); tdu = tdu + 1)
         {
@@ -271,13 +278,8 @@ class LFPG_TerritoryConfig
                 m_TierDurations[tdu] = 60;
         }
 
-        // Asegurar que TierFlagActionsEnabled tiene 3 entries
         if (!m_TierFlagActionsEnabled)
             m_TierFlagActionsEnabled = new array<int>;
-        while (m_TierFlagActionsEnabled.Count() < 3)
-        {
-            m_TierFlagActionsEnabled.Insert(1);
-        }
 
         // Energia T3
         if (m_BatteryDrainPerSecond < 0.001)
@@ -344,8 +346,7 @@ class LFPG_TerritoryConfig
     // del disco. Se invoca tras carga si m_ConfigVersion < LFPG_CONFIG_VERSION.
     void MergeNewDefaults()
     {
-        // Si el config antiguo no tenia estos campos, los arrays seran null/vacios
-        // y los campos numericos seran 0. Detectar 0 y asignar defaults.
+        // Restore legacy timing defaults when no positive value was supplied.
 
         if (m_RpcThrottleMs <= 0)
             m_RpcThrottleMs = 500;
@@ -366,30 +367,7 @@ class LFPG_TerritoryConfig
             }
         }
 
-        // v3: si los nuevos arrays no existen en el config del disco, crear con defaults.
-        // Si existen (admin los creo/edito manualmente) respetar su contenido.
-        if (!m_NoBaseRequiredTypes)
-        {
-            LFPG_TerritoryConfig tmpA = new LFPG_TerritoryConfig();
-            m_NoBaseRequiredTypes = tmpA.m_NoBaseRequiredTypes;
-        }
-        if (!m_UnrestrictedTypes)
-        {
-            m_UnrestrictedTypes = new array<string>;
-        }
-
-        // v4: create each new list with its defaults only when the loaded value is null.
-        // An admin list is kept as stored, including an empty list.
-        if (!m_FurnitureCountedTypes)
-        {
-            LFPG_TerritoryConfig tmpFurn = new LFPG_TerritoryConfig();
-            m_FurnitureCountedTypes = tmpFurn.m_FurnitureCountedTypes;
-        }
-        if (!m_NoDropInForeignTerritoryTypes)
-        {
-            LFPG_TerritoryConfig tmpNoDrop = new LFPG_TerritoryConfig();
-            m_NoDropInForeignTerritoryTypes = tmpNoDrop.m_NoDropInForeignTerritoryTypes;
-        }
+        // Load restores omitted lists from the validated JSON key set.
 
         // The constructor supplies m_MinRefreshLifetime when the key is absent.
         // Keep an explicit admin value even when the file still declares v4 or older.
@@ -404,6 +382,10 @@ class LFPG_TerritoryConfig
         int idx = tier - 1;
         if (idx < 0)
             idx = 0;
+        if (!m_TierDurations || m_TierDurations.Count() == 0)
+            return 172800;
+        if (idx >= m_TierDurations.Count() && m_TierDurations.Count() < 3)
+            return 172800;
         if (idx >= m_TierDurations.Count())
             idx = m_TierDurations.Count() - 1;
         return m_TierDurations[idx];
@@ -415,6 +397,10 @@ class LFPG_TerritoryConfig
         int idx = tier - 1;
         if (idx < 0)
             idx = 0;
+        if (!m_TierFlagActionsEnabled || m_TierFlagActionsEnabled.Count() == 0)
+            return true;
+        if (idx >= m_TierFlagActionsEnabled.Count() && m_TierFlagActionsEnabled.Count() < 3)
+            return true;
         if (idx >= m_TierFlagActionsEnabled.Count())
             idx = m_TierFlagActionsEnabled.Count() - 1;
         return (m_TierFlagActionsEnabled[idx] != 0);
@@ -564,13 +550,42 @@ class LFPG_TerritoryConfig
         hasNoBase = false;
         hasCounted = false;
         hasNoDrop = false;
+        array<string> keys;
+        if (!FindTopLevelKeys(raw, keys))
+            return false;
+        hasNoBase = keys.Find("m_NoBaseRequiredTypes") >= 0;
+        hasCounted = keys.Find("m_FurnitureCountedTypes") >= 0;
+        hasNoDrop = keys.Find("m_NoDropInForeignTerritoryTypes") >= 0;
+        return true;
+    }
+
+    // Scan only engine-validated JSON; decode escaped names with the same parser.
+    static bool FindTopLevelKeys(string raw, out array<string> keys)
+    {
+        keys = new array<string>;
         int depth = 0;
+        bool hasRoot = false;
         bool inString = false;
         bool escaped = false;
         bool expectKey = false;
         int start = 0;
         int length = raw.Length();
         string block;
+        int scanStart = 0;
+        if (length >= 3)
+        {
+            int bomFirst = raw.Get(0).ToAscii();
+            int bomSecond = raw.Get(1).ToAscii();
+            int bomThird = raw.Get(2).ToAscii();
+            if (bomFirst < 0)
+                bomFirst = bomFirst + 256;
+            if (bomSecond < 0)
+                bomSecond = bomSecond + 256;
+            if (bomThird < 0)
+                bomThird = bomThird + 256;
+            if (bomFirst == 239 && bomSecond == 187 && bomThird == 191)
+                scanStart = 3;
+        }
         for (int i = 0; i < length; i++)
         {
             int inBlock = i % 512;
@@ -580,7 +595,11 @@ class LFPG_TerritoryConfig
                 if (blockLength > 512)
                     blockLength = 512;
                 block = raw.Substring(i, blockLength);
+                if (block.Length() != blockLength)
+                    return false;
             }
+            if (i < scanStart)
+                continue;
             string character = block.Get(inBlock);
             if (inString)
             {
@@ -598,16 +617,17 @@ class LFPG_TerritoryConfig
                         string keyJSON = "{\"key\":" + raw.Substring(start, i - start + 1) + "}";
                         if (!JsonFileLoader<LFPG_ConfigKeyToken>.LoadData(keyJSON, token, error))
                             return false;
-                        if (token.key == "m_NoBaseRequiredTypes")
-                            hasNoBase = true;
-                        if (token.key == "m_FurnitureCountedTypes")
-                            hasCounted = true;
-                        if (token.key == "m_NoDropInForeignTerritoryTypes")
-                            hasNoDrop = true;
+                        keys.Insert(token.key);
                         expectKey = false;
                     }
                 }
                 continue;
+            }
+            if (depth == 0 && character != " " && character != "\t" && character != "\r" && character != "\n")
+            {
+                if (hasRoot || character != "{")
+                    return false;
+                hasRoot = true;
             }
             if (character == "\"")
             {
@@ -625,7 +645,7 @@ class LFPG_TerritoryConfig
             else if (character == "," && depth == 1)
                 expectKey = true;
         }
-        return depth == 0 && !inString;
+        return hasRoot && depth == 0 && !inString;
     }
 
     static LFPG_TerritoryConfig Load()
@@ -655,27 +675,33 @@ class LFPG_TerritoryConfig
                 return config;
             }
 
-            // FIX M-21: Mergear defaults si el config es de version previa
+            // Omitted lists use constructor defaults in every config version.
+            array<string> keys;
+            if (FindTopLevelKeys(raw, keys))
+            {
+                LFPG_TerritoryConfig defaults = new LFPG_TerritoryConfig();
+                if (keys.Find("m_FurnitureExcludedTypes") < 0)
+                    config.m_FurnitureExcludedTypes = defaults.m_FurnitureExcludedTypes;
+                if (keys.Find("m_NoBaseRequiredTypes") < 0)
+                    config.m_NoBaseRequiredTypes = defaults.m_NoBaseRequiredTypes;
+                if (keys.Find("m_FurnitureCountedTypes") < 0)
+                    config.m_FurnitureCountedTypes = defaults.m_FurnitureCountedTypes;
+                if (keys.Find("m_NoDropInForeignTerritoryTypes") < 0)
+                    config.m_NoDropInForeignTerritoryTypes = defaults.m_NoDropInForeignTerritoryTypes;
+                if (keys.Find("m_TierDeployLimits") < 0)
+                    config.m_TierDeployLimits = defaults.m_TierDeployLimits;
+                if (keys.Find("m_TierDurations") < 0)
+                    config.m_TierDurations = defaults.m_TierDurations;
+                if (keys.Find("m_TierFlagActionsEnabled") < 0)
+                    config.m_TierFlagActionsEnabled = defaults.m_TierFlagActionsEnabled;
+            }
+            else
+            {
+                // Keep parsed values if the scanner and engine disagree.
+                LFPG_Log.Error("Cannot inspect config keys; keeping the parsed admin values.");
+            }
             if (config.m_ConfigVersion < LFPG_CONFIG_VERSION)
             {
-                bool hasNoBase;
-                bool hasCounted;
-                bool hasNoDrop;
-                if (!FindListKeys(raw, hasNoBase, hasCounted, hasNoDrop))
-                {
-                    LFPG_Log.Error("Cannot inspect legacy config keys; keeping the parsed admin values.");
-                    // A scanner/parser disagreement must not discard a config
-                    // that the engine has already loaded successfully.
-                    hasNoBase = true;
-                    hasCounted = true;
-                    hasNoDrop = true;
-                }
-                if (!hasNoBase)
-                    config.m_NoBaseRequiredTypes = null;
-                if (!hasCounted)
-                    config.m_FurnitureCountedTypes = null;
-                if (!hasNoDrop)
-                    config.m_NoDropInForeignTerritoryTypes = null;
                 string migMsg = "Config version outdated (";
                 migMsg = migMsg + config.m_ConfigVersion.ToString();
                 migMsg = migMsg + " -> ";

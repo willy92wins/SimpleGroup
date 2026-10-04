@@ -1,6 +1,6 @@
-name = "LFPG Territory";
-author = "LFPG";
-url = "";
+name = "SimpleGroup";
+author = "Return";
+version = "1.0.0-rc1";
 type = "mod";
-
 dependencies[] = { "DF_Scripts" };
+protocol = 1;
