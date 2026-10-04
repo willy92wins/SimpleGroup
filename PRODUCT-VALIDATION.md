@@ -109,9 +109,9 @@ Runs `c7936dcc-9886-4b0b-954e-7f63b98050da` y
 de migración de configuración originó la corrección del PR #19. No invalida
 las pruebas de v2 ni convierte aquel recuento fallido en aceptación de carga.
 
-Evidencia local: `C:/Users/guill/sgwork/jobs/completion-20261003/acceptance/`,
-directorios `native-v2-optimized`, `native-rollback-old-reader`,
-`native-string-probe`, `native-perf-probe`; revisiones en el directorio padre.
+Evidencia: expediente local del dueño (no publicado), directorios
+`native-v2-optimized`, `native-rollback-old-reader`, `native-string-probe` y
+`native-perf-probe`, con sus revisiones.
 Los primeros ensayos fallidos no se presentan como PASS. El diagnóstico del
 plugin vanilla `PluginItemDiagnostic` al iniciar DayZDiag sigue siendo visible;
 no se afirma ausencia absoluta de errores del entorno.

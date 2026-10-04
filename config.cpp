@@ -69,7 +69,6 @@ class CfgPatches
         {
             "LFPG_FlagKit_T1",
             "LFPG_Flag_T1_Placing",
-            "LFPG_FlagBase",
             "LFPG_Flag_T1",
             "LFPG_Flag_T2",
             "LFPG_Flag_T3"
@@ -116,7 +115,7 @@ class CfgVehicles
         varQuantityMax = 0;
         hiddenSelections[] = {"T1_Rag"};
         hiddenSelectionsTextures[] = {"DZ\gear\consumables\data\rag_co.paa"};
-        hiddenSelectionsMaterials[] = {"SimpleGroup\data\Textures\rags_bandages.rvmat"};
+        hiddenSelectionsMaterials[] = {"DZ\gear\consumables\data\rags_bandages.rvmat"};
         hologramMaterial = "hologram";
         hologramMaterialPath = "dz\data";
 
@@ -143,7 +142,7 @@ class CfgVehicles
         alignHologramToTerain = 0;
         hiddenSelections[] = {"T1_Rag"};
         hiddenSelectionsTextures[] = {"DZ\gear\consumables\data\rag_co.paa"};
-        hiddenSelectionsMaterials[] = {"SimpleGroup\data\Textures\rags_bandages.rvmat"};
+        hiddenSelectionsMaterials[] = {"DZ\gear\consumables\data\rags_bandages.rvmat"};
 
         class AnimationSources
         {
@@ -335,6 +334,8 @@ class CfgMods
 {
     class SimpleGroup
     {
+        dir = "SimpleGroup";
+        name = "SimpleGroup";
         type = "mod";
         inputs = "SimpleGroup\inputs.xml";
         dependencies[] = { "Game", "World", "Mission" };
