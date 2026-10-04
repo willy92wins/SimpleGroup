@@ -51,11 +51,14 @@ class CfgSlots
         ghostIcon = "stones";
         stackMax = 10;
     };
-    // T3 power slot
+    // T3 power slot. selection names the T3 model selection that holds the battery_car proxy:
+    // ProxyBattery_Car serves several slots, and the selection picks this one (vanilla:
+    // Slot_CarBattery selection "battery", the selection of battery_car.001 in civiliansedan.p3d).
     class Slot_LFPG_FlagBattery
     {
         name = "LFPG_FlagBattery";
         displayName = "Car Battery";
+        selection = "LFPG_FlagBattery";
         ghostIcon = "carbattery";
         stackMax = 1;
     };
