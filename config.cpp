@@ -51,14 +51,11 @@ class CfgSlots
         ghostIcon = "stones";
         stackMax = 10;
     };
-    // T3 power slot. selection names the T3 model selection that holds the battery_car proxy:
-    // ProxyBattery_Car serves several slots, and the selection picks this one (vanilla:
-    // Slot_CarBattery selection "battery", the selection of battery_car.001 in civiliansedan.p3d).
+    // T3 power slot (drawn by ProxyLFPG_FlagBattery, CfgNonAIVehicles below)
     class Slot_LFPG_FlagBattery
     {
         name = "LFPG_FlagBattery";
         displayName = "Car Battery";
-        selection = "LFPG_FlagBattery";
         ghostIcon = "carbattery";
         stackMax = 1;
     };
@@ -348,15 +345,19 @@ class CfgVehicles
 
 // ============================================================================
 // CfgNonAIVehicles — draw an attached car battery at the T3 battery proxy
-// (same proxy the vanilla vehicles use, DZ\vehicles\parts\config.cpp ProxyBattery_Car)
+// Own single-slot attachment proxy, as the vanilla flag (ProxyDZ_Flag): the
+// vehicle part proxy ProxyBattery_Car draws nothing on an ItemBase. The class
+// name is "Proxy" + the model basename of proxy:\SimpleGroup\data\T3\LFPG_FlagBattery.001
 // ============================================================================
 
 class CfgNonAIVehicles
 {
-    class ProxyPart;
-    class ProxyBattery_Car: ProxyPart
+    class ProxyAttachment;
+    class ProxyLFPG_FlagBattery: ProxyAttachment
     {
-        inventorySlot[] += {"LFPG_FlagBattery"};
+        scope = 2;
+        inventorySlot[] = {"LFPG_FlagBattery"};
+        model = "\SimpleGroup\data\T3\LFPG_FlagBattery.p3d";
     };
 };
 
