@@ -47,8 +47,11 @@ class LFPG_ActionGuards
         string groupID = mgr.GetPlayerGroupID(identity.GetPlainId());
         if (groupID == "")
             return false;
+        if (groupID != flag.GetGroupID())
+            return false;
 
-        return groupID == flag.GetGroupID();
+        // Only the group's registered flag can be upgraded (UpgradeFlag), so a duplicate keeps Raise/Lower.
+        return mgr.IsOwnedRegisteredFlag(flag);
     }
 
     // T2 -> T3 upgrade materials attached to the flag: 6 Firewood, 60 Nails, 10 Stones and a
