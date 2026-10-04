@@ -13,8 +13,10 @@
 
 class LFPG_FlagKit_T1 extends ItemBase
 {
-    // Hologram.LARGE_PROJECTION_DISTANCE_LIMIT (6 m) plus a 2 m margin.
-    protected static const float LFPG_MAX_PLACEMENT_DISTANCE = 8.0;
+    // Vanilla keeps this small projection 1-2 m from the player and within
+    // 1.5 m of height; 4 m leaves a margin and stays inside the 5 m reach
+    // of every flag action.
+    protected static const float LFPG_MAX_PLACEMENT_DISTANCE = 4.0;
     protected bool m_PlacementSucceeded;
 
     bool DidPlaceSuccessfully()

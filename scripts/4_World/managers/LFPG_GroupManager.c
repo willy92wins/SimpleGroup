@@ -3184,8 +3184,9 @@ class LFPG_GroupManager
         if (!FileExist(legacySource))
             legacySource = bakPath;
         // A verified pending write already preserved its legacy source before
-        // creating tmp. Its own partial final must not prevent completing it.
-        if (!finalInvalid && !LFPG_GroupsStorage.PreserveLegacy(legacySource, finalPath + ".pre-v2"))
+        // creating tmp. Neither its own partial final nor a backup it failed
+        // to rotate may prevent completing it.
+        if (!finalInvalid && !m_HasVerifiedGroupsTmp && !LFPG_GroupsStorage.PreserveLegacy(legacySource, finalPath + ".pre-v2"))
         {
             LFPG_Log.Error("SaveGroups: cannot preserve v1 migration backup. Save refused.");
             return false;

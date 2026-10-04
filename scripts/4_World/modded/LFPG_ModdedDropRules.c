@@ -50,7 +50,7 @@ modded class ActionDropItem
 
                 string dropActLog = "ActionDropItem blocked ";
                 dropActLog = dropActLog + heldItem.GetType();
-                LFPG_Log.Debug(dropActLog);
+                LFPG_Log.Info(dropActLog);
                 return;
             }
         }

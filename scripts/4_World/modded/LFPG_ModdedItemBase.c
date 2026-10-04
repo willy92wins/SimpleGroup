@@ -370,7 +370,7 @@ modded class ItemBase
                         listedLog = listedLog + GetType();
                         listedLog = listedLog + ") foreign=";
                         listedLog = listedLog + foreignOwner;
-                        LFPG_Log.Debug(listedLog);
+                        LFPG_Log.Info(listedLog);
                         return;
                     }
                 }
@@ -473,7 +473,7 @@ modded class ItemBase
             dropLog = dropLog + GetType();
             dropLog = dropLog + ") reason=";
             dropLog = dropLog + blockReason.ToString();
-            LFPG_Log.Debug(dropLog);
+            LFPG_Log.Info(dropLog);
             return;
         }
 
