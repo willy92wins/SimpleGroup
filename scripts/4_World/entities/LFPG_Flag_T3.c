@@ -165,6 +165,22 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         LFPG_SetBatteryCablesVisible(hasBattery);
     }
 
+    // ========================================================================
+    // VANILLA FLAG — slot Material_FPole_Flag, drawn by the DZ_Flag proxy on flag_mast
+    // ========================================================================
+    // As on the vanilla TerritoryFlag, the flag can be put on or taken off only while the flag
+    // is fully lowered. UpdateAnimationPhase runs on the server after every raise-progress write
+    // (storage load and upgrade swap included) and on the client from OnVariablesSynchronized,
+    // so both sides lock the slot from the same progress.
+    override protected void UpdateAnimationPhase(float raiseProgress)
+    {
+        super.UpdateAnimationPhase(raiseProgress);
+
+        string slotName = "Material_FPole_Flag";
+        int slotId = InventorySlots.GetSlotIdFromString(slotName);
+        GetInventory().SetSlotLock(slotId, raiseProgress > 0.0);
+    }
+
     protected void CheckBatteryPower()
     {
         string slotName = "LFPG_FlagBattery";

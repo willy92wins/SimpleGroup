@@ -243,6 +243,8 @@ class CfgVehicles
     // ========================================================================
     // LFPG_Flag_T2 — Tier 2
     // Slots custom para upgrade a T3: Firewood + Nails + Stones
+    // Material_FPole_Flag: vanilla flag (any Flag_Base), required by the upgrade
+    // to T3 and moved to the T3 by it; not drawn on the T2 model.
     // ========================================================================
     class LFPG_Flag_T2: LFPG_FlagBase
     {
@@ -257,7 +259,8 @@ class CfgVehicles
         {
             "LFPG_FlagFirewood",
             "LFPG_FlagNails",
-            "LFPG_FlagStones"
+            "LFPG_FlagStones",
+            "Material_FPole_Flag"
         };
         class GUIInventoryAttachmentsProps
         {
@@ -265,7 +268,7 @@ class CfgVehicles
             {
                 name = "Upgrade to T3";
                 description = "";
-                attachmentSlots[] = {"LFPG_FlagFirewood", "LFPG_FlagNails", "LFPG_FlagStones"};
+                attachmentSlots[] = {"LFPG_FlagFirewood", "LFPG_FlagNails", "LFPG_FlagStones", "Material_FPole_Flag"};
                 icon = "set:dayz_inventory image:cat_common_cargo";
             };
         };
@@ -274,6 +277,8 @@ class CfgVehicles
     // ========================================================================
     // LFPG_Flag_T3 — Tier 3 (max, sin slots de upgrade)
     // Slot de bateria para sistema de energia
+    // Material_FPole_Flag: vanilla flag drawn by the vanilla DZ_Flag proxy on
+    // flag_mast; locked while the flag is not fully lowered (LFPG_Flag_T3.c)
     // ========================================================================
     class LFPG_Flag_T3: LFPG_FlagBase
     {
@@ -286,7 +291,7 @@ class CfgVehicles
         // Index 0: the battery cables, shown only while a battery is attached (LFPG_Flag_T3.c)
         simpleHiddenSelections[] = { "battery_cables" };
 
-        attachments[] = { "LFPG_FlagBattery" };
+        attachments[] = { "LFPG_FlagBattery", "Material_FPole_Flag" };
         class GUIInventoryAttachmentsProps
         {
             class PowerSupply
@@ -295,6 +300,14 @@ class CfgVehicles
                 description = "";
                 attachmentSlots[] = {"LFPG_FlagBattery"};
                 icon = "set:dayz_inventory image:cat_common_cargo";
+            };
+            // Same category as the vanilla TerritoryFlag (DZ\gear\camping\config.cpp)
+            class Flag
+            {
+                name = "$STR_CfgVehicles_TerritoryFlag_Att_Category_Flag";
+                description = "";
+                attachmentSlots[] = {"Material_FPole_Flag"};
+                icon = "set:dayz_inventory image:tf_flag";
             };
         };
     };
