@@ -345,9 +345,10 @@ class CfgVehicles
 
 // ============================================================================
 // CfgNonAIVehicles — draw an attached car battery at the T3 battery proxy
-// Own single-slot attachment proxy, as the vanilla flag (ProxyDZ_Flag): the
-// vehicle part proxy ProxyBattery_Car draws nothing on an ItemBase. The class
-// name is "Proxy" + the model basename of proxy:\SimpleGroup\data\T3\LFPG_FlagBattery.001
+// Own single-slot attachment proxy, as the vanilla flag (ProxyDZ_Flag). The
+// vanilla vehicle part proxy ProxyBattery_Car, with this slot added to its
+// list, drew nothing on the T3. The class name is "Proxy" + the model basename
+// of proxy:\SimpleGroup\data\T3\LFPG_FlagBattery.001
 // ============================================================================
 
 class CfgNonAIVehicles
