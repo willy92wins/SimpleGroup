@@ -53,6 +53,8 @@ class LFPG_VehicleProtection
     protected bool m_ReadOnly;
     protected bool m_Dirty;
     protected bool m_SaveErrorLogged;
+    protected bool m_BackupErrorLogged;
+    protected bool m_TmpErrorLogged;
 
     // Reused buffers.
     protected ref array<Object> m_ScanObjects;
@@ -60,6 +62,8 @@ class LFPG_VehicleProtection
     protected ref map<string, Transport> m_Candidates;
     protected ref array<string> m_CandidateKeys;
     protected ref array<string> m_GroupBuffer;
+    protected ref array<string> m_SlotKeys;
+    protected ref array<string> m_SlotGroups;
 
     void LFPG_VehicleProtection()
     {
@@ -72,11 +76,15 @@ class LFPG_VehicleProtection
         m_ReadOnly = false;
         m_Dirty = false;
         m_SaveErrorLogged = false;
+        m_BackupErrorLogged = false;
+        m_TmpErrorLogged = false;
         m_ScanObjects = new array<Object>;
         m_ScanCargo = new array<CargoBase>;
         m_Candidates = new map<string, Transport>;
         m_CandidateKeys = new array<string>;
         m_GroupBuffer = new array<string>;
+        m_SlotKeys = new array<string>;
+        m_SlotGroups = new array<string>;
     }
 
     static string GetFilePath()
@@ -384,9 +392,10 @@ class LFPG_VehicleProtection
                 if (owner == groupID)
                     continue;
                 // Another base keeps the vehicle until it is beyond that base's exit distance.
-                if (!HasLeftZone(owner, newcomer, mgr, cfg))
+                bool ownerActive = false;
+                if (!HasLeftZone(owner, newcomer, mgr, cfg, ownerActive))
                     continue;
-                RemoveKey(owner, newKey, "moved", true);
+                RemoveKey(owner, newKey, "moved", ownerActive);
             }
             if (DistanceSqXZ(newcomer.GetPosition(), center) > enterSq)
                 continue;
@@ -394,22 +403,43 @@ class LFPG_VehicleProtection
         }
     }
 
-    protected bool HasLeftZone(string groupID, Transport vehicle, LFPG_GroupManager mgr, LFPG_TerritoryConfig cfg)
+    // ownerActive: that base's flag still protects (registered and raised).
+    protected bool HasLeftZone(string groupID, Transport vehicle, LFPG_GroupManager mgr, LFPG_TerritoryConfig cfg, out bool ownerActive)
     {
-        LFPG_FlagBase zoneFlag = mgr.GetGroupFlag(groupID);
-        if (!zoneFlag || !mgr.IsOwnedRegisteredFlag(zoneFlag))
+        ownerActive = false;
+        LFPG_FlagBase zoneFlag = GetRegisteredFlag(groupID, mgr);
+        if (!zoneFlag)
             return true;
+        ownerActive = IsRaised(zoneFlag);
         float zoneKeep = cfg.m_BuildRadiusMeters + EXIT_MARGIN;
         float zoneKeepSq = zoneKeep * zoneKeep;
         return DistanceSqXZ(vehicle.GetPosition(), zoneFlag.GetPosition()) > zoneKeepSq;
+    }
+
+    // The flag registered to a live group, or null.
+    protected LFPG_FlagBase GetRegisteredFlag(string groupID, LFPG_GroupManager mgr)
+    {
+        LFPG_FlagBase regFlag = mgr.GetGroupFlag(groupID);
+        if (!regFlag || !mgr.IsOwnedRegisteredFlag(regFlag))
+            return null;
+        return regFlag;
+    }
+
+    protected static bool IsRaised(LFPG_FlagBase flag)
+    {
+        if (!flag)
+            return false;
+        return flag.ComputeCurrentRaiseProgress() > 0.0;
     }
 
     // ========================================================================
     // PROTECTION - every validation tick, for every queue
     // ========================================================================
 
-    // Drops queued vehicles that left the zone or were ruined, then protects
-    // the first bound vehicles of each raised registered flag and clears the rest.
+    // Pass 1, every queue: drop ruined, re-keyed and departed vehicles.
+    // Pass 2, every queue: the first bound vehicles of each raised registered flag
+    // hold its slots. Every icon of the tick is cleared before any is set, so a
+    // vehicle never ends a tick unmarked while it holds a slot.
     void ApplyProtection(LFPG_GroupManager mgr, LFPG_TerritoryConfig cfg)
     {
         if (!m_Loaded || !mgr || !cfg)
@@ -426,59 +456,80 @@ class LFPG_VehicleProtection
         int gi;
         for (gi = 0; gi < groupCount; gi = gi + 1)
         {
-            string groupID = m_GroupBuffer[gi];
-            array<string> queue = null;
-            if (!m_Queues.Find(groupID, queue) || !queue)
+            string exitGroup = m_GroupBuffer[gi];
+            array<string> exitQueue = null;
+            if (!m_Queues.Find(exitGroup, exitQueue) || !exitQueue)
                 continue;
 
-            LFPG_FlagBase flag = mgr.GetGroupFlag(groupID);
-            bool registered = false;
-            if (flag && mgr.IsOwnedRegisteredFlag(flag))
-                registered = true;
+            // Read before any removal: the cut of D5 needs a flag that still protects.
+            LFPG_FlagBase exitFlag = GetRegisteredFlag(exitGroup, mgr);
+            bool exitActive = IsRaised(exitFlag);
+            vector center = "0 0 0";
+            if (exitFlag)
+                center = exitFlag.GetPosition();
 
-            if (registered)
+            int xi;
+            for (xi = exitQueue.Count() - 1; xi >= 0; xi = xi - 1)
             {
-                vector center = flag.GetPosition();
-                int xi;
-                for (xi = queue.Count() - 1; xi >= 0; xi = xi - 1)
-                {
-                    string exitKey = queue[xi];
-                    Transport exitVehicle = null;
-                    if (!m_Bound.Find(exitKey, exitVehicle) || !exitVehicle)
-                        continue;
-                    // An empty id proves nothing; only a different id moves the key.
-                    string liveKey = KeyOf(exitVehicle);
-                    if (exitVehicle.IsRuined())
-                        RemoveAt(groupID, queue, xi, "ruined", false);
-                    else if (liveKey != "" && liveKey != exitKey)
-                        RemoveAt(groupID, queue, xi, "rekeyed", false);
-                    else if (DistanceSqXZ(exitVehicle.GetPosition(), center) > keepSq)
-                        RemoveAt(groupID, queue, xi, "left", true);
-                }
+                string exitKey = exitQueue[xi];
+                Transport exitVehicle = null;
+                if (!m_Bound.Find(exitKey, exitVehicle) || !exitVehicle)
+                    continue;
+                // An empty id proves nothing; only a different id moves the key.
+                string liveKey = KeyOf(exitVehicle);
+                if (exitVehicle.IsRuined())
+                    RemoveAt(exitGroup, exitQueue, xi, "ruined", false);
+                else if (liveKey != "" && liveKey != exitKey)
+                    RemoveAt(exitGroup, exitQueue, xi, "rekeyed", false);
+                else if (exitFlag && DistanceSqXZ(exitVehicle.GetPosition(), center) > keepSq)
+                    RemoveAt(exitGroup, exitQueue, xi, "left", exitActive);
             }
+        }
 
+        m_SlotKeys.Clear();
+        m_SlotGroups.Clear();
+        for (gi = 0; gi < groupCount; gi = gi + 1)
+        {
+            string slotGroup = m_GroupBuffer[gi];
+            array<string> slotQueue = null;
+            if (!m_Queues.Find(slotGroup, slotQueue) || !slotQueue)
+                continue;
+
+            LFPG_FlagBase slotFlag = GetRegisteredFlag(slotGroup, mgr);
             int limit = 0;
-            if (registered && flag.ComputeCurrentRaiseProgress() > 0.0)
-                limit = cfg.GetVehiclesProtected(flag.GetTier());
+            if (IsRaised(slotFlag))
+                limit = cfg.GetVehiclesProtected(slotFlag.GetTier());
 
             int used = 0;
             int pi;
-            for (pi = 0; pi < queue.Count(); pi = pi + 1)
+            for (pi = 0; pi < slotQueue.Count(); pi = pi + 1)
             {
-                string slotKey = queue[pi];
+                string slotKey = slotQueue[pi];
                 Transport slotVehicle = null;
                 if (!m_Bound.Find(slotKey, slotVehicle) || !slotVehicle)
                     continue;
                 if (used < limit && !slotVehicle.IsRuined())
                 {
-                    Protect(groupID, slotKey, slotVehicle, wanted, floorLimit);
+                    m_SlotKeys.Insert(slotKey);
+                    m_SlotGroups.Insert(slotGroup);
                     used = used + 1;
                 }
                 else
                 {
-                    Unprotect(groupID, slotKey, slotVehicle);
+                    Unprotect(slotGroup, slotKey, slotVehicle);
                 }
             }
+        }
+
+        int slotCount = m_SlotKeys.Count();
+        int si;
+        for (si = 0; si < slotCount; si = si + 1)
+        {
+            string heldKey = m_SlotKeys[si];
+            string heldGroup = m_SlotGroups[si];
+            Transport heldVehicle = null;
+            if (m_Bound.Find(heldKey, heldVehicle) && heldVehicle)
+                Protect(heldGroup, heldKey, heldVehicle, wanted, floorLimit);
         }
 
         CompactEmptyQueues();
@@ -550,8 +601,12 @@ class LFPG_VehicleProtection
     // QUEUE EDITS
     // ========================================================================
 
+    // A key bound to another live entity until now leaves that entity unmarked.
     protected void Bind(string key, Transport vehicle)
     {
+        Transport previous = null;
+        if (m_Bound.Find(key, previous) && previous && previous != vehicle)
+            previous.LFPG_SetProtected(false);
         m_Bound.Set(key, vehicle);
         m_Misses.Remove(key);
     }
@@ -746,8 +801,13 @@ class LFPG_VehicleProtection
         return data;
     }
 
-    // tmp -> verify -> keep the previous final -> copy -> verify -> delete tmp.
-    // Not atomic: DayZ has no rename. tmp and the backup cover the copy window.
+    // 1. The previous state is kept before tmp is touched: a valid final is copied
+    //    to the backup, an invalid final is copied aside, and without a valid final
+    //    a valid tmp (left by a crash or used by a recovery) becomes the backup.
+    // 2. tmp -> verify -> copy to the final -> verify.
+    // 3. tmp is deleted only when the backup holds the previous state; otherwise
+    //    it stays as a second copy of the final.
+    // Not atomic: DayZ has no rename. A valid copy exists at every step.
     protected bool SaveQueues()
     {
         string finalPath = GetFilePath();
@@ -767,38 +827,53 @@ class LFPG_VehicleProtection
         if (!JsonFileLoader<LFPG_VehicleQueuesData>.MakeData(data, expected, saveError, false))
             return SaveFailed("cannot serialize the queues");
 
-        // 1. Write and verify tmp before touching the final or the backup.
+        // 1. Previous state.
+        bool keepTmp = false;
+        LFPG_VehicleQueuesData previous;
+        string previousError = "";
+        if (FileExist(finalPath) && ReadQueuesFile(finalPath, previous, previousError))
+        {
+            if (CopyToBackup(finalPath, bakPath))
+            {
+                m_BackupErrorLogged = false;
+            }
+            else
+            {
+                keepTmp = true;
+                if (!m_BackupErrorLogged)
+                {
+                    m_BackupErrorLogged = true;
+                    LFPG_Log.Error("vehicles.json backup rotation failed; vehicles.json.tmp stays as a second copy.");
+                }
+            }
+        }
+        else
+        {
+            if (FileExist(finalPath))
+            {
+                string asidePath = "";
+                if (!CopyAside(finalPath, ".corrupt", asidePath))
+                    return SaveFailed("the invalid vehicles.json cannot be copied aside");
+                string asideMsg = "vehicles.json did not verify; copied to ";
+                asideMsg = asideMsg + asidePath;
+                asideMsg = asideMsg + " before it is replaced.";
+                LFPG_Log.Error(asideMsg);
+            }
+            LFPG_VehicleQueuesData pending;
+            string pendingError = "";
+            if (FileExist(tmpPath) && ReadQueuesFile(tmpPath, pending, pendingError))
+            {
+                if (!CopyToBackup(tmpPath, bakPath))
+                    return SaveFailed("vehicles.json.tmp holds the last state and cannot be copied to vehicles.json.bak");
+            }
+        }
+
+        // 2. Write and verify tmp, then promote it. The final is deleted only
+        //    when a direct copy fails.
         if (!JsonFileLoader<LFPG_VehicleQueuesData>.SaveFile(tmpPath, data, saveError))
             return SaveFailed("cannot write vehicles.json.tmp: " + saveError);
         if (!FileMatches(tmpPath, expected))
             return SaveFailed("vehicles.json.tmp does not verify");
-
-        // 2. A valid final becomes the backup; an invalid one is copied aside.
-        if (FileExist(finalPath))
-        {
-            LFPG_VehicleQueuesData previous;
-            string previousError = "";
-            if (ReadQueuesFile(finalPath, previous, previousError))
-            {
-                bool backupOk = true;
-                if (FileExist(bakPath) && !DeleteFile(bakPath))
-                    backupOk = false;
-                if (backupOk && !CopyFile(finalPath, bakPath))
-                    backupOk = false;
-                if (backupOk && !LFPG_GroupsStorage.FilesEqual(finalPath, bakPath))
-                    backupOk = false;
-                if (!backupOk)
-                    LFPG_Log.Error("vehicles.json backup rotation failed; the save continues.");
-            }
-            else
-            {
-                if (!CopyAside(finalPath, ".corrupt"))
-                    return SaveFailed("the invalid vehicles.json cannot be copied aside");
-                LFPG_Log.Error("vehicles.json did not verify; copied to vehicles.json.corrupt before it is replaced.");
-            }
-        }
-
-        // 3. Promote tmp. The final is deleted only when a direct copy fails.
         if (!CopyFile(tmpPath, finalPath))
         {
             if (FileExist(finalPath) && !DeleteFile(finalPath))
@@ -809,9 +884,24 @@ class LFPG_VehicleProtection
         if (!FileMatches(finalPath, expected))
             return SaveFailed("vehicles.json does not verify after the copy; tmp kept");
 
-        // 4. tmp goes only after a verified final.
-        DeleteFile(tmpPath);
+        // 3. tmp now equals the final. A tmp that cannot be deleted is harmless:
+        //    the next boot reads the valid final first.
+        if (!keepTmp && !DeleteFile(tmpPath) && !m_TmpErrorLogged)
+        {
+            m_TmpErrorLogged = true;
+            LFPG_Log.Error("vehicles.json.tmp could not be deleted; it is a copy of vehicles.json.");
+        }
         return true;
+    }
+
+    // Replaces the backup with a verified copy of sourcePath.
+    protected bool CopyToBackup(string sourcePath, string bakPath)
+    {
+        if (FileExist(bakPath) && !DeleteFile(bakPath))
+            return false;
+        if (!CopyFile(sourcePath, bakPath))
+            return false;
+        return LFPG_GroupsStorage.FilesEqual(sourcePath, bakPath);
     }
 
     protected bool FileMatches(string path, string expected)
@@ -827,9 +917,11 @@ class LFPG_VehicleProtection
     }
 
     // Copies a file to path+suffix, or path+suffix.N when that name is taken.
-    protected bool CopyAside(string path, string suffix)
+    // A source the text reader cannot read (NUL bytes after a power loss) is
+    // checked by its byte count, as GroupManager.MoveAside does.
+    protected bool CopyAside(string path, string suffix, out string aside)
     {
-        string aside = path + suffix;
+        aside = path + suffix;
         int asideIndex = 0;
         while (FileExist(aside))
         {
@@ -838,6 +930,9 @@ class LFPG_VehicleProtection
         }
         if (!CopyFile(path, aside))
             return false;
+        string sourceText;
+        if (LFPG_GroupsStorage.ReadText(path, sourceText))
+            return LFPG_GroupsStorage.FilesEqual(path, aside);
         int sourceBytes = LFPG_GroupsStorage.ReadByteCount(path);
         if (sourceBytes < 0)
             return false;

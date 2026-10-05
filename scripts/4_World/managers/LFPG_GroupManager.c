@@ -121,9 +121,11 @@ class LFPG_GroupManager
     protected ref map<string, int> m_BaseRefreshAt;
     protected int m_BaseRefreshCursor;
 
-    // Vehicle protection under raised flags (config v6) and its scan cursor.
+    // Vehicle protection under raised flags (config v6), its scan cursor and the
+    // flag group ids of the current tick (map.GetKey is O(n) per call).
     protected ref LFPG_VehicleProtection m_VehicleProtection;
     protected int m_VehicleScanCursor;
+    protected ref array<string> m_VehicleScanIDs;
 
     // ========================================================================
     // CONSTRUCTOR
@@ -157,6 +159,7 @@ class LFPG_GroupManager
         m_BaseRefreshCursor = 0;
         m_VehicleProtection = new LFPG_VehicleProtection();
         m_VehicleScanCursor = 0;
+        m_VehicleScanIDs = new array<string>;
     }
 
     void ~LFPG_GroupManager()
@@ -694,7 +697,12 @@ class LFPG_GroupManager
         if (!m_BootAuditDone)
             return;
 
-        int scanFlagCount = m_GroupFlags.Count();
+        m_VehicleScanIDs.Clear();
+        foreach (string flagGroupID, LFPG_FlagBase flagEntry : m_GroupFlags)
+        {
+            m_VehicleScanIDs.Insert(flagGroupID);
+        }
+        int scanFlagCount = m_VehicleScanIDs.Count();
         if (scanFlagCount > 0)
         {
             if (m_VehicleScanCursor >= scanFlagCount)
@@ -703,7 +711,7 @@ class LFPG_GroupManager
             int flagsSeen = 0;
             while (flagsSeen < scanFlagCount && flagsScanned < LFPG_VehicleProtection.SCAN_BATCH)
             {
-                string scanID = m_GroupFlags.GetKey(m_VehicleScanCursor);
+                string scanID = m_VehicleScanIDs[m_VehicleScanCursor];
                 m_VehicleScanCursor = m_VehicleScanCursor + 1;
                 if (m_VehicleScanCursor >= scanFlagCount)
                     m_VehicleScanCursor = 0;
