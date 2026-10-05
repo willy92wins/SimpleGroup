@@ -36,6 +36,8 @@ class LFPG_VehicleProtection
     static const float EXIT_MARGIN = 2.0;
     // Consecutive scans that do not find a queued vehicle before its key is dropped.
     static const int MAX_MISSES = 3;
+    // Entries dropped while loading that are named in the log; the rest are counted.
+    static const int DROP_LOG_LIMIT = 20;
 
     // groupID -> vehicle keys in order of arrival. Saved to vehicles.json.
     protected ref map<string, ref array<string>> m_Queues;
@@ -47,14 +49,19 @@ class LFPG_VehicleProtection
     protected ref map<string, int> m_Misses;
     // key -> a lifetime below the protected floor was already logged. Runtime only.
     protected ref map<string, bool> m_FloorLogged;
+    // groupID -> flag position at the last exit pass. A flag moved by admin tools
+    // does not cut the vehicles left outside its zone: they did not move (D5).
+    protected ref map<string, vector> m_LastCenter;
 
     protected bool m_Loaded;
-    // A newer vehicles file exists: queues live in memory and nothing is written.
+    // A newer vehicles file exists, or the final cannot be opened: queues live in
+    // memory and nothing is written this session.
     protected bool m_ReadOnly;
     protected bool m_Dirty;
     protected bool m_SaveErrorLogged;
-    protected bool m_BackupErrorLogged;
     protected bool m_TmpErrorLogged;
+    // The invalid final of the current failing save streak was already copied aside.
+    protected bool m_CorruptCopied;
 
     // Reused buffers.
     protected ref array<Object> m_ScanObjects;
@@ -72,12 +79,13 @@ class LFPG_VehicleProtection
         m_Bound = new map<string, Transport>;
         m_Misses = new map<string, int>;
         m_FloorLogged = new map<string, bool>;
+        m_LastCenter = new map<string, vector>;
         m_Loaded = false;
         m_ReadOnly = false;
         m_Dirty = false;
         m_SaveErrorLogged = false;
-        m_BackupErrorLogged = false;
         m_TmpErrorLogged = false;
+        m_CorruptCopied = false;
         m_ScanObjects = new array<Object>;
         m_ScanCargo = new array<CargoBase>;
         m_Candidates = new map<string, Transport>;
@@ -180,16 +188,26 @@ class LFPG_VehicleProtection
         m_Bound.Clear();
         m_Misses.Clear();
         m_FloorLogged.Clear();
+        m_LastCenter.Clear();
 
         string finalPath = GetFilePath();
         string tmpPath = GetTmpPath();
         string bakPath = GetBackupPath();
 
-        if (IsFutureFile(finalPath) || IsFutureFile(tmpPath) || IsFutureFile(bakPath))
+        // A newer format in any of the three files: read only. A valid version 1
+        // file is still loaded below, into memory.
+        if (CheckFutureFiles())
         {
             m_ReadOnly = true;
-            LFPG_Log.Error("vehicles.json has a newer format. Vehicle queues start empty and no vehicles file is written this session.");
-            return;
+            LFPG_Log.Error("Vehicle queues are kept in memory and no vehicles file is written this session.");
+        }
+
+        // A final that exists but cannot be opened (held by another process) may be
+        // newer than tmp and the backup: it is never replaced this session.
+        if (FileExist(finalPath) && LFPG_GroupsStorage.ReadByteCount(finalPath) < 0)
+        {
+            m_ReadOnly = true;
+            LFPG_Log.Error("vehicles.json exists but cannot be opened. Vehicle queues are kept in memory and no vehicles file is written this session.");
         }
 
         LFPG_VehicleQueuesData loaded;
@@ -232,6 +250,28 @@ class LFPG_VehicleProtection
         return LFPG_GroupsStorage.ReadVersion(path) > FILE_VERSION;
     }
 
+    // Logs each vehicles file written by a newer build; true when there is one.
+    protected bool CheckFutureFiles()
+    {
+        bool anyFuture = false;
+        if (IsFutureFile(GetFilePath()))
+        {
+            anyFuture = true;
+            LFPG_Log.Error("vehicles.json has a newer format than this build reads.");
+        }
+        if (IsFutureFile(GetTmpPath()))
+        {
+            anyFuture = true;
+            LFPG_Log.Error("vehicles.json.tmp has a newer format than this build reads.");
+        }
+        if (IsFutureFile(GetBackupPath()))
+        {
+            anyFuture = true;
+            LFPG_Log.Error("vehicles.json.bak has a newer format than this build reads.");
+        }
+        return anyFuture;
+    }
+
     // Parses and checks one vehicles file. Entries are checked by ApplyLoadedData.
     protected bool ReadQueuesFile(string path, out LFPG_VehicleQueuesData data, out string error)
     {
@@ -261,7 +301,8 @@ class LFPG_VehicleProtection
         return true;
     }
 
-    // Malformed keys, repeated keys and repeated groups are dropped; the first entry wins.
+    // Malformed keys, repeated keys and repeated groups are dropped; the first entry
+    // wins. The first DROP_LOG_LIMIT drops are named in the log.
     protected void ApplyLoadedData(LFPG_VehicleQueuesData data, string source)
     {
         int dropped = 0;
@@ -274,6 +315,10 @@ class LFPG_VehicleProtection
             if (!record || record.m_GroupID == "" || !record.m_Vehicles || m_Queues.Contains(record.m_GroupID))
             {
                 dropped = dropped + 1;
+                string recordWhat = "record " + ri.ToString();
+                if (record)
+                    recordWhat = recordWhat + " group=" + record.m_GroupID;
+                LogDropped(recordWhat, dropped);
                 continue;
             }
             array<string> loadedQueue = new array<string>;
@@ -285,6 +330,9 @@ class LFPG_VehicleProtection
                 if (!IsValidKey(loadedKey) || m_KeyGroup.Contains(loadedKey))
                 {
                     dropped = dropped + 1;
+                    string keyWhat = "key " + loadedKey;
+                    keyWhat = keyWhat + " group=" + record.m_GroupID;
+                    LogDropped(keyWhat, dropped);
                     continue;
                 }
                 loadedQueue.Insert(loadedKey);
@@ -297,6 +345,8 @@ class LFPG_VehicleProtection
 
         string loadMsg = "Vehicle queues loaded from ";
         loadMsg = loadMsg + source;
+        if (m_ReadOnly)
+            loadMsg = loadMsg + " (read only)";
         loadMsg = loadMsg + ": groups=" + m_Queues.Count().ToString();
         loadMsg = loadMsg + " vehicles=" + vehicleCount.ToString();
         loadMsg = loadMsg + " dropped=" + dropped.ToString();
@@ -304,6 +354,13 @@ class LFPG_VehicleProtection
             LFPG_Log.Error(loadMsg);
         else
             LFPG_Log.Info(loadMsg);
+    }
+
+    protected void LogDropped(string what, int droppedSoFar)
+    {
+        if (droppedSoFar > DROP_LOG_LIMIT)
+            return;
+        LFPG_Log.Error("Vehicle queue entry dropped at load: " + what);
     }
 
     // ========================================================================
@@ -360,7 +417,16 @@ class LFPG_VehicleProtection
                 Transport seen = null;
                 if (m_Candidates.Find(queuedKey, seen) && seen)
                 {
-                    Bind(queuedKey, seen);
+                    // An id carried by two live entities identifies neither: the
+                    // entity already bound keeps the key.
+                    Transport current = null;
+                    m_Bound.Find(queuedKey, current);
+                    if (!current || current == seen)
+                    {
+                        if (!current)
+                            LogFound(groupID, queuedKey, seen, qi);
+                        Bind(queuedKey, seen);
+                    }
                     continue;
                 }
                 // A live bound vehicle is judged by its position in ApplyProtection.
@@ -390,6 +456,10 @@ class LFPG_VehicleProtection
             if (m_KeyGroup.Find(newKey, owner))
             {
                 if (owner == groupID)
+                    continue;
+                // Another live entity bound to this id keeps it where it is.
+                Transport ownerBound = null;
+                if (m_Bound.Find(newKey, ownerBound) && ownerBound && ownerBound != newcomer)
                     continue;
                 // Another base keeps the vehicle until it is beyond that base's exit distance.
                 bool ownerActive = false;
@@ -461,12 +531,27 @@ class LFPG_VehicleProtection
             if (!m_Queues.Find(exitGroup, exitQueue) || !exitQueue)
                 continue;
 
-            // Read before any removal: the cut of D5 needs a flag that still protects.
+            // Read before any removal: the cut of D5 needs a flag that still protects
+            // and a zone that did not move since the last pass.
             LFPG_FlagBase exitFlag = GetRegisteredFlag(exitGroup, mgr);
             bool exitActive = IsRaised(exitFlag);
             vector center = "0 0 0";
             if (exitFlag)
+            {
                 center = exitFlag.GetPosition();
+                vector lastCenter = "0 0 0";
+                if (m_LastCenter.Find(exitGroup, lastCenter) && DistanceSqXZ(lastCenter, center) > EXIT_MARGIN * EXIT_MARGIN)
+                {
+                    exitActive = false;
+                    string movedMsg = "Flag of group ";
+                    movedMsg = movedMsg + exitGroup;
+                    movedMsg = movedMsg + " moved from " + lastCenter.ToString();
+                    movedMsg = movedMsg + " to " + center.ToString();
+                    movedMsg = movedMsg + "; vehicles left outside its zone keep their lifetime.";
+                    LFPG_Log.Info(movedMsg);
+                }
+                m_LastCenter.Set(exitGroup, center);
+            }
 
             int xi;
             for (xi = exitQueue.Count() - 1; xi >= 0; xi = xi - 1)
@@ -601,6 +686,19 @@ class LFPG_VehicleProtection
     // QUEUE EDITS
     // ========================================================================
 
+    // First time this session a queued key is tied to a live vehicle.
+    protected void LogFound(string groupID, string key, Transport vehicle, int index)
+    {
+        int place = index + 1;
+        string foundMsg = "Vehicle found: ";
+        foundMsg = foundMsg + key;
+        foundMsg = foundMsg + " group=" + groupID;
+        foundMsg = foundMsg + " place=" + place.ToString();
+        foundMsg = foundMsg + " type=" + vehicle.GetType();
+        foundMsg = foundMsg + " pos=" + vehicle.GetPosition().ToString();
+        LFPG_Log.Info(foundMsg);
+    }
+
     // A key bound to another live entity until now leaves that entity unmarked.
     protected void Bind(string key, Transport vehicle)
     {
@@ -705,6 +803,7 @@ class LFPG_VehicleProtection
             m_FloorLogged.Remove(dropKey);
         }
         m_Queues.Remove(groupID);
+        m_LastCenter.Remove(groupID);
         m_Dirty = true;
 
         string dropMsg = "Vehicle queue dropped: group=";
@@ -751,7 +850,10 @@ class LFPG_VehicleProtection
             string compactID = m_GroupBuffer[cqi];
             array<string> compactQueue = null;
             if (m_Queues.Find(compactID, compactQueue) && compactQueue && compactQueue.Count() == 0)
+            {
                 m_Queues.Remove(compactID);
+                m_LastCenter.Remove(compactID);
+            }
         }
     }
 
@@ -767,6 +869,7 @@ class LFPG_VehicleProtection
             return false;
         m_Dirty = false;
         m_SaveErrorLogged = false;
+        m_CorruptCopied = false;
         return true;
     }
 
@@ -802,11 +905,12 @@ class LFPG_VehicleProtection
     }
 
     // 1. The previous state is kept before tmp is touched: a valid final is copied
-    //    to the backup, an invalid final is copied aside, and without a valid final
-    //    a valid tmp (left by a crash or used by a recovery) becomes the backup.
+    //    to the backup, an invalid final is copied aside (once per failing
+    //    streak), and without a valid final a valid tmp (left by a crash or used
+    //    by a recovery) becomes the backup. Any failure stops the save; the next
+    //    tick retries.
     // 2. tmp -> verify -> copy to the final -> verify.
-    // 3. tmp is deleted only when the backup holds the previous state; otherwise
-    //    it stays as a second copy of the final.
+    // 3. tmp is deleted.
     // Not atomic: DayZ has no rename. A valid copy exists at every step.
     protected bool SaveQueues()
     {
@@ -814,10 +918,10 @@ class LFPG_VehicleProtection
         string tmpPath = GetTmpPath();
         string bakPath = GetBackupPath();
 
-        if (IsFutureFile(finalPath) || IsFutureFile(tmpPath) || IsFutureFile(bakPath))
+        if (CheckFutureFiles())
         {
             m_ReadOnly = true;
-            LFPG_Log.Error("vehicles.json has a newer format. Vehicle queue saves stop for this session.");
+            LFPG_Log.Error("Vehicle queue saves stop for this session.");
             return false;
         }
 
@@ -828,32 +932,21 @@ class LFPG_VehicleProtection
             return SaveFailed("cannot serialize the queues");
 
         // 1. Previous state.
-        bool keepTmp = false;
         LFPG_VehicleQueuesData previous;
         string previousError = "";
         if (FileExist(finalPath) && ReadQueuesFile(finalPath, previous, previousError))
         {
-            if (CopyToBackup(finalPath, bakPath))
-            {
-                m_BackupErrorLogged = false;
-            }
-            else
-            {
-                keepTmp = true;
-                if (!m_BackupErrorLogged)
-                {
-                    m_BackupErrorLogged = true;
-                    LFPG_Log.Error("vehicles.json backup rotation failed; vehicles.json.tmp stays as a second copy.");
-                }
-            }
+            if (!CopyToBackup(finalPath, bakPath))
+                return SaveFailed("cannot copy vehicles.json to vehicles.json.bak");
         }
         else
         {
-            if (FileExist(finalPath))
+            if (FileExist(finalPath) && !m_CorruptCopied)
             {
                 string asidePath = "";
                 if (!CopyAside(finalPath, ".corrupt", asidePath))
                     return SaveFailed("the invalid vehicles.json cannot be copied aside");
+                m_CorruptCopied = true;
                 string asideMsg = "vehicles.json did not verify; copied to ";
                 asideMsg = asideMsg + asidePath;
                 asideMsg = asideMsg + " before it is replaced.";
@@ -886,7 +979,7 @@ class LFPG_VehicleProtection
 
         // 3. tmp now equals the final. A tmp that cannot be deleted is harmless:
         //    the next boot reads the valid final first.
-        if (!keepTmp && !DeleteFile(tmpPath) && !m_TmpErrorLogged)
+        if (!DeleteFile(tmpPath) && !m_TmpErrorLogged)
         {
             m_TmpErrorLogged = true;
             LFPG_Log.Error("vehicles.json.tmp could not be deleted; it is a copy of vehicles.json.");

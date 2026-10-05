@@ -34,4 +34,32 @@ modded class Transport
         SetSynchDirty();
         #endif
     }
+
+    // Vanilla resets the economy lifetime of the root entity to its default when
+    // items inside it are combined (ItemBase.OnCombine -> IncreaseLifetimeUp). A
+    // protected vehicle keeps what it had if that was more; the validation tick
+    // tops it up again.
+    override void IncreaseLifetimeUp()
+    {
+        #ifdef SERVER
+        float lfpgLifeBefore = GetLifetime();
+        #endif
+
+        super.IncreaseLifetimeUp();
+
+        #ifdef SERVER
+        if (m_LFPG_ProtectedNet)
+        {
+            float lfpgLifeReset = GetLifetime();
+            if (lfpgLifeReset < lfpgLifeBefore)
+                SetLifetime(lfpgLifeBefore);
+            string resetMsg = "Vanilla lifetime reset on a protected vehicle: ";
+            resetMsg = resetMsg + GetType();
+            resetMsg = resetMsg + " before=" + lfpgLifeBefore.ToString();
+            resetMsg = resetMsg + " reset=" + lfpgLifeReset.ToString();
+            resetMsg = resetMsg + " now=" + GetLifetime().ToString();
+            LFPG_Log.Info(resetMsg);
+        }
+        #endif
+    }
 };

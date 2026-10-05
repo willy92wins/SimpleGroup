@@ -682,14 +682,16 @@ class LFPG_GroupManager
 
     // Vehicle protection (config v6). Scans up to LFPG_VehicleProtection.SCAN_BATCH
     // registered flags per tick, raised or not, then protects the first vehicles
-    // of every raised flag. Off in sessions whose group state is not trusted.
+    // of every raised flag. Off when the groups could not be loaded (R12). The
+    // boot safety net keeps it on: protection neither dissolves nor deletes, and
+    // with the option on the base refresh no longer keeps vehicles alive.
     protected void UpdateVehicleProtection()
     {
         if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
             return;
         if (!m_VehicleProtection || !m_VehicleProtection.IsLoaded())
             return;
-        if (m_GroupsLoadFailed || m_DissolveDisabled)
+        if (m_GroupsLoadFailed)
         {
             m_VehicleProtection.UnprotectAll();
             return;
@@ -739,7 +741,7 @@ class LFPG_GroupManager
             return true;
         if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
             return true;
-        if (m_GroupsLoadFailed || m_DissolveDisabled || !m_BootAuditDone)
+        if (m_GroupsLoadFailed || !m_BootAuditDone)
             return false;
         return m_VehicleProtection.SaveIfDirty();
     }
