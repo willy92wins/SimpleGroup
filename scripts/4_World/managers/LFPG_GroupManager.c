@@ -126,8 +126,11 @@ class LFPG_GroupManager
     protected ref LFPG_VehicleProtection m_VehicleProtection;
     protected int m_VehicleScanCursor;
     protected ref array<string> m_VehicleScanIDs;
-    // The first vehicle pass after boot scans every registered flag at once.
-    protected bool m_VehicleBootPassDone;
+    // groupID -> the flag had its first vehicle scan this session. A flag gets it on
+    // the first update after it registers, outside the batch (after boot: all).
+    protected ref map<string, bool> m_VehicleFirstScanDone;
+    // Group ids first-scanned in the current update; the batch skips them.
+    protected ref array<string> m_VehicleFirstScanned;
 
     // ========================================================================
     // CONSTRUCTOR
@@ -162,7 +165,8 @@ class LFPG_GroupManager
         m_VehicleProtection = new LFPG_VehicleProtection();
         m_VehicleScanCursor = 0;
         m_VehicleScanIDs = new array<string>;
-        m_VehicleBootPassDone = false;
+        m_VehicleFirstScanDone = new map<string, bool>;
+        m_VehicleFirstScanned = new array<string>;
     }
 
     void ~LFPG_GroupManager()
@@ -683,10 +687,11 @@ class LFPG_GroupManager
         UpdateVehicleProtection();
     }
 
-    // Vehicle protection (config v6). The first pass after boot scans every
-    // registered flag, so every queued vehicle is bound and topped up at once;
-    // later ticks scan up to LFPG_VehicleProtection.SCAN_BATCH flags, raised or
-    // not. Then the first vehicles of every raised flag are protected.
+    // Vehicle protection (config v6). Each registered flag gets its first scan of
+    // the session on the first update after it registers, outside the batch, so
+    // its queued vehicles are bound and topped up at once (after boot: every flag).
+    // Then up to LFPG_VehicleProtection.SCAN_BATCH flags are scanned, raised or
+    // not, and the first vehicles of every raised flag are protected.
     // Off when the groups could not be loaded (R12). While the boot safety net is
     // armed the world may be the wrong one: protection, icons and real exits go on,
     // but missing vehicles are not counted, queues of missing groups are kept and
@@ -705,10 +710,9 @@ class LFPG_GroupManager
         if (!m_BootAuditDone)
             return;
 
+        // Misses need a world that can be trusted, and are never counted in a
+        // flag's first scan (its vehicles may not be bound yet).
         bool worldTrusted = !m_DissolveDisabled;
-        bool bootPass = !m_VehicleBootPassDone;
-        // Misses need a world that has finished loading and can be trusted.
-        bool countMisses = worldTrusted && !bootPass;
 
         m_VehicleScanIDs.Clear();
         foreach (string flagGroupID, LFPG_FlagBase flagEntry : m_GroupFlags)
@@ -716,16 +720,35 @@ class LFPG_GroupManager
             m_VehicleScanIDs.Insert(flagGroupID);
         }
         int scanFlagCount = m_VehicleScanIDs.Count();
-        int scanBudget = LFPG_VehicleProtection.SCAN_BATCH;
-        if (bootPass)
-            scanBudget = scanFlagCount;
+
+        m_VehicleFirstScanned.Clear();
+        int fsi;
+        for (fsi = 0; fsi < scanFlagCount; fsi = fsi + 1)
+        {
+            string firstID = m_VehicleScanIDs[fsi];
+            if (m_VehicleFirstScanDone.Contains(firstID))
+                continue;
+            LFPG_FlagBase firstFlag = m_GroupFlags.Get(firstID);
+            if (!firstFlag || !IsOwnedRegisteredFlag(firstFlag))
+                continue;
+            m_VehicleProtection.ScanFlag(firstFlag, firstID, this, m_Config, false);
+            m_VehicleFirstScanDone.Set(firstID, true);
+            m_VehicleFirstScanned.Insert(firstID);
+        }
+        if (m_VehicleFirstScanned.Count() > 0)
+        {
+            string firstMsg = "Vehicle protection first scans: flags=";
+            firstMsg = firstMsg + m_VehicleFirstScanned.Count().ToString();
+            LFPG_Log.Info(firstMsg);
+        }
+
         if (scanFlagCount > 0)
         {
             if (m_VehicleScanCursor >= scanFlagCount)
                 m_VehicleScanCursor = 0;
             int flagsScanned = 0;
             int flagsSeen = 0;
-            while (flagsSeen < scanFlagCount && flagsScanned < scanBudget)
+            while (flagsSeen < scanFlagCount && flagsScanned < LFPG_VehicleProtection.SCAN_BATCH)
             {
                 string scanID = m_VehicleScanIDs[m_VehicleScanCursor];
                 m_VehicleScanCursor = m_VehicleScanCursor + 1;
@@ -733,22 +756,17 @@ class LFPG_GroupManager
                     m_VehicleScanCursor = 0;
                 flagsSeen = flagsSeen + 1;
 
+                if (m_VehicleFirstScanned.Find(scanID) >= 0)
+                    continue;
                 LFPG_FlagBase scanFlag = m_GroupFlags.Get(scanID);
                 if (!scanFlag)
                     continue;
                 if (!IsOwnedRegisteredFlag(scanFlag))
                     continue;
-                m_VehicleProtection.ScanFlag(scanFlag, scanID, this, m_Config, countMisses);
+                m_VehicleProtection.ScanFlag(scanFlag, scanID, this, m_Config, worldTrusted);
                 flagsScanned = flagsScanned + 1;
             }
-            if (bootPass)
-            {
-                string bootMsg = "Vehicle protection boot pass: flags scanned=";
-                bootMsg = bootMsg + flagsScanned.ToString();
-                LFPG_Log.Info(bootMsg);
-            }
         }
-        m_VehicleBootPassDone = true;
 
         if (worldTrusted)
             m_VehicleProtection.PruneMissingGroups(this);
@@ -1796,6 +1814,7 @@ class LFPG_GroupManager
         // The vehicle queue belongs to the group: icons go off, lifetimes stay.
         if (m_VehicleProtection)
             m_VehicleProtection.DropGroup(groupID, "dissolved");
+        m_VehicleFirstScanDone.Remove(groupID);
 
         // Limpiar flag references (DESPUES de destruir deployed objects)
         UnregisterFlag(groupID);

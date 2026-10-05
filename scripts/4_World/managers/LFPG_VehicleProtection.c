@@ -38,8 +38,6 @@ class LFPG_VehicleProtection
     static const int MAX_MISSES = 3;
     // Entries dropped while loading that are named in the log; the rest are counted.
     static const int DROP_LOG_LIMIT = 20;
-    // Keys kept per group when loading; a 32 m radius never holds more vehicles.
-    static const int MAX_LOADED_KEYS = 256;
 
     // groupID -> vehicle keys in order of arrival. Saved to vehicles.json.
     protected ref map<string, ref array<string>> m_Queues;
@@ -359,7 +357,7 @@ class LFPG_VehicleProtection
             for (ki = 0; ki < keyCount; ki = ki + 1)
             {
                 string loadedKey = record.m_Vehicles[ki];
-                if (!IsValidKey(loadedKey) || m_KeyGroup.Contains(loadedKey) || loadedQueue.Count() >= MAX_LOADED_KEYS)
+                if (!IsValidKey(loadedKey) || m_KeyGroup.Contains(loadedKey))
                 {
                     dropped = dropped + 1;
                     string keyWhat = "key " + loadedKey;
@@ -987,9 +985,10 @@ class LFPG_VehicleProtection
             LFPG_Log.Error("Vehicle queue saves stop for this session.");
             return false;
         }
-        // A final held by another process is never replaced; the next tick retries.
-        if (CannotOpen(finalPath))
-            return SaveFailed("vehicles.json exists but cannot be opened");
+        // A file held by another process may be the only valid copy: nothing is
+        // written while any of the three cannot be opened; the next tick retries.
+        if (CannotOpen(finalPath) || CannotOpen(tmpPath) || CannotOpen(bakPath))
+            return SaveFailed("a vehicles file exists but cannot be opened");
 
         LFPG_VehicleQueuesData data = BuildData();
         string expected = "";
