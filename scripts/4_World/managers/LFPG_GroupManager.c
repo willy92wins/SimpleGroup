@@ -1081,6 +1081,9 @@ class LFPG_GroupManager
         {
             m_BaseRefreshAt.Remove(groupID);
         }
+        // The next flag registered for this group (an upgrade) gets its own first
+        // vehicle scan. The vehicle queue itself stays with the group.
+        m_VehicleFirstScanDone.Remove(groupID);
     }
 
     // ========================================================================
@@ -1814,7 +1817,6 @@ class LFPG_GroupManager
         // The vehicle queue belongs to the group: icons go off, lifetimes stay.
         if (m_VehicleProtection)
             m_VehicleProtection.DropGroup(groupID, "dissolved");
-        m_VehicleFirstScanDone.Remove(groupID);
 
         // Limpiar flag references (DESPUES de destruir deployed objects)
         UnregisterFlag(groupID);
