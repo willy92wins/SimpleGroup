@@ -67,6 +67,11 @@ class LFPG_GroupManager
     // Periodic validation timer (Timer class, NOT CallLater)
     protected ref Timer m_ValidationTimer;
 
+    // PERF (issue #24, PR2): unico timer de drenaje de baterias T3 (10 s).
+    // Antes cada T3 tenia el suyo (m_BatteryDrainTimer): N timers, N lookups
+    // de config por tick. El drain por bandera y periodo no cambian.
+    protected ref Timer m_BatteryTickTimer;
+
     // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
     protected ref array<string> m_OrphanBuffer;
     protected ref array<Man> m_PlayerSearchBuffer;
@@ -160,6 +165,11 @@ class LFPG_GroupManager
             m_ValidationTimer.Stop();
             m_ValidationTimer = null;
         }
+        if (m_BatteryTickTimer)
+        {
+            m_BatteryTickTimer.Stop();
+            m_BatteryTickTimer = null;
+        }
         if (GetGame())
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.RunBootAudit);
     }
@@ -212,6 +222,11 @@ class LFPG_GroupManager
             tickSec = m_Config.m_ValidationTickSeconds;
         m_ValidationTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
         m_ValidationTimer.Run(tickSec, this, "OnValidationTick", null, true);
+
+        // PERF (issue #24, PR2): drenaje de baterias T3, 1 timer global cada
+        // 10 s en vez de 1 por bandera. Usa Timer class, igual que validacion.
+        m_BatteryTickTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
+        m_BatteryTickTimer.Run(10.0, this, "OnBatteryTick", null, true);
 
         string msg = "GroupManager initialized. Groups: ";
         msg = msg + m_Groups.Count().ToString();
@@ -663,6 +678,35 @@ class LFPG_GroupManager
 
         MaintainRegisteredFlagLifetimes();
         RefreshRaisedBases();
+    }
+
+    // PERF (issue #24, PR2): tick global de drenaje T3, cada 10 s.
+    // Itera las banderas registradas, filtra tier 3 y drena con el
+    // m_BatteryDrainPerSecond leido UNA vez por tick (antes era una lectura
+    // de config por bandera y por tick, mas un Timer por entidad).
+    void OnBatteryTick()
+    {
+        if (m_IsShuttingDown)
+            return;
+        if (!m_Config)
+            return;
+
+        float drainPerSec = m_Config.m_BatteryDrainPerSecond;
+
+        int flagCount = m_GroupFlags.Count();
+        int fi;
+        for (fi = 0; fi < flagCount; fi = fi + 1)
+        {
+            LFPG_FlagBase flag = m_GroupFlags.GetElement(fi);
+            if (!flag)
+                continue;
+            if (flag.GetTier() != 3)
+                continue;
+            LFPG_Flag_T3 t3 = LFPG_Flag_T3.Cast(flag);
+            if (!t3)
+                continue;
+            t3.BatteryTick(drainPerSec);
+        }
     }
 
     // Top up every flag that still belongs to a group. Abandoned flags are not in the map.
