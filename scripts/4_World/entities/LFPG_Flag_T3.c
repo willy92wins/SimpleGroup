@@ -16,10 +16,14 @@
 class LFPG_Flag_T3 extends LFPG_FlagBase
 {
     // ========================================================================
-    // BATTERY FIELDS (siempre presentes, sin #ifdef)
+    // BATTERY STATE (siempre presente, sin #ifdef)
+    // PERF (issue #24, PR2): el drenaje lo hace un unico Timer global en
+    // GroupManager (OnBatteryTick). Esta entidad ya no posee timer propio:
+    // con N banderas T3 habia N timers repitiendo el mismo trabajo cada 10 s.
+    // Se registra en el manager donde antes arrancaba su timer y se retira
+    // donde lo paraba; el registro no depende de que la bandera tenga grupo.
     // ========================================================================
     protected bool m_HasBatteryPower;
-    protected ref Timer m_BatteryDrainTimer;
 
     // ========================================================================
     // POWERGRID FIELDS (declarados siempre para persistencia estable)
@@ -58,11 +62,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
 
     void ~LFPG_Flag_T3()
     {
-        if (m_BatteryDrainTimer)
-        {
-            m_BatteryDrainTimer.Stop();
-            m_BatteryDrainTimer = null;
-        }
+        StopBatteryDrain();
     }
 
     // ========================================================================
@@ -123,7 +123,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
             CheckBatteryPower();
             if (m_HasBatteryPower)
             {
-                StartBatteryDrainTimer();
+                StartBatteryDrain();
             }
             UpdatePowerState();
         }
@@ -141,7 +141,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         if (slot_name == "LFPG_FlagBattery")
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
+            StopBatteryDrain();
             UpdatePowerState();
         }
         #endif
@@ -215,73 +215,73 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         m_HasBatteryPower = true;
     }
 
-    protected void StartBatteryDrainTimer()
+    // Alta/baja en el registro de drenaje del GroupManager (antes Start/Stop
+    // del Timer propio). Registrar de nuevo reinicia los 10 s, como Timer.Run.
+    protected void StartBatteryDrain()
     {
-        if (!m_BatteryDrainTimer)
-        {
-            m_BatteryDrainTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
-        }
-        m_BatteryDrainTimer.Run(10.0, this, "OnBatteryDrainTick", null, true);
+        #ifdef SERVER
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+            mgr.RegisterBatteryDrain(this);
+        #endif
     }
 
-    protected void StopBatteryDrainTimer()
+    protected void StopBatteryDrain()
     {
-        if (m_BatteryDrainTimer)
-        {
-            m_BatteryDrainTimer.Stop();
-        }
+        #ifdef SERVER
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+            mgr.UnregisterBatteryDrain(this);
+        #endif
     }
 
-    void OnBatteryDrainTick()
+    // Tick de drenaje ejecutado por el Timer global de GroupManager (OnBatteryTick),
+    // cada 10 s desde que esta bandera se registro. drainPerSec ya viene resuelto
+    // del config (el manager lo lee una vez por tick, no una vez por bandera).
+    // El latch OFF->ON, la prioridad del grid y la bateria ruined sin energia
+    // se conservan via UpdatePowerState, igual que con el timer por entidad.
+    // Devuelve false donde el timer antiguo se paraba: el manager la retira.
+    bool BatteryTick(float drainPerSec)
     {
         #ifdef SERVER
         // Si el grid alimenta, la bateria no drena (grid prioridad)
         if (m_GridPowered)
-            return;
+            return true;
 
         string slotName = "LFPG_FlagBattery";
         EntityAI batteryEnt = FindAttachmentBySlotName(slotName);
         if (!batteryEnt)
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
             UpdatePowerState();
-            return;
+            return false;
         }
 
         ItemBase battery = ItemBase.Cast(batteryEnt);
         if (!battery || battery.IsRuined())
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
             UpdatePowerState();
-            return;
+            return false;
         }
 
         ComponentEnergyManager cem = battery.GetCompEM();
         if (!cem)
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
             UpdatePowerState();
-            return;
+            return false;
         }
 
         float currentEnergy = cem.GetEnergy();
         if (currentEnergy <= 0.0)
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
             UpdatePowerState();
-            return;
+            return false;
         }
 
         // Drenar bateria
-        LFPG_TerritoryConfig config = GetTerritoryConfig();
-        float drainPerSec = 0.01;
-        if (config)
-            drainPerSec = config.m_BatteryDrainPerSecond;
-
         float drainAmount = drainPerSec * 10.0;
         float newEnergy = currentEnergy - drainAmount;
         if (newEnergy < 0.0)
@@ -289,10 +289,11 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
 
         cem.SetEnergy(newEnergy);
 
+        bool keepDraining = true;
         if (newEnergy <= 0.0)
         {
             m_HasBatteryPower = false;
-            StopBatteryDrainTimer();
+            keepDraining = false;
         }
         else
         {
@@ -300,7 +301,9 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         }
 
         UpdatePowerState();
+        return keepDraining;
         #endif
+        return false;
     }
 
     // ========================================================================
@@ -354,7 +357,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         CheckBatteryPower();
         if (m_HasBatteryPower)
         {
-            StartBatteryDrainTimer();
+            StartBatteryDrain();
         }
         UpdatePowerState();
         #endif
