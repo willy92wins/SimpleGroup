@@ -781,13 +781,13 @@ class LFPG_GroupManager
             }
 
             int dueMs = m_BatteryDueMs[bi];
-            if (nowMs < dueMs)
+            if (nowMs - dueMs < 0)
                 continue;
 
             // Periodo fijo como el Timer repetitivo; tras un hitch largo no se
             // encadenan drenajes atrasados.
             dueMs = dueMs + LFPG_BATTERY_DRAIN_PERIOD_MS;
-            if (dueMs <= nowMs)
+            if (dueMs - nowMs <= 0)
                 dueMs = nowMs + LFPG_BATTERY_DRAIN_PERIOD_MS;
             m_BatteryDueMs[bi] = dueMs;
 
