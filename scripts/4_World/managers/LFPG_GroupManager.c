@@ -67,6 +67,10 @@ class LFPG_GroupManager
     // Periodic validation timer (Timer class, NOT CallLater)
     protected ref Timer m_ValidationTimer;
 
+    // Lifetime upkeep of protected vehicles between validation ticks (1 s).
+    // Created only with the vehicle option on.
+    protected ref Timer m_VehicleLifetimeTimer;
+
     // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
     protected ref array<string> m_OrphanBuffer;
     protected ref array<Man> m_PlayerSearchBuffer;
@@ -176,6 +180,11 @@ class LFPG_GroupManager
             m_ValidationTimer.Stop();
             m_ValidationTimer = null;
         }
+        if (m_VehicleLifetimeTimer)
+        {
+            m_VehicleLifetimeTimer.Stop();
+            m_VehicleLifetimeTimer = null;
+        }
         if (GetGame())
             GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.RunBootAudit);
     }
@@ -220,7 +229,11 @@ class LFPG_GroupManager
 
         // With the option off, vehicles.json is neither read nor written.
         if (m_Config.m_OverrideVehicleLifetime)
+        {
             m_VehicleProtection.Load();
+            m_VehicleLifetimeTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
+            m_VehicleLifetimeTimer.Run(1.0, this, "OnVehicleLifetimeTick", null, true);
+        }
 
         // One second, once. The validation tick repeats the audit only if this
         // call has not run yet. Not a repeating CallLater (the 4.5 h timer bug).
@@ -773,6 +786,20 @@ class LFPG_GroupManager
         m_VehicleProtection.ApplyProtection(this, m_Config);
         if (worldTrusted)
             m_VehicleProtection.SaveIfDirty();
+    }
+
+    // Every second: gives protected vehicles back the lifetime that the engine
+    // reset when an item entered them. Same gates as UpdateVehicleProtection; it
+    // also runs while the boot safety net is armed, like the protection itself.
+    void OnVehicleLifetimeTick()
+    {
+        if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
+            return;
+        if (!m_VehicleProtection || !m_VehicleProtection.IsLoaded())
+            return;
+        if (m_GroupsLoadFailed || !m_BootAuditDone)
+            return;
+        m_VehicleProtection.KeepProtectedLifetimes(m_Config);
     }
 
     // Shutdown save of the vehicle queues, behind the same gates as the tick.

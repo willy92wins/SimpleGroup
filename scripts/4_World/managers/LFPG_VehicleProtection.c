@@ -560,6 +560,14 @@ class LFPG_VehicleProtection
     // PROTECTION - every validation tick, for every queue
     // ========================================================================
 
+    // Two validation ticks of decay plus a margin below the configured lifetime.
+    // A protected vehicle below it was shortened by something else.
+    protected static float FloorLimit(LFPG_TerritoryConfig cfg)
+    {
+        float floorWanted = cfg.m_VehicleLifetime;
+        return floorWanted - (2.0 * cfg.m_ValidationTickSeconds) - 5.0;
+    }
+
     // Pass 1, every queue: drop ruined, re-keyed and departed vehicles.
     // Pass 2, every queue: the first bound vehicles of each raised registered flag
     // hold its slots. Every icon of the tick is cleared before any is set, so a
@@ -572,8 +580,7 @@ class LFPG_VehicleProtection
         float keepRadius = cfg.m_BuildRadiusMeters + EXIT_MARGIN;
         float keepSq = keepRadius * keepRadius;
         float wanted = cfg.m_VehicleLifetime;
-        // Two ticks of decay plus a margin. Lower means something else shortened it.
-        float floorLimit = wanted - (2.0 * cfg.m_ValidationTickSeconds) - 5.0;
+        float floorLimit = FloorLimit(cfg);
 
         CollectGroupIDs();
         int groupCount = m_GroupBuffer.Count();
@@ -685,16 +692,8 @@ class LFPG_VehicleProtection
     {
         float before = vehicle.GetLifetime();
         bool wasProtected = LFPG_VehicleState.IsProtected(vehicle);
-        if (wasProtected && before < floorLimit && !m_FloorLogged.Contains(key))
-        {
-            m_FloorLogged.Set(key, true);
-            string floorMsg = "Vehicle lifetime below the protected floor: ";
-            floorMsg = floorMsg + key;
-            floorMsg = floorMsg + " group=" + groupID;
-            floorMsg = floorMsg + " lifetime=" + before.ToString();
-            floorMsg = floorMsg + " max=" + vehicle.GetLifetimeMax().ToString();
-            LFPG_Log.Info(floorMsg);
-        }
+        if (wasProtected && before < floorLimit)
+            LogBelowFloor(groupID, key, vehicle, before);
 
         if (before < wanted)
             vehicle.SetLifetime(wanted);
@@ -740,6 +739,49 @@ class LFPG_VehicleProtection
                 LFPG_VehicleState.SetProtected(boundVehicle, false);
         }
         m_FloorLogged.Clear();
+    }
+
+    // Every second, between validation ticks. An item entering a vehicle makes the
+    // engine reset the vehicle's economy lifetime to its types.xml value, and the
+    // next validation tick can be a minute away. A protected vehicle below the
+    // floor gets the configured lifetime back at once.
+    void KeepProtectedLifetimes(LFPG_TerritoryConfig cfg)
+    {
+        if (!m_Loaded || !cfg)
+            return;
+
+        float keepWanted = cfg.m_VehicleLifetime;
+        float keepFloor = FloorLimit(cfg);
+        foreach (string keepKey, Transport keepVehicle : m_Bound)
+        {
+            if (!keepVehicle || keepVehicle.IsRuined())
+                continue;
+            if (!LFPG_VehicleState.IsProtected(keepVehicle))
+                continue;
+            float keepLife = keepVehicle.GetLifetime();
+            if (keepLife >= keepFloor)
+                continue;
+
+            string keepGroup = "";
+            m_KeyGroup.Find(keepKey, keepGroup);
+            LogBelowFloor(keepGroup, keepKey, keepVehicle, keepLife);
+            keepVehicle.SetLifetime(keepWanted);
+        }
+    }
+
+    // Once per vehicle until it loses its slot.
+    protected void LogBelowFloor(string groupID, string key, Transport vehicle, float lifetime)
+    {
+        if (m_FloorLogged.Contains(key))
+            return;
+        m_FloorLogged.Set(key, true);
+
+        string floorMsg = "Vehicle lifetime below the protected floor: ";
+        floorMsg = floorMsg + key;
+        floorMsg = floorMsg + " group=" + groupID;
+        floorMsg = floorMsg + " lifetime=" + lifetime.ToString();
+        floorMsg = floorMsg + " max=" + vehicle.GetLifetimeMax().ToString();
+        LFPG_Log.Info(floorMsg);
     }
 
     // ========================================================================
