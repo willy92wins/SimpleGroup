@@ -321,12 +321,12 @@ class LFPG_FlagBase extends ItemBase
         if (m_RemainingAtRaise <= 0.0)
             return 0.0;
 
-        // Obtener duracion total del tier desde config
-        LFPG_TerritoryConfig config = GetTerritoryConfig();
+        // Obtener duracion total del tier (cacheada en el manager, issue #24 PR1)
         float tierDuration = 172800.0;
-        if (config)
+        LFPG_GroupManager durMgr = LFPG_GroupManager.Get();
+        if (durMgr)
         {
-            tierDuration = config.GetTierDuration(GetTier());
+            tierDuration = durMgr.GetCachedTierDuration(GetTier());
         }
 
         if (tierDuration <= 0.0)
@@ -365,13 +365,18 @@ class LFPG_FlagBase extends ItemBase
     void SetFullyRaised()
     {
         #ifdef SERVER
-        LFPG_TerritoryConfig config = GetTerritoryConfig();
+        // Duracion del tier cacheada en el manager (issue #24 PR1). Sin config
+        // todavia (boot pre-Init): provisional + reinit al cargar la config,
+        // igual que antes — si no, T3 quedaria truncada al default.
+        LFPG_GroupManager durMgr = LFPG_GroupManager.Get();
         float tierDuration = 172800.0;
-        if (config)
+        bool haveConfig = false;
+        if (durMgr)
         {
-            tierDuration = config.GetTierDuration(GetTier());
+            tierDuration = durMgr.GetCachedTierDuration(GetTier());
+            haveConfig = (durMgr.GetConfig() != null);
         }
-        else
+        if (!haveConfig)
         {
             // Boot (T3 con energia en AfterStoreLoad): el default truncaria T3.
             // Se rehace con la duracion real en OnServerConfigLoaded.
@@ -462,12 +467,12 @@ class LFPG_FlagBase extends ItemBase
         float newProgress = current + delta;
         newProgress = Math.Clamp(newProgress, 0.0, 1.0);
 
-        // Recalcular remaining basado en nuevo progress
-        LFPG_TerritoryConfig config = GetTerritoryConfig();
+        // Recalcular remaining basado en nuevo progress (duracion cacheada, #24 PR1)
         float tierDuration = 172800.0;
-        if (config)
+        LFPG_GroupManager incMgr = LFPG_GroupManager.Get();
+        if (incMgr)
         {
-            tierDuration = config.GetTierDuration(GetTier());
+            tierDuration = incMgr.GetCachedTierDuration(GetTier());
         }
 
         m_RemainingAtRaise = newProgress * tierDuration;
@@ -489,11 +494,11 @@ class LFPG_FlagBase extends ItemBase
         float newProgress = current - delta;
         newProgress = Math.Clamp(newProgress, 0.0, 1.0);
 
-        LFPG_TerritoryConfig config = GetTerritoryConfig();
         float tierDuration = 172800.0;
-        if (config)
+        LFPG_GroupManager decMgr = LFPG_GroupManager.Get();
+        if (decMgr)
         {
-            tierDuration = config.GetTierDuration(GetTier());
+            tierDuration = decMgr.GetCachedTierDuration(GetTier());
         }
 
         m_RemainingAtRaise = newProgress * tierDuration;
