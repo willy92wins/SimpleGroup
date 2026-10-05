@@ -48,6 +48,11 @@ class LFPG_GroupManager
     // ========================================================================
     protected ref LFPG_TerritoryConfig m_Config;
 
+    // PERF (issue #24, PR1): tier durations resolved once in Init so
+    // ComputeCurrentRaiseProgress (called per territory/build check) skips the
+    // config lookup + array-bounds walk. Falls back to config when empty.
+    protected ref array<int> m_TierDurCache;
+
     // Primary storage: groupID -> GroupData
     protected ref map<string, ref LFPG_GroupData> m_Groups;
 
@@ -180,6 +185,16 @@ class LFPG_GroupManager
         // Cargar config
         m_Config = LFPG_TerritoryConfig.Load();
 
+        // PERF (issue #24, PR1): snapshots used by hot paths. Config lists are
+        // immutable after this point, so the classname memo stays valid.
+        LFPG_KindMemo.Clear();
+        m_TierDurCache = new array<int>;
+        int cacheTier;
+        for (cacheTier = 1; cacheTier <= 3; cacheTier = cacheTier + 1)
+        {
+            m_TierDurCache.Insert(m_Config.GetTierDuration(cacheTier));
+        }
+
         // Rehacer con la config real lo calculado antes de cargarla (acciones
         // por tier y SetFullyRaised de T3); despues cargar los grupos.
         int cfgPendCount = m_ConfigPendingFlags.Count();
@@ -221,6 +236,19 @@ class LFPG_GroupManager
     LFPG_TerritoryConfig GetConfig()
     {
         return m_Config;
+    }
+
+    // PERF (issue #24, PR1): cached tier duration for raise-progress math.
+    int GetCachedTierDuration(int tier)
+    {
+        int idx = tier - 1;
+        if (idx < 0)
+            idx = 0;
+        if (m_TierDurCache && idx < m_TierDurCache.Count())
+            return m_TierDurCache[idx];
+        if (m_Config)
+            return m_Config.GetTierDuration(tier);
+        return 172800;
     }
 
     // ========================================================================
