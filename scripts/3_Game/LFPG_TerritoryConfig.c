@@ -19,7 +19,9 @@
 // v2 -> v3: anadidos m_NoBaseRequiredTypes y m_UnrestrictedTypes
 // v3 -> v4: m_FurnitureCountedTypes and m_NoDropInForeignTerritoryTypes
 // v4 -> v5: m_MinRefreshLifetime (seconds). Negative disables base refresh.
-const int LFPG_CONFIG_VERSION = 5;
+// v5 -> v6: vehicle protection (m_OverrideVehicleLifetime, m_VehicleLifetime,
+//           m_T1VehiclesProtected, m_T2VehiclesProtected, m_T3VehiclesProtected).
+const int LFPG_CONFIG_VERSION = 6;
 
 // Decode a quoted JSON key with the engine, including escaped key names.
 class LFPG_ConfigKeyToken
@@ -102,6 +104,17 @@ class LFPG_TerritoryConfig
     // is at least this many seconds are reset to that max. Negative disables it.
     int m_MinRefreshLifetime;
 
+    // --- Vehicle protection (v6) ---
+    // While a flag is raised, the first vehicles that entered its build radius keep
+    // at least m_VehicleLifetime seconds of lifetime; the tier sets how many. Other
+    // vehicles in the radius keep their own lifetime and the base refresh skips them.
+    // When false, the base refresh treats vehicles like any other object.
+    bool m_OverrideVehicleLifetime;
+    int m_VehicleLifetime;
+    int m_T1VehiclesProtected;
+    int m_T2VehiclesProtected;
+    int m_T3VehiclesProtected;
+
     // --- Energia T3 ---
     float m_BatteryDrainPerSecond;
     float m_PowerGridConsumption;
@@ -181,6 +194,12 @@ class LFPG_TerritoryConfig
         // el flujo normal es on-demand por grupo.
         m_RecalibrationIntervalSeconds = 1800;
         m_MinRefreshLifetime = 86400;
+
+        m_OverrideVehicleLifetime = true;
+        m_VehicleLifetime = 86400;
+        m_T1VehiclesProtected = 2;
+        m_T2VehiclesProtected = 3;
+        m_T3VehiclesProtected = 4;
 
         // Garden plots: conteo separado por defecto
         m_EnablePlots = true;
@@ -307,6 +326,19 @@ class LFPG_TerritoryConfig
         if (m_ValidationTickSeconds > 600)
             m_ValidationTickSeconds = 600;
 
+        // Vehicle protection. The lifetime floor stays well above the longest
+        // validation tick, which is what tops it up again.
+        int previousVehicleLifetime = m_VehicleLifetime;
+        if (m_VehicleLifetime < 3600)
+            m_VehicleLifetime = 3600;
+        if (m_VehicleLifetime > 316224000)
+            m_VehicleLifetime = 316224000;
+        if (previousVehicleLifetime != m_VehicleLifetime)
+            LFPG_Log.Info("Config: m_VehicleLifetime clamped to " + m_VehicleLifetime.ToString());
+        m_T1VehiclesProtected = ClampVehicleSlots(m_T1VehiclesProtected, "m_T1VehiclesProtected");
+        m_T2VehiclesProtected = ClampVehicleSlots(m_T2VehiclesProtected, "m_T2VehiclesProtected");
+        m_T3VehiclesProtected = ClampVehicleSlots(m_T3VehiclesProtected, "m_T3VehiclesProtected");
+
         // Asegurar que FurnitureExcludedTypes existe
         if (!m_FurnitureExcludedTypes)
         {
@@ -367,7 +399,8 @@ class LFPG_TerritoryConfig
             }
         }
 
-        // Load restores omitted lists from the validated JSON key set.
+        // Load restores omitted lists and the v6 vehicle protection keys from
+        // the validated JSON key set.
 
         // The constructor supplies m_MinRefreshLifetime when the key is absent.
         // Keep an explicit admin value even when the file still declares v4 or older.
@@ -389,6 +422,48 @@ class LFPG_TerritoryConfig
         if (idx >= m_TierDurations.Count())
             idx = m_TierDurations.Count() - 1;
         return m_TierDurations[idx];
+    }
+
+    // Vehicle slots of a flag of the given tier; tiers above 3 use the T3 value.
+    int GetVehiclesProtected(int tier)
+    {
+        if (tier >= 3)
+            return m_T3VehiclesProtected;
+        if (tier == 2)
+            return m_T2VehiclesProtected;
+        return m_T1VehiclesProtected;
+    }
+
+    // Keeps a per-tier vehicle slot count in [0, 100] and logs a change.
+    protected int ClampVehicleSlots(int value, string key)
+    {
+        int clamped = value;
+        if (clamped < 0)
+            clamped = 0;
+        if (clamped > 100)
+            clamped = 100;
+        if (clamped != value)
+        {
+            string clampMsg = "Config: " + key;
+            clampMsg = clampMsg + " clamped to " + clamped.ToString();
+            LFPG_Log.Info(clampMsg);
+        }
+        return clamped;
+    }
+
+    // Effective vehicle protection settings, logged once at startup.
+    string DescribeVehicleProtection()
+    {
+        string desc = "Vehicle protection: override=";
+        if (m_OverrideVehicleLifetime)
+            desc = desc + "true";
+        else
+            desc = desc + "false";
+        desc = desc + " lifetime=" + m_VehicleLifetime.ToString();
+        desc = desc + " T1=" + m_T1VehiclesProtected.ToString();
+        desc = desc + " T2=" + m_T2VehiclesProtected.ToString();
+        desc = desc + " T3=" + m_T3VehiclesProtected.ToString();
+        return desc;
     }
 
     // Retorna si las acciones de subir/bajar bandera estan habilitadas para el tier
@@ -694,6 +769,18 @@ class LFPG_TerritoryConfig
                     config.m_TierDurations = defaults.m_TierDurations;
                 if (keys.Find("m_TierFlagActionsEnabled") < 0)
                     config.m_TierFlagActionsEnabled = defaults.m_TierFlagActionsEnabled;
+                // Absent v6 keys take the constructor defaults, whatever the
+                // serializer leaves in a scalar that the file does not declare.
+                if (keys.Find("m_OverrideVehicleLifetime") < 0)
+                    config.m_OverrideVehicleLifetime = defaults.m_OverrideVehicleLifetime;
+                if (keys.Find("m_VehicleLifetime") < 0)
+                    config.m_VehicleLifetime = defaults.m_VehicleLifetime;
+                if (keys.Find("m_T1VehiclesProtected") < 0)
+                    config.m_T1VehiclesProtected = defaults.m_T1VehiclesProtected;
+                if (keys.Find("m_T2VehiclesProtected") < 0)
+                    config.m_T2VehiclesProtected = defaults.m_T2VehiclesProtected;
+                if (keys.Find("m_T3VehiclesProtected") < 0)
+                    config.m_T3VehiclesProtected = defaults.m_T3VehiclesProtected;
             }
             else
             {

@@ -121,6 +121,10 @@ class LFPG_GroupManager
     protected ref map<string, int> m_BaseRefreshAt;
     protected int m_BaseRefreshCursor;
 
+    // Vehicle protection under raised flags (config v6) and its scan cursor.
+    protected ref LFPG_VehicleProtection m_VehicleProtection;
+    protected int m_VehicleScanCursor;
+
     // ========================================================================
     // CONSTRUCTOR
     // ========================================================================
@@ -151,6 +155,8 @@ class LFPG_GroupManager
         m_RecalibrationTickCounter = 0;
         m_BaseRefreshAt = new map<string, int>;
         m_BaseRefreshCursor = 0;
+        m_VehicleProtection = new LFPG_VehicleProtection();
+        m_VehicleScanCursor = 0;
     }
 
     void ~LFPG_GroupManager()
@@ -179,6 +185,7 @@ class LFPG_GroupManager
 
         // Cargar config
         m_Config = LFPG_TerritoryConfig.Load();
+        LFPG_Log.Info(m_Config.DescribeVehicleProtection());
 
         // Rehacer con la config real lo calculado antes de cargarla (acciones
         // por tier y SetFullyRaised de T3); despues cargar los grupos.
@@ -200,6 +207,10 @@ class LFPG_GroupManager
 
         // Resolve flags already restored, without abandoning any pending ID.
         ResolvePendingFlags();
+
+        // With the option off, vehicles.json is neither read nor written.
+        if (m_Config.m_OverrideVehicleLifetime)
+            m_VehicleProtection.Load();
 
         // One second, once. The validation tick repeats the audit only if this
         // call has not run yet. Not a repeating CallLater (the 4.5 h timer bug).
@@ -663,6 +674,66 @@ class LFPG_GroupManager
 
         MaintainRegisteredFlagLifetimes();
         RefreshRaisedBases();
+        UpdateVehicleProtection();
+    }
+
+    // Vehicle protection (config v6). Scans up to LFPG_VehicleProtection.SCAN_BATCH
+    // registered flags per tick, raised or not, then protects the first vehicles
+    // of every raised flag. Off in sessions whose group state is not trusted.
+    protected void UpdateVehicleProtection()
+    {
+        if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
+            return;
+        if (!m_VehicleProtection || !m_VehicleProtection.IsLoaded())
+            return;
+        if (m_GroupsLoadFailed || m_DissolveDisabled)
+        {
+            m_VehicleProtection.UnprotectAll();
+            return;
+        }
+        if (!m_BootAuditDone)
+            return;
+
+        int scanFlagCount = m_GroupFlags.Count();
+        if (scanFlagCount > 0)
+        {
+            if (m_VehicleScanCursor >= scanFlagCount)
+                m_VehicleScanCursor = 0;
+            int flagsScanned = 0;
+            int flagsSeen = 0;
+            while (flagsSeen < scanFlagCount && flagsScanned < LFPG_VehicleProtection.SCAN_BATCH)
+            {
+                string scanID = m_GroupFlags.GetKey(m_VehicleScanCursor);
+                m_VehicleScanCursor = m_VehicleScanCursor + 1;
+                if (m_VehicleScanCursor >= scanFlagCount)
+                    m_VehicleScanCursor = 0;
+                flagsSeen = flagsSeen + 1;
+
+                LFPG_FlagBase scanFlag = m_GroupFlags.Get(scanID);
+                if (!scanFlag)
+                    continue;
+                if (!IsOwnedRegisteredFlag(scanFlag))
+                    continue;
+                m_VehicleProtection.ScanFlag(scanFlag, scanID, this, m_Config);
+                flagsScanned = flagsScanned + 1;
+            }
+        }
+
+        m_VehicleProtection.PruneMissingGroups(this);
+        m_VehicleProtection.ApplyProtection(this, m_Config);
+        m_VehicleProtection.SaveIfDirty();
+    }
+
+    // Shutdown save of the vehicle queues, behind the same gates as the tick.
+    bool SaveVehicleQueuesIfDirty()
+    {
+        if (!m_VehicleProtection)
+            return true;
+        if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
+            return true;
+        if (m_GroupsLoadFailed || m_DissolveDisabled || !m_BootAuditDone)
+            return false;
+        return m_VehicleProtection.SaveIfDirty();
     }
 
     // Top up every flag that still belongs to a group. Abandoned flags are not in the map.
@@ -754,6 +825,8 @@ class LFPG_GroupManager
 
     // Same radius query the furniture recount uses. Resets remaining lifetime to max
     // for objects at or above m_MinRefreshLifetime. Players, creatures and the flag are skipped.
+    // With vehicle protection on, vehicles and everything they carry are skipped too:
+    // only the protected slots keep a vehicle alive.
     void RefreshBaseAroundFlag(LFPG_FlagBase flag)
     {
         if (!flag || !m_Config)
@@ -763,6 +836,7 @@ class LFPG_GroupManager
         if (!IsOwnedRegisteredFlag(flag))
             return;
 
+        bool skipVehicles = m_Config.m_OverrideVehicleLifetime;
         vector refreshPos = flag.GetPosition();
         float refreshRadius = m_Config.m_BuildRadiusMeters;
 
@@ -794,6 +868,12 @@ class LFPG_GroupManager
                 continue;
             if (refreshEnt.IsDayZCreature())
                 continue;
+            if (skipVehicles)
+            {
+                Transport refreshVehicle = Transport.Cast(refreshEnt.GetHierarchyRoot());
+                if (refreshVehicle)
+                    continue;
+            }
 
             float lifeMax = refreshEnt.GetLifetimeMax();
             if (lifeMax < lifeThreshold)
@@ -1679,6 +1759,10 @@ class LFPG_GroupManager
         // (si m_DestroyDeployedOnDissolve=false, los objetos sobreviven pero el tracker
         // queda apuntando a un grupo disuelto; sin Clear quedarian como huerfanos)
         LFPG_DeployTracker.ClearByGroup(groupID);
+
+        // The vehicle queue belongs to the group: icons go off, lifetimes stay.
+        if (m_VehicleProtection)
+            m_VehicleProtection.DropGroup(groupID, "dissolved");
 
         // Limpiar flag references (DESPUES de destruir deployed objects)
         UnregisterFlag(groupID);

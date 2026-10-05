@@ -34,6 +34,9 @@ modded class MissionServer
             // disolver su grupo y el save final escribiria un fichero vacio.
             mgr.SetShuttingDown();
             mgr.SaveGroupsIfDirty();
+            // Vehicle keys were captured from live vehicles during the session;
+            // nothing is resolved from entities here.
+            mgr.SaveVehicleQueuesIfDirty();
         }
 
         LFPG_GroupManager.Destroy();
