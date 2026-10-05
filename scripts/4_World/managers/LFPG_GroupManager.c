@@ -67,10 +67,20 @@ class LFPG_GroupManager
     // Periodic validation timer (Timer class, NOT CallLater)
     protected ref Timer m_ValidationTimer;
 
-    // PERF (issue #24, PR2): unico timer de drenaje de baterias T3 (10 s).
+    // PERF (issue #24, PR2): unico timer de drenaje de baterias T3.
     // Antes cada T3 tenia el suyo (m_BatteryDrainTimer): N timers, N lookups
     // de config por tick. El drain por bandera y periodo no cambian.
+    // El timer global solo despacha (cada 1 s); cada bateria conserva su propio
+    // vencimiento a 10 s desde que se registro, como hacia Timer.Run al insertar.
+    static const float LFPG_BATTERY_SCHED_SEC = 1.0;
+    static const int LFPG_BATTERY_DRAIN_PERIOD_MS = 10000;
     protected ref Timer m_BatteryTickTimer;
+
+    // T3 con bateria drenando, independiente de grupos: incluye banderas
+    // abandonadas, pendientes y las de grupos disueltos. Refs debiles: una
+    // entidad borrada queda null y el tick la poda. Arrays paralelos.
+    protected ref array<LFPG_Flag_T3> m_BatteryFlags;
+    protected ref array<int> m_BatteryDueMs;
 
     // FIX H4+H5: Buffers reutilizables (no allocar en ticks)
     protected ref array<string> m_OrphanBuffer;
@@ -145,6 +155,8 @@ class LFPG_GroupManager
         m_PendingFlags = new array<LFPG_FlagBase>;
         m_ConfigPendingFlags = new array<LFPG_FlagBase>;
         m_OrphanStrikes = new map<string, int>;
+        m_BatteryFlags = new array<LFPG_Flag_T3>;
+        m_BatteryDueMs = new array<int>;
         m_IsShuttingDown = false;
         m_DissolveDisabled = false;
         m_DissolveDisabledLogged = false;
@@ -223,10 +235,10 @@ class LFPG_GroupManager
         m_ValidationTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
         m_ValidationTimer.Run(tickSec, this, "OnValidationTick", null, true);
 
-        // PERF (issue #24, PR2): drenaje de baterias T3, 1 timer global cada
-        // 10 s en vez de 1 por bandera. Usa Timer class, igual que validacion.
+        // PERF (issue #24, PR2): drenaje de baterias T3, 1 timer global en vez
+        // de 1 por bandera. Usa Timer class, igual que validacion.
         m_BatteryTickTimer = new Timer(CALL_CATEGORY_GAMEPLAY);
-        m_BatteryTickTimer.Run(10.0, this, "OnBatteryTick", null, true);
+        m_BatteryTickTimer.Run(LFPG_BATTERY_SCHED_SEC, this, "OnBatteryTick", null, true);
 
         string msg = "GroupManager initialized. Groups: ";
         msg = msg + m_Groups.Count().ToString();
@@ -680,10 +692,45 @@ class LFPG_GroupManager
         RefreshRaisedBases();
     }
 
-    // PERF (issue #24, PR2): tick global de drenaje T3, cada 10 s.
-    // Itera las banderas registradas, filtra tier 3 y drena con el
-    // m_BatteryDrainPerSecond leido UNA vez por tick (antes era una lectura
-    // de config por bandera y por tick, mas un Timer por entidad).
+    // ========================================================================
+    // T3 BATTERY DRAIN REGISTRY
+    // ========================================================================
+    // Llamado por LFPG_Flag_T3 donde antes arrancaba su Timer (insercion con
+    // carga, AfterStoreLoad). Re-registrar reinicia el periodo, igual que Timer.Run.
+    void RegisterBatteryDrain(LFPG_Flag_T3 flag)
+    {
+        if (!flag)
+            return;
+
+        int dueMs = GetGame().GetTime() + LFPG_BATTERY_DRAIN_PERIOD_MS;
+        int idx = m_BatteryFlags.Find(flag);
+        if (idx >= 0)
+        {
+            m_BatteryDueMs[idx] = dueMs;
+            return;
+        }
+        m_BatteryFlags.Insert(flag);
+        m_BatteryDueMs.Insert(dueMs);
+    }
+
+    // Llamado por LFPG_Flag_T3 donde antes paraba su Timer (desconexion, borrado).
+    void UnregisterBatteryDrain(LFPG_Flag_T3 flag)
+    {
+        if (!flag)
+            return;
+        int idx = m_BatteryFlags.Find(flag);
+        if (idx < 0)
+            return;
+        m_BatteryFlags.Remove(idx);
+        m_BatteryDueMs.Remove(idx);
+    }
+
+    // PERF (issue #24, PR2): tick global de drenaje T3, cada 1 s.
+    // Solo drena las baterias cuyo vencimiento llego (cada 10 s por bateria),
+    // con el m_BatteryDrainPerSecond leido UNA vez por tick (antes era una
+    // lectura de config por bandera y por tick, mas un Timer por entidad).
+    // Recorre hacia atras: Remove mueve el ultimo elemento al hueco y ese ya
+    // se proceso.
     void OnBatteryTick()
     {
         if (m_IsShuttingDown)
@@ -692,20 +739,35 @@ class LFPG_GroupManager
             return;
 
         float drainPerSec = m_Config.m_BatteryDrainPerSecond;
+        int nowMs = GetGame().GetTime();
 
-        int flagCount = m_GroupFlags.Count();
-        int fi;
-        for (fi = 0; fi < flagCount; fi = fi + 1)
+        int bi;
+        for (bi = m_BatteryFlags.Count() - 1; bi >= 0; bi = bi - 1)
         {
-            LFPG_FlagBase flag = m_GroupFlags.GetElement(fi);
-            if (!flag)
-                continue;
-            if (flag.GetTier() != 3)
-                continue;
-            LFPG_Flag_T3 t3 = LFPG_Flag_T3.Cast(flag);
+            LFPG_Flag_T3 t3 = m_BatteryFlags[bi];
             if (!t3)
+            {
+                m_BatteryFlags.Remove(bi);
+                m_BatteryDueMs.Remove(bi);
                 continue;
-            t3.BatteryTick(drainPerSec);
+            }
+
+            int dueMs = m_BatteryDueMs[bi];
+            if (nowMs < dueMs)
+                continue;
+
+            // Periodo fijo como el Timer repetitivo; tras un hitch largo no se
+            // encadenan drenajes atrasados.
+            dueMs = dueMs + LFPG_BATTERY_DRAIN_PERIOD_MS;
+            if (dueMs <= nowMs)
+                dueMs = nowMs + LFPG_BATTERY_DRAIN_PERIOD_MS;
+            m_BatteryDueMs[bi] = dueMs;
+
+            if (!t3.BatteryTick(drainPerSec))
+            {
+                m_BatteryFlags.Remove(bi);
+                m_BatteryDueMs.Remove(bi);
+            }
         }
     }
 

@@ -20,6 +20,8 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
     // PERF (issue #24, PR2): el drenaje lo hace un unico Timer global en
     // GroupManager (OnBatteryTick). Esta entidad ya no posee timer propio:
     // con N banderas T3 habia N timers repitiendo el mismo trabajo cada 10 s.
+    // Se registra en el manager donde antes arrancaba su timer y se retira
+    // donde lo paraba; el registro no depende de que la bandera tenga grupo.
     // ========================================================================
     protected bool m_HasBatteryPower;
 
@@ -56,6 +58,11 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         string varIdHigh = "m_DeviceIdHigh";
         RegisterNetSyncVariableInt(varIdHigh);
         #endif
+    }
+
+    void ~LFPG_Flag_T3()
+    {
+        StopBatteryDrain();
     }
 
     // ========================================================================
@@ -114,6 +121,10 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         if (slot_name == "LFPG_FlagBattery")
         {
             CheckBatteryPower();
+            if (m_HasBatteryPower)
+            {
+                StartBatteryDrain();
+            }
             UpdatePowerState();
         }
         #endif
@@ -130,6 +141,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         if (slot_name == "LFPG_FlagBattery")
         {
             m_HasBatteryPower = false;
+            StopBatteryDrain();
             UpdatePowerState();
         }
         #endif
@@ -203,17 +215,38 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         m_HasBatteryPower = true;
     }
 
+    // Alta/baja en el registro de drenaje del GroupManager (antes Start/Stop
+    // del Timer propio). Registrar de nuevo reinicia los 10 s, como Timer.Run.
+    protected void StartBatteryDrain()
+    {
+        #ifdef SERVER
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+            mgr.RegisterBatteryDrain(this);
+        #endif
+    }
+
+    protected void StopBatteryDrain()
+    {
+        #ifdef SERVER
+        LFPG_GroupManager mgr = LFPG_GroupManager.Get();
+        if (mgr)
+            mgr.UnregisterBatteryDrain(this);
+        #endif
+    }
+
     // Tick de drenaje ejecutado por el Timer global de GroupManager (OnBatteryTick),
-    // una vez por bandera T3 cada 10 s. drainPerSec ya viene resuelto del config
-    // (el manager lo lee una vez por tick, no una vez por bandera).
+    // cada 10 s desde que esta bandera se registro. drainPerSec ya viene resuelto
+    // del config (el manager lo lee una vez por tick, no una vez por bandera).
     // El latch OFF->ON, la prioridad del grid y la bateria ruined sin energia
     // se conservan via UpdatePowerState, igual que con el timer por entidad.
-    void BatteryTick(float drainPerSec)
+    // Devuelve false donde el timer antiguo se paraba: el manager la retira.
+    bool BatteryTick(float drainPerSec)
     {
         #ifdef SERVER
         // Si el grid alimenta, la bateria no drena (grid prioridad)
         if (m_GridPowered)
-            return;
+            return true;
 
         string slotName = "LFPG_FlagBattery";
         EntityAI batteryEnt = FindAttachmentBySlotName(slotName);
@@ -221,7 +254,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         {
             m_HasBatteryPower = false;
             UpdatePowerState();
-            return;
+            return false;
         }
 
         ItemBase battery = ItemBase.Cast(batteryEnt);
@@ -229,7 +262,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         {
             m_HasBatteryPower = false;
             UpdatePowerState();
-            return;
+            return false;
         }
 
         ComponentEnergyManager cem = battery.GetCompEM();
@@ -237,7 +270,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         {
             m_HasBatteryPower = false;
             UpdatePowerState();
-            return;
+            return false;
         }
 
         float currentEnergy = cem.GetEnergy();
@@ -245,7 +278,7 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         {
             m_HasBatteryPower = false;
             UpdatePowerState();
-            return;
+            return false;
         }
 
         // Drenar bateria
@@ -256,9 +289,11 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
 
         cem.SetEnergy(newEnergy);
 
+        bool keepDraining = true;
         if (newEnergy <= 0.0)
         {
             m_HasBatteryPower = false;
+            keepDraining = false;
         }
         else
         {
@@ -266,7 +301,9 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
         }
 
         UpdatePowerState();
+        return keepDraining;
         #endif
+        return false;
     }
 
     // ========================================================================
@@ -318,6 +355,10 @@ class LFPG_Flag_T3 extends LFPG_FlagBase
 
         #ifdef SERVER
         CheckBatteryPower();
+        if (m_HasBatteryPower)
+        {
+            StartBatteryDrain();
+        }
         UpdatePowerState();
         #endif
     }
