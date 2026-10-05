@@ -126,6 +126,8 @@ class LFPG_GroupManager
     protected ref LFPG_VehicleProtection m_VehicleProtection;
     protected int m_VehicleScanCursor;
     protected ref array<string> m_VehicleScanIDs;
+    // The first vehicle pass after boot scans every registered flag at once.
+    protected bool m_VehicleBootPassDone;
 
     // ========================================================================
     // CONSTRUCTOR
@@ -160,6 +162,7 @@ class LFPG_GroupManager
         m_VehicleProtection = new LFPG_VehicleProtection();
         m_VehicleScanCursor = 0;
         m_VehicleScanIDs = new array<string>;
+        m_VehicleBootPassDone = false;
     }
 
     void ~LFPG_GroupManager()
@@ -680,11 +683,14 @@ class LFPG_GroupManager
         UpdateVehicleProtection();
     }
 
-    // Vehicle protection (config v6). Scans up to LFPG_VehicleProtection.SCAN_BATCH
-    // registered flags per tick, raised or not, then protects the first vehicles
-    // of every raised flag. Off when the groups could not be loaded (R12). The
-    // boot safety net keeps it on: protection neither dissolves nor deletes, and
-    // with the option on the base refresh no longer keeps vehicles alive.
+    // Vehicle protection (config v6). The first pass after boot scans every
+    // registered flag, so every queued vehicle is bound and topped up at once;
+    // later ticks scan up to LFPG_VehicleProtection.SCAN_BATCH flags, raised or
+    // not. Then the first vehicles of every raised flag are protected.
+    // Off when the groups could not be loaded (R12). While the boot safety net is
+    // armed the world may be the wrong one: protection, icons and real exits go on,
+    // but missing vehicles are not counted, queues of missing groups are kept and
+    // vehicles.json is not written.
     protected void UpdateVehicleProtection()
     {
         if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
@@ -699,19 +705,27 @@ class LFPG_GroupManager
         if (!m_BootAuditDone)
             return;
 
+        bool worldTrusted = !m_DissolveDisabled;
+        bool bootPass = !m_VehicleBootPassDone;
+        // Misses need a world that has finished loading and can be trusted.
+        bool countMisses = worldTrusted && !bootPass;
+
         m_VehicleScanIDs.Clear();
         foreach (string flagGroupID, LFPG_FlagBase flagEntry : m_GroupFlags)
         {
             m_VehicleScanIDs.Insert(flagGroupID);
         }
         int scanFlagCount = m_VehicleScanIDs.Count();
+        int scanBudget = LFPG_VehicleProtection.SCAN_BATCH;
+        if (bootPass)
+            scanBudget = scanFlagCount;
         if (scanFlagCount > 0)
         {
             if (m_VehicleScanCursor >= scanFlagCount)
                 m_VehicleScanCursor = 0;
             int flagsScanned = 0;
             int flagsSeen = 0;
-            while (flagsSeen < scanFlagCount && flagsScanned < LFPG_VehicleProtection.SCAN_BATCH)
+            while (flagsSeen < scanFlagCount && flagsScanned < scanBudget)
             {
                 string scanID = m_VehicleScanIDs[m_VehicleScanCursor];
                 m_VehicleScanCursor = m_VehicleScanCursor + 1;
@@ -724,14 +738,23 @@ class LFPG_GroupManager
                     continue;
                 if (!IsOwnedRegisteredFlag(scanFlag))
                     continue;
-                m_VehicleProtection.ScanFlag(scanFlag, scanID, this, m_Config);
+                m_VehicleProtection.ScanFlag(scanFlag, scanID, this, m_Config, countMisses);
                 flagsScanned = flagsScanned + 1;
             }
+            if (bootPass)
+            {
+                string bootMsg = "Vehicle protection boot pass: flags scanned=";
+                bootMsg = bootMsg + flagsScanned.ToString();
+                LFPG_Log.Info(bootMsg);
+            }
         }
+        m_VehicleBootPassDone = true;
 
-        m_VehicleProtection.PruneMissingGroups(this);
+        if (worldTrusted)
+            m_VehicleProtection.PruneMissingGroups(this);
         m_VehicleProtection.ApplyProtection(this, m_Config);
-        m_VehicleProtection.SaveIfDirty();
+        if (worldTrusted)
+            m_VehicleProtection.SaveIfDirty();
     }
 
     // Shutdown save of the vehicle queues, behind the same gates as the tick.
@@ -741,7 +764,7 @@ class LFPG_GroupManager
             return true;
         if (!m_Config || !m_Config.m_OverrideVehicleLifetime)
             return true;
-        if (m_GroupsLoadFailed || !m_BootAuditDone)
+        if (m_GroupsLoadFailed || m_DissolveDisabled || !m_BootAuditDone)
             return false;
         return m_VehicleProtection.SaveIfDirty();
     }
