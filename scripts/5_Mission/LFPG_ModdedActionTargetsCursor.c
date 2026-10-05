@@ -22,7 +22,7 @@ modded class ActionTargetsCursor
             return;
 
         Transport vehicle = Transport.Cast(entity.GetHierarchyRoot());
-        if (!vehicle || !vehicle.LFPG_IsProtected() || vehicle.IsRuined())
+        if (!vehicle || !LFPG_VehicleState.IsProtected(vehicle) || vehicle.IsRuined())
             return;
 
         Widget flagIcon = m_Root.FindAnyWidget("item_flag_icon");

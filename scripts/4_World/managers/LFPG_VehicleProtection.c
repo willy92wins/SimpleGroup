@@ -422,7 +422,7 @@ class LFPG_VehicleProtection
         for (oi = 0; oi < objCount; oi = oi + 1)
         {
             Transport found = Transport.Cast(m_ScanObjects[oi]);
-            if (!found)
+            if (!found || !LFPG_VehicleState.IsProtectable(found))
                 continue;
             if (found.IsRuined())
                 continue;
@@ -684,7 +684,7 @@ class LFPG_VehicleProtection
     protected void Protect(string groupID, string key, Transport vehicle, float wanted, float floorLimit)
     {
         float before = vehicle.GetLifetime();
-        bool wasProtected = vehicle.LFPG_IsProtected();
+        bool wasProtected = LFPG_VehicleState.IsProtected(vehicle);
         if (wasProtected && before < floorLimit && !m_FloorLogged.Contains(key))
         {
             m_FloorLogged.Set(key, true);
@@ -702,7 +702,7 @@ class LFPG_VehicleProtection
         if (wasProtected)
             return;
 
-        vehicle.LFPG_SetProtected(true);
+        LFPG_VehicleState.SetProtected(vehicle, true);
         string protMsg = "Vehicle protected: ";
         protMsg = protMsg + key;
         protMsg = protMsg + " group=" + groupID;
@@ -716,10 +716,10 @@ class LFPG_VehicleProtection
     protected void Unprotect(string groupID, string key, Transport vehicle)
     {
         m_FloorLogged.Remove(key);
-        if (!vehicle.LFPG_IsProtected())
+        if (!LFPG_VehicleState.IsProtected(vehicle))
             return;
 
-        vehicle.LFPG_SetProtected(false);
+        LFPG_VehicleState.SetProtected(vehicle, false);
         string unprotMsg = "Vehicle unprotected: ";
         unprotMsg = unprotMsg + key;
         unprotMsg = unprotMsg + " group=" + groupID;
@@ -736,8 +736,8 @@ class LFPG_VehicleProtection
             return;
         foreach (string boundKey, Transport boundVehicle : m_Bound)
         {
-            if (boundVehicle && boundVehicle.LFPG_IsProtected())
-                boundVehicle.LFPG_SetProtected(false);
+            if (boundVehicle && LFPG_VehicleState.IsProtected(boundVehicle))
+                LFPG_VehicleState.SetProtected(boundVehicle, false);
         }
         m_FloorLogged.Clear();
     }
@@ -764,7 +764,7 @@ class LFPG_VehicleProtection
     {
         Transport previous = null;
         if (m_Bound.Find(key, previous) && previous && previous != vehicle)
-            previous.LFPG_SetProtected(false);
+            LFPG_VehicleState.SetProtected(previous, false);
         m_Bound.Set(key, vehicle);
         m_Misses.Remove(key);
     }
@@ -801,7 +801,7 @@ class LFPG_VehicleProtection
         string clipDetail = "";
         if (vehicle)
         {
-            if (clip && vehicle.LFPG_IsProtected())
+            if (clip && LFPG_VehicleState.IsProtected(vehicle))
             {
                 float lifeNow = vehicle.GetLifetime();
                 float lifeMax = vehicle.GetLifetimeMax();
@@ -813,7 +813,7 @@ class LFPG_VehicleProtection
                     clipDetail = clipDetail + " max=" + lifeMax.ToString();
                 }
             }
-            vehicle.LFPG_SetProtected(false);
+            LFPG_VehicleState.SetProtected(vehicle, false);
         }
 
         queue.RemoveOrdered(index);
@@ -856,7 +856,7 @@ class LFPG_VehicleProtection
             string dropKey = dropQueue[di];
             Transport dropVehicle = null;
             if (m_Bound.Find(dropKey, dropVehicle) && dropVehicle)
-                dropVehicle.LFPG_SetProtected(false);
+                LFPG_VehicleState.SetProtected(dropVehicle, false);
             m_KeyGroup.Remove(dropKey);
             m_Bound.Remove(dropKey);
             m_Misses.Remove(dropKey);
