@@ -525,6 +525,9 @@ class LFPG_ClientGroupCache
         s_NoBaseRequiredTypes = noBaseTypes;
         s_UnrestrictedTypes = unrestrictedTypes;
         s_PlacementRulesReceived = true;
+        // PERF (issue #24, PR1): new lists may differ from the previous session
+        // state this client memoized; drop stale classname verdicts.
+        LFPG_KindMemo.Clear();
     }
 
     protected static void HandleGroupSyncFull(ParamsReadContext ctx, LFPG_FlagBase flag)

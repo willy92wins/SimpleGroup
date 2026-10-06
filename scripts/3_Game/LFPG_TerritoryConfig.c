@@ -482,108 +482,48 @@ class LFPG_TerritoryConfig
     }
 
     // Chequea si un EntityAI esta en la greenhouse whitelist
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsGreenhouse(EntityAI ent)
     {
         if (!m_EnableGreenhouseAsPlot || !m_EnablePlots)
             return false;
 
-        if (!m_GreenhouseWhitelist || !ent)
-            return false;
-
-        int count = m_GreenhouseWhitelist.Count();
-        int i;
-        for (i = 0; i < count; i = i + 1)
-        {
-            string ghType = m_GreenhouseWhitelist[i];
-            if (ent.IsKindOf(ghType))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "gh", m_GreenhouseWhitelist);
     }
 
     // Chequea si un EntityAI esta en la lista de exclusion configurable
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsTypeExcludedFromFurniture(EntityAI ent)
     {
-        if (!m_FurnitureExcludedTypes || !ent)
-            return false;
-
-        int count = m_FurnitureExcludedTypes.Count();
-        int i;
-        for (i = 0; i < count; i = i + 1)
-        {
-            string excluded = m_FurnitureExcludedTypes[i];
-            if (ent.IsKindOf(excluded))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "fexcl", m_FurnitureExcludedTypes);
     }
 
     // Lista A: placement sin requerir grupo/territorio propio (pero bloqueado en ajeno)
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsNoBaseRequired(EntityAI ent)
     {
-        if (!m_NoBaseRequiredTypes || !ent)
-            return false;
-
-        int countNBR = m_NoBaseRequiredTypes.Count();
-        int iNBR;
-        for (iNBR = 0; iNBR < countNBR; iNBR = iNBR + 1)
-        {
-            string nbrType = m_NoBaseRequiredTypes[iNBR];
-            if (ent.IsKindOf(nbrType))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "nbr", m_NoBaseRequiredTypes);
     }
 
     // Lista B: placement sin restriccion alguna (prioridad sobre lista A)
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsUnrestricted(EntityAI ent)
     {
-        if (!m_UnrestrictedTypes || !ent)
-            return false;
-
-        int countU = m_UnrestrictedTypes.Count();
-        int iU;
-        for (iU = 0; iU < countU; iU = iU + 1)
-        {
-            string uType = m_UnrestrictedTypes[iU];
-            if (ent.IsKindOf(uType))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "unr", m_UnrestrictedTypes);
     }
 
     // Extra furniture types (crates, chests, barrels) counted in addition to parts and deployables.
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsCountedFurnitureType(EntityAI ent)
     {
-        if (!m_FurnitureCountedTypes || !ent)
-            return false;
-
-        int countFC = m_FurnitureCountedTypes.Count();
-        int iFC;
-        for (iFC = 0; iFC < countFC; iFC = iFC + 1)
-        {
-            string fcType = m_FurnitureCountedTypes[iFC];
-            if (ent.IsKindOf(fcType))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "cnt", m_FurnitureCountedTypes);
     }
 
     // Blacklist: cannot be dropped or placed in a foreign territory.
+    // PERF (issue #24, PR1): memoized by classname via LFPG_KindMemo.
     bool IsNoDropInForeignTerritory(EntityAI ent)
     {
-        if (!m_NoDropInForeignTerritoryTypes || !ent)
-            return false;
-
-        int countND = m_NoDropInForeignTerritoryTypes.Count();
-        int iND;
-        for (iND = 0; iND < countND; iND = iND + 1)
-        {
-            string ndType = m_NoDropInForeignTerritoryTypes[iND];
-            if (ent.IsKindOf(ndType))
-                return true;
-        }
-        return false;
+        return LFPG_KindMemo.MatchList(ent, "ndrp", m_NoDropInForeignTerritoryTypes);
     }
 
     // ========================================================================
