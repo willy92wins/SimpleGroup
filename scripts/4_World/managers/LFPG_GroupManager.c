@@ -186,7 +186,7 @@ class LFPG_GroupManager
             m_VehicleLifetimeTimer = null;
         }
         if (GetGame())
-            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.RunBootAudit);
+            GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).Remove(this.RunQueuedBootAudit);
     }
 
     // ========================================================================
@@ -237,7 +237,7 @@ class LFPG_GroupManager
 
         // One second, once. The validation tick repeats the audit only if this
         // call has not run yet. Not a repeating CallLater (the 4.5 h timer bug).
-        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.RunBootAudit, 1000, false);
+        GetGame().GetCallQueue(CALL_CATEGORY_GAMEPLAY).CallLater(this.RunQueuedBootAudit, 1000, false);
 
         // Timer periodico de validacion (FIX M-2: interval configurable)
         // Usa Timer class (NO CallLater) - inmune al bug de 4.5h
@@ -508,6 +508,18 @@ class LFPG_GroupManager
         pendLeft = pendLeft + abandonedDeclared.ToString();
         LFPG_Log.Info(pendLeft);
         m_BootAuditDone = true;
+    }
+
+    // The queued boot audit, about a second after Init. The vehicles restored
+    // with the world are bound and protected right after it, not a validation
+    // tick later: until their first update, nothing gives back a lifetime that
+    // the engine resets. A tick that ran the audit first updates them itself.
+    void RunQueuedBootAudit()
+    {
+        bool auditWasDone = m_BootAuditDone;
+        RunBootAudit();
+        if (!auditWasDone && m_BootAuditDone)
+            UpdateVehicleProtection();
     }
 
     void SetShuttingDown()
